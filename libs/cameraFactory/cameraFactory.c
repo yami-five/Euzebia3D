@@ -5,10 +5,10 @@
 #include "../storage/gfx.h"
 #include <stdlib.h>
 
-#define ZNEAR 1024       // floatToFixed(1.0f)
-#define ZFAR 102400      // floatToFixed(100.0f)
-#define ASPECTRATIO 1024 // 1:1
-#define TANFOV2 1658     // tan(fov/2)
+#define ZNEAR 4096       // floatToFixed(1.0f)
+#define ZFAR 409600      // floatToFixed(100.0f)
+#define ASPECTRATIO 4096 // 1:1
+#define TANFOV2 6634     // tan(fov/2)
 
 Vector3 *calculateForwardVector(Vector3 *pos, Vector3 *target)
 {

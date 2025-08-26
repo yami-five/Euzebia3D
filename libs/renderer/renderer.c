@@ -182,10 +182,10 @@ uint16_t texturing(Triangle2D *triangle, Material *mat, int Ba, int Bb, int Bc)
     return mat->texture[uv_y * mat->textureSize + uv_x];
 }
 
-int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
+inline int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
 {
-    int z = fixed_mul(Ba, fixed_div(SCALE_FACTOR, z1)) + fixed_mul(Bb, fixed_div(SCALE_FACTOR, z2)) + fixed_mul(Bc, fixed_div(SCALE_FACTOR, z3));
-    return fixed_div(SCALE_FACTOR, z);
+    int z = fixed_mul(Ba, z1) + fixed_mul(Bb, z2) + fixed_mul(Bc, z3);
+    return inverse(z);
 }
 
 void calc_bar_coords(Triangle2D *triangle, int *Ba, int *Bb, int *Bc, int32_t divider, int x, int y)
@@ -208,17 +208,12 @@ void clear_zbuffuer()
         zBuffer[i] = INT32_MAX;
 }
 
-void set_zbuffer(uint16_t addr, int z)
-{
-    zBuffer[addr] = z;
-}
-
 uint8_t check_zbuffer(int x, int y, int z)
 {
     uint16_t addr = x * HEIGHT_DISPLAY + y;
     if (z < zBuffer[addr])
     {
-        set_zbuffer(addr, z);
+        zBuffer[addr] = z;
         return 1;
     }
     else
@@ -289,77 +284,48 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
     }
 }
 
+inline void swap_int32(int32_t *x, int32_t *y)
+{
+    int temp = *x;
+    *x = *y;
+    *y = temp;
+}
+
 void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
-    int x, y, z, uv, l;
+    int32_t x, y, z, uv, l;
     if (triangle->a.y > triangle->b.y)
     {
-        z = triangle->a.z;
-        triangle->a.z = triangle->b.z;
-        triangle->b.z = z;
-        y = triangle->a.y;
-        triangle->a.y = triangle->b.y;
-        triangle->b.y = y;
-        x = triangle->a.x;
-        triangle->a.x = triangle->b.x;
-        triangle->b.x = x;
+        swap_int32(&triangle->a.z, &triangle->b.z);
+        swap_int32(&triangle->a.y, &triangle->b.y);
+        swap_int32(&triangle->a.x, &triangle->b.x);
 
-        uv = triangle->uvA.x;
-        triangle->uvA.x = triangle->uvB.x;
-        triangle->uvB.x = uv;
-        uv = triangle->uvA.y;
-        triangle->uvA.y = triangle->uvB.y;
-        triangle->uvB.y = uv;
+        swap_int32(&triangle->uvA.x, &triangle->uvB.x);
+        swap_int32(&triangle->uvA.y, &triangle->uvB.y);
 
-        l = lightDistances[0];
-        lightDistances[0] = lightDistances[1];
-        lightDistances[1] = l;
+        swap_int32(&lightDistances[0], &lightDistances[1]);
     }
     if (triangle->a.y > triangle->c.y)
     {
-        z = triangle->a.z;
-        triangle->a.z = triangle->c.z;
-        triangle->c.z = z;
-        y = triangle->a.y;
-        triangle->a.y = triangle->c.y;
-        triangle->c.y = y;
-        x = triangle->a.x;
-        triangle->a.x = triangle->c.x;
-        triangle->c.x = x;
+        swap_int32(&triangle->a.z, &triangle->c.z);
+        swap_int32(&triangle->a.y, &triangle->c.y);
+        swap_int32(&triangle->a.x, &triangle->c.x);
 
-        uv = triangle->uvA.x;
-        triangle->uvA.x = triangle->uvC.x;
-        triangle->uvC.x = uv;
-        uv = triangle->uvA.y;
-        triangle->uvA.y = triangle->uvC.y;
-        triangle->uvC.y = uv;
+        swap_int32(&triangle->uvA.x, &triangle->uvC.x);
+        swap_int32(&triangle->uvA.y, &triangle->uvC.y);
 
-        l = lightDistances[0];
-        lightDistances[0] = lightDistances[2];
-        lightDistances[2] = l;
+        swap_int32(&lightDistances[0], &lightDistances[2]);
     }
     if (triangle->b.y > triangle->c.y)
     {
-        z = triangle->b.z;
-        triangle->b.z = triangle->c.z;
-        triangle->c.z = z;
-        y = triangle->b.y;
-        triangle->b.y = triangle->c.y;
-        triangle->c.y = y;
-        x = triangle->b.x;
-        triangle->b.x = triangle->c.x;
-        triangle->c.x = x;
+        swap_int32(&triangle->b.z, &triangle->c.z);
+        swap_int32(&triangle->b.y, &triangle->c.y);
+        swap_int32(&triangle->b.x, &triangle->c.x);
 
-        uv = triangle->uvB.x;
-        triangle->uvB.x = triangle->uvC.x;
-        triangle->uvC.x = uv;
-        uv = triangle->uvB.y;
-        triangle->uvB.y = triangle->uvC.y;
-        triangle->uvC.y = uv;
+        swap_int32(&triangle->uvB.x, &triangle->uvC.x);
+        swap_int32(&triangle->uvB.y, &triangle->uvC.y);
 
-        l = lightDistances[1];
-        lightDistances[1] = lightDistances[2];
-        lightDistances[2] = l;
+        swap_int32(&lightDistances[1], &lightDistances[2]);
     }
     if (triangle->c.y < 0 || triangle->a.y > HEIGHT_DISPLAY)
         return;
@@ -381,15 +347,8 @@ void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLig
     if (triangle->c.x < triangle->a.x)
         xxd = -1;
 
-    int32_t divider = 0;
-
-    if (mat->textureSize > 0)
-    {
-        divider = (triangle->b.y - triangle->c.y) * (triangle->a.x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (triangle->a.y - triangle->c.y);
-        divider *= SCALE_FACTOR;
-        // if (divider < 0)
-        //     divider = -divider;
-    }
+    int32_t divider = (triangle->b.y - triangle->c.y) * (triangle->a.x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (triangle->a.y - triangle->c.y);
+    divider <<= SHIFT_FACTOR;
 
     if (triangle->a.y < triangle->b.y)
     {
@@ -450,7 +409,7 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
     uint16_t vnCounter = mesh->vnCounter;
     int verticesModified[verticesCounter * 3];
     int verticesOnScreen[verticesCounter * 3];
-    int normalsModified[verticesCounter * 3];
+    int normalsModified[vnCounter * 3];
 
     memcpy(verticesModified, mesh->vertices, verticesCounter * 3 * sizeof(int));
     memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int));
@@ -493,13 +452,13 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
             {
                 {verticesOnScreen[a * 3],
                  verticesOnScreen[a * 3 + 1],
-                 verticesOnScreen[a * 3 + 2]},
+                 inverse(verticesOnScreen[a * 3 + 2])},
                 {verticesOnScreen[b * 3],
                  verticesOnScreen[b * 3 + 1],
-                 verticesOnScreen[b * 3 + 2]},
+                 inverse(verticesOnScreen[b * 3 + 2])},
                 {verticesOnScreen[c * 3],
                  verticesOnScreen[c * 3 + 1],
-                 verticesOnScreen[c * 3 + 2]},
+                 inverse(verticesOnScreen[c * 3 + 2])},
                 {mesh->textureCoords[uvA * 2],
                  mesh->textureCoords[uvA * 2 + 1]},
                 {mesh->textureCoords[uvB * 2],

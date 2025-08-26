@@ -1,11 +1,11 @@
 #include <math.h>
 #include <stdint.h>
 
-#define SHIFT_FACTOR 10
+#define SHIFT_FACTOR 12
 #define SCALE_FACTOR (1 << SHIFT_FACTOR)
 #define TABLE_SIZE 36000
-#define PI 3217//3.14159265358979323846f * 1024
-#define PI2 6434 //PI * 2
+#define PI 12867//3.14159265358979323846f * 1024
+#define PI2 25734 //PI * 2
 // #define PI_FIXED PI *SCALE_FACTOR
 // #define PI2_FIXED PI2 *SCALE_FACTOR
 #define RESOLUTION (PI2 / TABLE_SIZE)
@@ -27,3 +27,4 @@ int16_t fast_atan2(int16_t y, int16_t x);
 int32_t fast_inv_sqrt(int32_t number);
 int32_t fast_sqrt(int64_t number);
 int32_t radian_to_index(int32_t radian);
+int32_t inverse(int32_t number);

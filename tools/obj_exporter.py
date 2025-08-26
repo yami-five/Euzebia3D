@@ -5,13 +5,13 @@ uv=[]
 normals=[]
 vn=[]
 fileName="mug"
-with open(f"assets/models/{fileName}.obj") as f:
+with open(f"assets/{fileName}.obj") as f:
     while line:=f.readline():
         if line[0:2]=='v ':
             vertex=line.split()
-            vertices.append(f'{round(float(vertex[1]),2)}f')
-            vertices.append(f'{round(float(vertex[2]),2)}f')
-            vertices.append(f'{round(float(vertex[3]),2)}f')
+            vertices.append(f'{round(float(vertex[1]),6)}f')
+            vertices.append(f'{round(float(vertex[2]),6)}f')
+            vertices.append(f'{round(float(vertex[3]),6)}f')
         elif line[0]=='f':
             face=line.split()
             faces.append(int(face[1].split('/')[0])-1)
@@ -24,12 +24,12 @@ with open(f"assets/models/{fileName}.obj") as f:
             uv.append(int(face[3].split('/')[1])-1)
             normals.append(int(face[3].split('/')[2])-1)
         elif line[0:2]=='vn':
-            vn.append(f'{round(float(line.split()[1]),2)}f')
-            vn.append(f'{round(float(line.split()[2]),2)}f')
-            vn.append(f'{round(float(line.split()[3]),2)}f')
+            vn.append(f'{round(float(line.split()[1]),6)}f')
+            vn.append(f'{round(float(line.split()[2]),6)}f')
+            vn.append(f'{round(float(line.split()[3]),6)}f')
         elif line[0:2]=='vt':
-            vt.append(f'{round(float(line.split()[1]),2)}f')
-            vt.append(f'{round(float(line.split()[2]),2)}f')
+            vt.append(f'{round(float(line.split()[1]),6)}f')
+            vt.append(f'{round(float(line.split()[2]),6)}f')
 print(fileName)
 text=""
 for x in vertices:

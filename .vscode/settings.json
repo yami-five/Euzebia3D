@@ -46,6 +46,7 @@
         "post_processing.h": "c",
         "rawpuppets.h": "c",
         "math.h": "c",
-        "camerafactory.h": "c"
+        "camerafactory.h": "c",
+        "light.h": "c"
     }
 }

@@ -52,14 +52,21 @@ int main()
     renderer->init_renderer(hardware_core, painter);
 
     meshFactory = get_meshFactory();
-    Mesh *pizza = meshFactory->create_textured_mesh(7, 7);
-    pizza->transformations = add_transformation(pizza->transformations, &pizza->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
+    Mesh *triangle1 = meshFactory->create_colored_mesh(0x1234, 0);
+    triangle1->transformations = add_transformation(triangle1->transformations, &triangle1->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
+
+    Mesh *triangle2 = meshFactory->create_colored_mesh(0x9999, 0);
+    triangle2->transformations = add_transformation(triangle2->transformations, &triangle2->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
+    triangle2->transformations = add_transformation(triangle2->transformations, &triangle2->transformationsNum, 0, 0.0f, 0.0f, 0.2f, 1);
+
+    Mesh *mug = meshFactory->create_colored_mesh(0x2137, 1);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
 
     lightFactory = get_lightFactory();
-    PointLight *pointLight = lightFactory->create_point_light(0.0f, 0.0f, 3.0f, 1.0f, 0xffff);
+    PointLight *pointLight = lightFactory->create_point_light(0.0f, 1.0f, 1.0f, 1.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 150.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
@@ -67,24 +74,22 @@ int main()
 
     while (1)
     {
-        float qt = t * 0.2f;
-        modify_transformation(pizza->transformations, -qt, 10.0f, 0.0f, 0.0f, 0);
-        renderer->draw_model(pizza, pointLight, camera);
+        float qt = t * 0.02f;
+        modify_transformation(triangle1->transformations, qt, 0.0f, 0.0f, 10.0f, 0);
+        renderer->draw_model(triangle1, pointLight, camera);
+        
+        modify_transformation(triangle2->transformations, qt-1.0472f, 0.0f, 0.0f, 10.0f, 0);
+        renderer->draw_model(triangle2, pointLight, camera);
+        
+        // modify_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
+        // renderer->draw_model(mug, pointLight, camera);
         // painter->apply_post_process_effect(0);
         painter->draw_buffer();
         t++;
         renderer->clear_zbuffer();
         painter->clear_buffer(0);
+        // sleep_ms(2000);
         // painter->clear_buffer(0x11);
     }
     // multicore_launch_core1(core1_main);
-}
-
-void core1_main()
-{
-    hardware_core->init_audio_i2s();
-    fileReader = get_fileReader();
-    fileReader->init_fileReader(hardware_core);
-    fileReader->play_wave_file("kostek.wav");
-    fileReader->play_wave_file("kosteke.wav");
 }

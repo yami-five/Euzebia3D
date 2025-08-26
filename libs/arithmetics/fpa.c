@@ -8,7 +8,7 @@ int32_t float_to_fixed(float value)
 
 int32_t fixed_to_float(int32_t value)
 {
-    return (float)(value>>SHIFT_FACTOR);
+    return (float)(value >> SHIFT_FACTOR);
 }
 
 int32_t fixed_add(int32_t a, int32_t b)
@@ -29,12 +29,12 @@ int32_t fixed_sub(int32_t a, int32_t b)
 int64_t fixed_mul(int32_t a, int32_t b)
 {
     int64_t result = (int64_t)a * b;
-    return (int64_t)(result>>SHIFT_FACTOR);
+    return (int64_t)(result >> SHIFT_FACTOR);
 }
 
 int32_t fixed_div(int32_t a, int32_t b)
 {
-    int64_t result = ((int64_t)a<<SHIFT_FACTOR) / b;
+    int64_t result = ((int64_t)a << SHIFT_FACTOR) / b;
     return (int32_t)result;
 }
 
@@ -100,4 +100,9 @@ int32_t radian_to_index(int32_t radian)
     while (radian >= PI2)
         radian -= PI2;
     return (radian * RADIAN_INDEX_FACTOR) >> SHIFT_FACTOR;
+}
+
+int32_t inverse(int32_t number)
+{
+    return fixed_div(SCALE_FACTOR, number);
 }
