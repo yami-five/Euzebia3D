@@ -4,10 +4,10 @@
 #include "stdio.h"
 #include <stdint.h>
 #include <stdlib.h>
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 #include "vectors.h"
-#include "../shared/sprites.h"
-#include "../shared/rawPuppets.h"
+#include "../storage/sprites.h"
+#include "../storage/rawPuppets.h"
 #include "animation.h"
 
 typedef struct Bone Bone;

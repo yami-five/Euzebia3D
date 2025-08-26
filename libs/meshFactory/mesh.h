@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "fpa.h"
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 
 typedef struct
 {

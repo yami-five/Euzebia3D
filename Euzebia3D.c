@@ -1,125 +1,90 @@
 #include <stdio.h>
-#include "pico/stdlib.h"
-#include "hardware/spi.h"
-#include "hardware/i2c.h"
-#include "hardware/dma.h"
-#include "hardware/pio.h"
-#include "hardware/interp.h"
+#include "pico/multicore.h"
 
-// SPI Defines
-// We are going to use SPI 0, and allocate it to the following GPIO pins
-// Pins can be changed, see the GPIO function select table in the datasheet for information on GPIO assignments
-#define SPI_PORT spi0
-#define PIN_MISO 16
-#define PIN_CS   17
-#define PIN_SCK  18
-#define PIN_MOSI 19
+#include "ICameraFactory.h"
+#include "IDisplay.h"
+#include "IFileReader.h"
+#include "IHardware.h"
+#include "ILightFactory.h"
+#include "IMeshFactory.h"
+#include "IPainter.h"
+#include "IRenderer.h"
+#include "IPuppetFactory.h"
 
-// I2C defines
-// This example will use I2C0 on GPIO8 (SDA) and GPIO9 (SCL) running at 400KHz.
-// Pins can be changed, see the GPIO function select table in the datasheet for information on GPIO assignments
-#define I2C_PORT i2c0
-#define I2C_SDA 8
-#define I2C_SCL 9
+#include "cameraFactory.h"
+#include "display.h"
+#include "fileReader.h"
+#include "hardware.h"
+#include "lightFactory.h"
+#include "meshFactory.h"
+#include "painter.h"
+#include "renderer.h"
+#include "mesh.h"
+#include "puppetFactory.h"
+#include "puppet.h"
 
-// Data will be copied from src to dst
-const char src[] = "Hello, world! (from DMA)";
-char dst[count_of(src)];
+static const IHardware *hardware_core;
+static const IDisplay *display;
+static const IPainter *painter;
+static const IFileReader *fileReader;
+static const IRenderer *renderer;
+static const IMeshFactory *meshFactory;
+static const ILightFactory *lightFactory;
+static const ICameraFactory *cameraFactory;
+static const IPuppetFactory *puppetFactory;
 
-#include "blink.pio.h"
-
-void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
-    blink_program_init(pio, sm, offset, pin);
-    pio_sm_set_enabled(pio, sm, true);
-
-    printf("Blinking pin %d at %d Hz\n", pin, freq);
-
-    // PIO counter program takes 3 more cycles in total than we pass as
-    // input (wait for n + 1; mov; jmp)
-    pio->txf[sm] = (125000000 / (2 * freq)) - 3;
-}
-
-
-
+void core1_main();
 
 int main()
 {
-    stdio_init_all();
+    set_sys_clock_khz(300000, true);
 
-    // SPI initialisation. This example will use SPI at 1MHz.
-    spi_init(SPI_PORT, 1000*1000);
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_CS,   GPIO_FUNC_SIO);
-    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-    
-    // Chip select is active-low, so we'll initialise it to a driven-high state
-    gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);
-    // For more examples of SPI use see https://github.com/raspberrypi/pico-examples/tree/master/spi
+    hardware_core = get_hardware();
+    hardware_core->init_hardware();
 
-    // I2C Initialisation. Using it at 400Khz.
-    i2c_init(I2C_PORT, 400*1000);
-    
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(I2C_SDA);
-    gpio_pull_up(I2C_SCL);
-    // For more examples of I2C use see https://github.com/raspberrypi/pico-examples/tree/master/i2c
+    display = get_display();
+    display->init_display(hardware_core);
 
-    // Get a free channel, panic() if there are none
-    int chan = dma_claim_unused_channel(true);
-    
-    // 8 bit transfers. Both read and write address increment after each
-    // transfer (each pointing to a location in src or dst respectively).
-    // No DREQ is selected, so the DMA transfers as fast as it can.
-    
-    dma_channel_config c = dma_channel_get_default_config(chan);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, true);
-    
-    dma_channel_configure(
-        chan,          // Channel to be configured
-        &c,            // The configuration we just created
-        dst,           // The initial write address
-        src,           // The initial read address
-        count_of(src), // Number of transfers; in this case each is 1 byte.
-        true           // Start immediately.
-    );
-    
-    // We could choose to go and do something else whilst the DMA is doing its
-    // thing. In this case the processor has nothing else to do, so we just
-    // wait for the DMA to finish.
-    dma_channel_wait_for_finish_blocking(chan);
-    
-    // The DMA has now copied our text from the transmit buffer (src) to the
-    // receive buffer (dst), so we can print it out from there.
-    puts(dst);
+    painter = get_painter();
+    painter->init_painter(display, hardware_core);
 
-    // PIO Blinking example
-    PIO pio = pio0;
-    uint offset = pio_add_program(pio, &blink_program);
-    printf("Loaded program at %d\n", offset);
-    
-    #ifdef PICO_DEFAULT_LED_PIN
-    blink_pin_forever(pio, 0, offset, PICO_DEFAULT_LED_PIN, 3);
-    #else
-    blink_pin_forever(pio, 0, offset, 6, 3);
-    #endif
-    // For more pio examples see https://github.com/raspberrypi/pico-examples/tree/master/pio
+    renderer = get_renderer();
+    renderer->init_renderer(hardware_core, painter);
 
-    // Interpolator example code
-    interp_config cfg = interp_default_config();
-    // Now use the various interpolator library functions for your use case
-    // e.g. interp_config_clamp(&cfg, true);
-    //      interp_config_shift(&cfg, 2);
-    // Then set the config 
-    interp_set_config(interp0, 0, &cfg);
-    // For examples of interpolator use see https://github.com/raspberrypi/pico-examples/tree/master/interp
+    meshFactory = get_meshFactory();
+    Mesh *pizza = meshFactory->create_textured_mesh(7, 7);
+    pizza->transformations = add_transformation(pizza->transformations, &pizza->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
 
-    while (true) {
-        printf("Hello, world!\n");
-        sleep_ms(1000);
+    lightFactory = get_lightFactory();
+    PointLight *pointLight = lightFactory->create_point_light(0.0f, 0.0f, 3.0f, 1.0f, 0xffff);
+
+    cameraFactory = get_cameraFactory();
+    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 25.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+
+    painter->clear_buffer(0x1100);
+    painter->draw_buffer();
+    uint32_t t = 0;
+
+    while (1)
+    {
+        float qt = t * 0.2f;
+        modify_transformation(pizza->transformations, -qt, 10.0f, 0.0f, 0.0f, 0);
+        renderer->draw_model(pizza, pointLight, camera);
+        // painter->apply_post_process_effect(0);
+        painter->draw_buffer();
+        t++;
+        renderer->clear_zbuffer();
+        painter->clear_buffer(0);
+        // painter->clear_buffer(0x11);
     }
+    // multicore_launch_core1(core1_main);
+}
+
+void core1_main()
+{
+    hardware_core->init_audio_i2s();
+    fileReader = get_fileReader();
+    fileReader->init_fileReader(hardware_core);
+    fileReader->play_wave_file("kostek.wav");
+    fileReader->play_wave_file("kosteke.wav");
 }

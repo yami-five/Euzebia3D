@@ -9,7 +9,7 @@
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
 #include "stdio.h"
-#include "../shared/pins.h"
+#include "../storage/pins.h"
 #include "pico/audio_i2s.h"
 
 static spi_inst_t *SPI_PORT = spi1;

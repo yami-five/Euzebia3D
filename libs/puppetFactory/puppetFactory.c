@@ -2,7 +2,7 @@
 #include "puppetFactory.h"
 #include "puppet.h"
 #include "string.h"
-#include "../shared/rawPuppets.h"
+#include "../storage/rawPuppets.h"
 
 Bone *create_bones(const RawBone *rawBones, const uint8_t bonesNum, int *parentWorldMatrix)
 {

@@ -2,7 +2,7 @@
 #include "meshFactory.h"
 #include "mesh.h"
 #include "fpa.h"
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 #include <stdlib.h>
 
 Mesh *createMesh(Material *mat, uint8_t meshIndex)

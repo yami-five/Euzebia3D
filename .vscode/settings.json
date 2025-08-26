@@ -36,5 +36,16 @@
     "raspberry-pi-pico.cmakeAutoConfigure": true,
     "raspberry-pi-pico.useCmakeTools": false,
     "raspberry-pi-pico.cmakePath": "${HOME}/.pico-sdk/cmake/v3.31.5/bin/cmake",
-    "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja"
+    "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.12.1/ninja",
+    "files.associations": {
+        "*.py": "python",
+        "vectors.h": "c",
+        "spi.h": "c",
+        "scrollers.h": "c",
+        "fonts.h": "c",
+        "post_processing.h": "c",
+        "rawpuppets.h": "c",
+        "math.h": "c",
+        "camerafactory.h": "c"
+    }
 }

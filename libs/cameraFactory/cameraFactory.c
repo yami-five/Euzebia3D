@@ -2,7 +2,7 @@
 #include "cameraFactory.h"
 #include "camera.h"
 #include "fpa.h"
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 #include <stdlib.h>
 
 #define ZNEAR 1024       // floatToFixed(1.0f)

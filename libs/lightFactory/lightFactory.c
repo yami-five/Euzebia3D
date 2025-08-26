@@ -2,7 +2,7 @@
 #include "lightFactory.h"
 #include "light.h"
 #include "fpa.h"
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 #include <stdlib.h>
 
 PointLight* create_point_light(float x, float y, float z, float intensity, uint16_t color)

@@ -7,8 +7,8 @@
 #include "hardware/dma.h"
 #include "hardware/spi.h"
 #include "string.h"
-#include "../shared/pins.h"
-#include "../shared/gfx.h"
+#include "../storage/pins.h"
+#include "../storage/gfx.h"
 
 #define WIDTH_DOUBLED 640
 #define HEIGHT_DOUBLED 480 

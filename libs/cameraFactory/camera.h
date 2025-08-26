@@ -4,7 +4,7 @@
 #include "stdio.h"
 #include <stdint.h>
 #include <stdlib.h>
-#include "../shared/gfx.h"
+#include "../storage/gfx.h"
 #include "vectors.h"
 
 typedef struct

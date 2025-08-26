@@ -1,9 +1,9 @@
 #include "IPainter.h"
 #include "painter.h"
-#include "../shared/fonts.h"
-#include "../shared/gfx.h"
-#include "../shared/post_processing.h"
-#include "../shared/sprites.h"
+#include "../storage/fonts.h"
+#include "../storage/gfx.h"
+#include "../storage/post_processing.h"
+#include "../storage/sprites.h"
 #include "hardware/sync/spin_lock.h"
 #include "../arithmetics/fpa.h"
 

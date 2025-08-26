@@ -5,9 +5,9 @@
 #include "IDisplay.h"
 #include "IHardware.h"
 #include "puppet.h"
-#include "../shared/sprites.h"
+#include "../storage/sprites.h"
 #include "gradient.h"
-#include "../shared/scrollers.h"
+#include "../storage/scrollers.h"
 
 typedef struct
 {

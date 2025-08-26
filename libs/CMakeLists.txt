@@ -1,5 +1,5 @@
 add_library(
-    Euzebia3D 
+    Euzebia3D_libs
     ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/fpa.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/vectors.c
     ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/lookup_tables.c
@@ -23,16 +23,16 @@ add_library(
     ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppet.c
     ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppetFactory.c
     ${CMAKE_CURRENT_SOURCE_DIR}/renderer/renderer.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/fonts.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/gfx.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/post_processing.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/scrollers.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/sprites.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared/rawPuppets.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/fonts.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/post_processing.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/scrollers.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/sprites.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/rawPuppets.c
 )
 
 target_link_libraries(
-    Euzebia3D
+    Euzebia3D_libs
     PUBLIC 
     pico_stdlib
     hardware_adc
@@ -45,9 +45,9 @@ target_link_libraries(
     pico_audio
     pico_audio_i2s
 )
-pico_generate_pio_header(Euzebia3D ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
+pico_generate_pio_header(Euzebia3D_libs ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
 
-target_include_directories(Euzebia3D
+target_include_directories(Euzebia3D_libs
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics
     ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory
@@ -61,7 +61,7 @@ target_include_directories(Euzebia3D
     ${CMAKE_CURRENT_SOURCE_DIR}/renderer
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage
 )
 
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)

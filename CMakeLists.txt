@@ -18,6 +18,7 @@ endif()
 set(sdkVersion 2.2.0)
 set(toolchainVersion 14_2_Rel1)
 set(picotoolVersion 2.2.0)
+set(PICO_EXTRAS_FETCH_FROM_GIT ON)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -27,6 +28,7 @@ set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
+include(pico_extras_import.cmake)
 
 project(Euzebia3D C CXX ASM)
 
@@ -47,6 +49,9 @@ pico_generate_pio_header(Euzebia3D ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 pico_enable_stdio_uart(Euzebia3D 1)
 pico_enable_stdio_usb(Euzebia3D 1)
 
+# Add mine libraries
+add_subdirectory(libs)
+
 # Add the standard library to the build
 target_link_libraries(Euzebia3D
         pico_stdlib)
@@ -63,6 +68,7 @@ target_link_libraries(Euzebia3D
         hardware_dma
         hardware_pio
         hardware_interp
+        Euzebia3D_libs
         )
 
 pico_add_extra_outputs(Euzebia3D)

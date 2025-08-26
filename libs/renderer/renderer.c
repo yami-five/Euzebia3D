@@ -17,7 +17,7 @@ static const uint32_t FIRE_FLOOR_ADR = 76480;
 static const uint32_t FIXED_FOCAL_LENGTH = 90 << SHIFT_FACTOR;
 static const uint32_t TRIANGLE_CENTER_DIVIDER = 3 << SHIFT_FACTOR;
 static const uint16_t ZBUFFERSIZE = 19200; // 160*120
-static int32_t zBuffer[19200];
+static int zBuffer[19200];
 #define SHADING_ENABLED 1
 
 void clear_zbuffuer();
@@ -185,7 +185,7 @@ uint16_t texturing(Triangle2D *triangle, Material *mat, int Ba, int Bb, int Bc)
 int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
 {
     int z = fixed_mul(Ba, fixed_div(SCALE_FACTOR, z1)) + fixed_mul(Bb, fixed_div(SCALE_FACTOR, z2)) + fixed_mul(Bc, fixed_div(SCALE_FACTOR, z3));
-    return fixed_div(SCALE_FACTOR, z) >> SHIFT_FACTOR;
+    return fixed_div(SCALE_FACTOR, z);
 }
 
 void calc_bar_coords(Triangle2D *triangle, int *Ba, int *Bb, int *Bc, int32_t divider, int x, int y)

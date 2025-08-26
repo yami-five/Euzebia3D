@@ -1,6 +1,6 @@
 #include "IHardware.h"
 #include "hardware.h"
-#include "../shared/pins.h"
+#include "../storage/pins.h"
 #include "pico/audio_i2s.h"
 #include "hardware/dma.h"
 

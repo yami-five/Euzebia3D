@@ -9,7 +9,7 @@
 #include "ff.h"
 #include "diskio.h"
 #include "sd_driver.h"
-#include "../shared/pins.h"
+#include "../storage/pins.h"
 
 /*-----------------------------------------------------------------------*/
 /* Inidialize a Drive                                                    */

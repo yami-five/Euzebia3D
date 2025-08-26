@@ -2,7 +2,7 @@
 #include "fileReader.h"
 #include "fatfs/ff.h"
 #include "stdio.h"
-#include "../shared/pins.h"
+#include "../storage/pins.h"
 #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "pico/audio.h"

@@ -1,6 +1,6 @@
 #include "IDisplay.h"
 #include "display.h"
-#include "../shared/pins.h"
+#include "../storage/pins.h"
 
 static const uint16_t DISPLAY_WIDTH = 320;
 static const uint16_t DISPLAY_HEIGHT = 240;
