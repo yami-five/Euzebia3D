@@ -23,6 +23,17 @@ static int32_t *zBuffer = NULL;
 #define MAX_ZBUFFER_BYTES 200000 
 #define SHADING_ENABLED 1
 
+static inline uint8_t norm_vector_safe(Vector3 *vec)
+{
+    int32_t len = len_vector(vec);
+    if (len == 0)
+        return 0;
+    vec->x = fixed_div(vec->x, len);
+    vec->y = fixed_div(vec->y, len);
+    vec->z = fixed_div(vec->z, len);
+    return 1;
+}
+
 void clear_zbuffuer();
 static void configure_render_dimensions(void)
 {
@@ -201,8 +212,9 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     //     *color = 0;
     //     return;
     // }
-    if (lightDistance < 50)
-        lightDistance = 50;
+    const int32_t AMBIENT_MIN = SCALE_FACTOR / 20;
+    if (lightDistance < AMBIENT_MIN)
+        lightDistance = AMBIENT_MIN;
     if (lightDistance > SCALE_FACTOR)
         lightDistance = SCALE_FACTOR;
 
@@ -222,7 +234,14 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     fixedG = fixed_mul(fixedG, 16);
     fixedB = fixed_mul(fixedB, 33);
 
-    int32_t lightFactor = fixed_mul(lightDistance, light->intensity);
+    int32_t intensity = light->intensity;
+    if (intensity < 0)
+        intensity = 0;
+    const int32_t INTENSITY_MAX = SCALE_FACTOR * 6;
+    if (intensity > INTENSITY_MAX)
+        intensity = INTENSITY_MAX;
+
+    int32_t lightFactor = fixed_mul(lightDistance, intensity);
     if (lightFactor < 0)
         lightFactor = 0;
     const int32_t MAX_LIGHT_FACTOR = SCALE_FACTOR * 4;
@@ -598,9 +617,8 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
             normalVectorC.y = normalsModified[normalC * 3 + 1];
             normalVectorC.z = normalsModified[normalC * 3 + 2];
 
-            norm_vector(&normalVectorA);
-            norm_vector(&normalVectorB);
-            norm_vector(&normalVectorC);
+            if (!norm_vector_safe(&normalVectorA) || !norm_vector_safe(&normalVectorB) || !norm_vector_safe(&normalVectorC))
+                continue;
 
             // light direction
             Triangle3D triangle3D = {
@@ -624,9 +642,8 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
             lightDirectionC.y = pLight->position.y - triangle3D.c.y;
             lightDirectionC.z = pLight->position.z - triangle3D.c.z;
 
-            norm_vector(&lightDirectionA);
-            norm_vector(&lightDirectionB);
-            norm_vector(&lightDirectionC);
+            if (!norm_vector_safe(&lightDirectionA) || !norm_vector_safe(&lightDirectionB) || !norm_vector_safe(&lightDirectionC))
+                continue;
 
             lightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
             if (lightDistances[0] < 0)
