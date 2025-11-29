@@ -270,17 +270,53 @@ uint16_t texturing(Triangle2D *triangle, Material *mat, int Ba, int Bb, int Bc)
 {
     int uv_x = (fixed_mul(Ba, triangle->uvA.x) + fixed_mul(Bb, triangle->uvB.x) + fixed_mul(Bc, triangle->uvC.x)) * mat->textureSize;
     int uv_y = (fixed_mul(Ba, triangle->uvA.y) + fixed_mul(Bb, triangle->uvB.y) + fixed_mul(Bc, triangle->uvC.y)) * mat->textureSize;
+    uv_x += (SCALE_FACTOR >> 1);
+    uv_y += (SCALE_FACTOR >> 1);
     uv_x = uv_x >> SHIFT_FACTOR;
     uv_y = uv_y >> SHIFT_FACTOR;
-    if (uv_x < 0)
-        uv_x = 0;
-    if (uv_x > mat->textureSize)
-        uv_x = mat->textureSize - 1;
-    if (uv_y < 0)
-        uv_y = 0;
-    if (uv_y > mat->textureSize)
-        uv_y = mat->textureSize - 1;
-    return mat->texture[uv_y * mat->textureSize + uv_x];
+    if (uv_x < 1)
+        uv_x = 1;
+    if (uv_y < 1)
+        uv_y = 1;
+    if (uv_x > mat->textureSize - 2)
+        uv_x = mat->textureSize - 2;
+    if (uv_y > mat->textureSize - 2)
+        uv_y = mat->textureSize - 2;
+    int x0 = uv_x;
+    int y0 = uv_y;
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+
+    uint16_t c00 = mat->texture[y0 * mat->textureSize + x0];
+    uint16_t c10 = mat->texture[y0 * mat->textureSize + x1];
+    uint16_t c01 = mat->texture[y1 * mat->textureSize + x0];
+    uint16_t c11 = mat->texture[y1 * mat->textureSize + x1];
+
+    uint32_t r00 = (c00 >> 11) & 0x1f;
+    uint32_t g00 = (c00 >> 5) & 0x3f;
+    uint32_t b00 = c00 & 0x1f;
+    uint32_t r10 = (c10 >> 11) & 0x1f;
+    uint32_t g10 = (c10 >> 5) & 0x3f;
+    uint32_t b10 = c10 & 0x1f;
+    uint32_t r01 = (c01 >> 11) & 0x1f;
+    uint32_t g01 = (c01 >> 5) & 0x3f;
+    uint32_t b01 = c01 & 0x1f;
+    uint32_t r11 = (c11 >> 11) & 0x1f;
+    uint32_t g11 = (c11 >> 5) & 0x3f;
+    uint32_t b11 = c11 & 0x1f;
+
+    uint32_t rTop = (r00 + r10) >> 1;
+    uint32_t gTop = (g00 + g10) >> 1;
+    uint32_t bTop = (b00 + b10) >> 1;
+    uint32_t rBot = (r01 + r11) >> 1;
+    uint32_t gBot = (g01 + g11) >> 1;
+    uint32_t bBot = (b01 + b11) >> 1;
+
+    uint32_t r = (rTop + rBot) >> 1;
+    uint32_t g = (gTop + gBot) >> 1;
+    uint32_t b = (bTop + bBot) >> 1;
+
+    return (r << 11) | (g << 5) | b;
 }
 
 inline int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
