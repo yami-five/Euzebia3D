@@ -47,6 +47,7 @@
         "rawpuppets.h": "c",
         "math.h": "c",
         "camerafactory.h": "c",
-        "light.h": "c"
+        "light.h": "c",
+        "icamerafactory.h": "c"
     }
 }

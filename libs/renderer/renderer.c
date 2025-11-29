@@ -1,5 +1,6 @@
 #include "IRenderer.h"
 #include "renderer.h"
+#include <stdlib.h>
 
 static volatile const IHardware *_hardware = NULL;
 static volatile const IPainter *_painter = NULL;
@@ -37,7 +38,7 @@ void triangle_center(Triangle3D *triangle, int32_t *center)
     center[2] = fixed_div((triangle->a.z + triangle->b.z + triangle->c.z), TRIANGLE_CENTER_DIVIDER);
 }
 
-void rotate(int *vertices, uint16_t verticesCounter, TransformVector *vector)
+void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
     int32_t qt_rad = fixed_mul(vector->w, PI2);
     int32_t c = fast_cos(qt_rad >> 1);
@@ -69,7 +70,27 @@ void rotate(int *vertices, uint16_t verticesCounter, TransformVector *vector)
             .w = 0,
             .vec = &vec_vertex};
         Quaternion *result = mul_quaternion(&q, &q_vertex);
+        if (result == NULL || result->vec == NULL)
+        {
+            if (result != NULL)
+            {
+                free(result->vec);
+                free(result);
+            }
+            return;
+        }
         Quaternion *result2 = mul_quaternion(result, &qInv);
+        if (result2 == NULL || result2->vec == NULL)
+        {
+            free(result->vec);
+            free(result);
+            if (result2 != NULL)
+            {
+                free(result2->vec);
+                free(result2);
+            }
+            return;
+        }
         vertices[i * 3] = result2->vec->x;
         vertices[i * 3 + 1] = result2->vec->y;
         vertices[i * 3 + 2] = result2->vec->z;
@@ -80,7 +101,7 @@ void rotate(int *vertices, uint16_t verticesCounter, TransformVector *vector)
     }
 }
 
-void translate(int *vertices, uint16_t verticesCounter, TransformVector *vector)
+void translate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
@@ -90,7 +111,7 @@ void translate(int *vertices, uint16_t verticesCounter, TransformVector *vector)
     }
 }
 
-void scale(int *vertices, uint16_t verticesCounter, TransformVector *vector)
+void scale(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
@@ -100,7 +121,7 @@ void scale(int *vertices, uint16_t verticesCounter, TransformVector *vector)
     }
 }
 
-void transform(int *vertices, uint16_t verticesCounter, TransformInfo *transformInfo)
+void transform(int32_t *vertices, uint16_t verticesCounter, TransformInfo *transformInfo)
 {
     if (transformInfo->transformType == 0)
         rotate(vertices, verticesCounter, transformInfo->transformVector);
@@ -156,11 +177,27 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     fixedG = fixed_mul(fixedG, 16);
     fixedB = fixed_mul(fixedB, 33);
 
-    uint32_t lightFactor = fixed_mul(lightDistance, light->intensity);
+    int32_t lightFactor = fixed_mul(lightDistance, light->intensity);
+    if (lightFactor < 0)
+        lightFactor = 0;
+    const int32_t MAX_LIGHT_FACTOR = SCALE_FACTOR * 4;
+    if (lightFactor > MAX_LIGHT_FACTOR)
+        lightFactor = MAX_LIGHT_FACTOR;
 
-    uint8_t r = (uint8_t)(fixed_mul(fixedR, lightFactor) >> SHIFT_FACTOR);
-    uint8_t g = (uint8_t)(fixed_mul(fixedG, lightFactor) >> SHIFT_FACTOR);
-    uint8_t b = (uint8_t)(fixed_mul(fixedB, lightFactor) >> SHIFT_FACTOR);
+    uint32_t rTmp = (uint32_t)(fixed_mul(fixedR, lightFactor) >> SHIFT_FACTOR);
+    uint32_t gTmp = (uint32_t)(fixed_mul(fixedG, lightFactor) >> SHIFT_FACTOR);
+    uint32_t bTmp = (uint32_t)(fixed_mul(fixedB, lightFactor) >> SHIFT_FACTOR);
+
+    if (rTmp > 31)
+        rTmp = 31;
+    if (gTmp > 63)
+        gTmp = 63;
+    if (bTmp > 31)
+        bTmp = 31;
+
+    uint8_t r = (uint8_t)rTmp;
+    uint8_t g = (uint8_t)gTmp;
+    uint8_t b = (uint8_t)bTmp;
 
     *color = (r << 11) | (g << 5) | b;
 }
@@ -234,6 +271,7 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
         x0 = x1;
         x1 = q;
     }
+    x1 += 1;
     if (x1 < 0 || x0 >= WIDTH_DISPLAY)
         return;
     if (x0 < 0)
@@ -407,12 +445,22 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
 {
     uint16_t verticesCounter = mesh->verticesCounter;
     uint16_t vnCounter = mesh->vnCounter;
-    int verticesModified[verticesCounter * 3];
-    int verticesOnScreen[verticesCounter * 3];
-    int normalsModified[vnCounter * 3];
+    int32_t *verticesModified = (int32_t *)malloc(sizeof(int32_t) * verticesCounter * 3);
+    int32_t *verticesOnScreen = (int32_t *)malloc(sizeof(int32_t) * verticesCounter * 3);
+    int32_t *normalsModified = (int32_t *)malloc(sizeof(int32_t) * vnCounter * 3);
+    uint8_t *vertexValid = (uint8_t *)malloc(sizeof(uint8_t) * verticesCounter);
 
-    memcpy(verticesModified, mesh->vertices, verticesCounter * 3 * sizeof(int));
-    memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int));
+    if (verticesModified == NULL || verticesOnScreen == NULL || normalsModified == NULL || vertexValid == NULL)
+    {
+        free(verticesModified);
+        free(verticesOnScreen);
+        free(normalsModified);
+        free(vertexValid);
+        return;
+    }
+
+    memcpy(verticesModified, mesh->vertices, verticesCounter * 3 * sizeof(int32_t));
+    memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int32_t));
     for (int i = 0; i < mesh->transformationsNum; i++)
     {
         transform(verticesModified, verticesCounter, &mesh->transformations[i]);
@@ -427,9 +475,15 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
         int32_t w = SCALE_FACTOR;
         fixed_mul_matrix_vector(&x, &y, &z, &w, camera->vMatrix);
         fixed_mul_matrix_vector(&x, &y, &z, &w, camera->pMatrix);
+        if (w == 0 || z <= 0)
+        {
+            vertexValid[i / 3] = 0;
+            continue;
+        }
         verticesOnScreen[i] = fixed_div(x, w) + WIDTH_HALF;
         verticesOnScreen[i + 1] = fixed_div(y, w) + HEIGHT_HALF;
         verticesOnScreen[i + 2] = z;
+        vertexValid[i / 3] = 1;
     }
     Vector3 normalVectorA;
     Vector3 normalVectorB;
@@ -442,6 +496,8 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
         uint16_t a = mesh->faces[i];
         uint16_t b = mesh->faces[i + 1];
         uint16_t c = mesh->faces[i + 2];
+        if (vertexValid[a] == 0 || vertexValid[b] == 0 || vertexValid[c] == 0)
+            continue;
         uint16_t uvA = mesh->uv[i];
         uint16_t uvB = mesh->uv[i + 1];
         uint16_t uvC = mesh->uv[i + 2];
@@ -532,6 +588,11 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
 #endif
         tri(&triangle, mesh->mat, lightDistances, pLight);
     }
+
+    free(verticesModified);
+    free(verticesOnScreen);
+    free(normalsModified);
+    free(vertexValid);
 }
 
 static IRenderer renderer = {

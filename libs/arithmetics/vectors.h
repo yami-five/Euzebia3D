@@ -22,7 +22,8 @@ typedef struct
     int32_t y;
 } Vector2;
 
-Quaternion *mul_quaternion(Quaternion *q1,Quaternion *q2);
+void mul_quaternion_inline(const Quaternion *q1, const Quaternion *q2, Quaternion *out);
+Quaternion *mul_quaternion(const Quaternion *q1, const Quaternion *q2);
 Vector3 *add_vectors(Vector3 *vecA, Vector3 *vecB);
 Vector3 *sub_vectors(Vector3 *vecA, Vector3 *vecB);
 Vector3 *mul_vectors(Vector3 *vecA, Vector3 *vecB);

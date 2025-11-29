@@ -27,11 +27,22 @@ void modify_transformation(TransformInfo *currentTransformations, float w, float
 
 void free_model(Mesh *mesh)
 {
+    if (mesh == NULL)
+        return;
+    if (mesh->transformations != NULL)
+    {
+        for (uint32_t i = 0; i < mesh->transformationsNum; i++)
+        {
+            free(mesh->transformations[i].transformVector);
+        }
+        free(mesh->transformations);
+    }
     free(mesh->mat);
     free(mesh->faces);
     free(mesh->vertices);
     free(mesh->textureCoords);
     free(mesh->uv);
-    free(mesh->transformations);
+    free(mesh->normals);
+    free(mesh->vn);
     free(mesh);
 }

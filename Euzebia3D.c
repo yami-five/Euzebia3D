@@ -75,19 +75,13 @@ int main()
     while (1)
     {
         float qt = t * 0.02f;
-        // modify_transformation(triangle1->transformations, qt, 0.0f, 0.0f, 10.0f, 0);
-        // renderer->draw_model(triangle1, pointLight, camera);
-        
-        // modify_transformation(triangle2->transformations, qt-1.0472f, 0.0f, 0.0f, 10.0f, 0);
-        // renderer->draw_model(triangle2, pointLight, camera);
-        
         modify_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
         renderer->draw_model(mug, pointLight, camera);
         // painter->apply_post_process_effect(0);
         painter->draw_buffer();
         t++;
         renderer->clear_zbuffer();
-        painter->clear_buffer(0);
+        painter->clear_buffer(255);
         // sleep_ms(2000);
         // painter->clear_buffer(0x11);
     }

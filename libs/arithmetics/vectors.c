@@ -3,14 +3,28 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-Quaternion *mul_quaternion(Quaternion *q1, Quaternion *q2)
+void mul_quaternion_inline(const Quaternion *q1, const Quaternion *q2, Quaternion *out)
+{
+    if (!q1 || !q2 || !out || !q1->vec || !q2->vec || !out->vec)
+        return;
+    out->w = fixed_mul(q1->w, q2->w) - fixed_mul(q1->vec->x, q2->vec->x) - fixed_mul(q1->vec->y, q2->vec->y) - fixed_mul(q1->vec->z, q2->vec->z);
+    out->vec->x = fixed_mul(q1->w, q2->vec->x) + fixed_mul(q1->vec->x, q2->w) - fixed_mul(q1->vec->y, q2->vec->z) + fixed_mul(q1->vec->z, q2->vec->y);
+    out->vec->y = fixed_mul(q1->w, q2->vec->y) + fixed_mul(q1->vec->x, q2->vec->z) + fixed_mul(q1->vec->y, q2->w) - fixed_mul(q1->vec->z, q2->vec->x);
+    out->vec->z = fixed_mul(q1->w, q2->vec->z) - fixed_mul(q1->vec->x, q2->vec->y) + fixed_mul(q1->vec->y, q2->vec->x) + fixed_mul(q1->vec->z, q2->w);
+}
+
+Quaternion *mul_quaternion(const Quaternion *q1, const Quaternion *q2)
 {
     Quaternion *result = (Quaternion *)malloc(sizeof(Quaternion));
+    if (result == NULL)
+        return NULL;
     result->vec = (Vector3 *)malloc(sizeof(Vector3));
-    result->w = fixed_mul(q1->w, q2->w) - fixed_mul(q1->vec->x, q2->vec->x) - fixed_mul(q1->vec->y, q2->vec->y) - fixed_mul(q1->vec->z, q2->vec->z);
-    result->vec->x = fixed_mul(q1->w, q2->vec->x) + fixed_mul(q1->vec->x, q2->w) - fixed_mul(q1->vec->y, q2->vec->z) + fixed_mul(q1->vec->z, q2->vec->y);
-    result->vec->y = fixed_mul(q1->w, q2->vec->y) + fixed_mul(q1->vec->x, q2->vec->z) + fixed_mul(q1->vec->y, q2->w) - fixed_mul(q1->vec->z, q2->vec->x);
-    result->vec->z = fixed_mul(q1->w, q2->vec->z) - fixed_mul(q1->vec->x, q2->vec->y) + fixed_mul(q1->vec->y, q2->vec->x) + fixed_mul(q1->vec->z, q2->w);
+    if (result->vec == NULL)
+    {
+        free(result);
+        return NULL;
+    }
+    mul_quaternion_inline(q1, q2, result);
     return result;
 }
 
@@ -74,6 +88,8 @@ int32_t len_vector(Vector3 *vec)
 void norm_vector(Vector3 *vec)
 {
     int32_t len = len_vector(vec);
+    if (len == 0)
+        return;
     vec->x = fixed_div(vec->x, len);
     vec->y = fixed_div(vec->y, len);
     vec->z = fixed_div(vec->z, len);

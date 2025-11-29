@@ -6,6 +6,8 @@
 #include "../storage/sprites.h"
 #include "hardware/sync/spin_lock.h"
 #include "../arithmetics/fpa.h"
+#include <string.h>
+#include <stdlib.h>
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
@@ -100,7 +102,13 @@ void draw_buffer()
 
 void clear_buffer(uint16_t color)
 {
-    memset(buffer, color, sizeof(buffer));
+    uint8_t hi = (color >> 8) & 0xff;
+    uint8_t lo = color & 0xff;
+    for (uint32_t i = 0; i < BUFFER_SIZE; i += 2)
+    {
+        buffer[i] = hi;
+        buffer[i + 1] = lo;
+    }
 }
 
 void draw_pixel(uint16_t x, uint16_t y, uint16_t color)
@@ -193,11 +201,18 @@ void crt_disp_effect()
 
 void fake_glow_effect(uint16_t *params)
 {
+    if (params == NULL)
+        return;
     uint16_t r = params[0];
+    const uint16_t MAX_GLOW_RADIUS = 40;
+    if (r > MAX_GLOW_RADIUS)
+        r = MAX_GLOW_RADIUS;
     uint16_t mainColor = params[1];
     uint16_t maxOffsets = ((r << 1) + 1);
     maxOffsets *= maxOffsets;
-    int offsets[maxOffsets << 1];
+    int *offsets = (int *)malloc(sizeof(int) * (maxOffsets << 1));
+    if (offsets == NULL)
+        return;
     uint16_t offsetsNum = 0;
     uint16_t r2 = r * r;
     for (int16_t dy = -r; dy <= r; dy++)
@@ -239,6 +254,7 @@ void fake_glow_effect(uint16_t *params)
             }
         }
     }
+    free(offsets);
 }
 
 void blue_only()
@@ -295,7 +311,8 @@ void apply_post_process_effect(uint8_t effect_index, uint16_t *params)
         crt_disp_effect();
         break;
     case 1:
-        fake_glow_effect(params);
+        if (params != NULL)
+            fake_glow_effect(params);
         break;
     case 2:
         blue_only();
@@ -562,7 +579,6 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
     if ((patternIndex == 8 && mode == 0))
         return;
     uint8_t pattern[16];
-    uint16_t square[width * height];
 
     if (mode == 0) // fade out
     {
@@ -573,7 +589,10 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
         memcpy(pattern, fadeInPatterns[patternIndex], 16);
     }
 
-    uint8_t lineBuffer[width << 1];
+    uint16_t lineBufferSize = width << 1;
+    uint8_t *lineBuffer = (uint8_t *)malloc(lineBufferSize);
+    if (lineBuffer == NULL)
+        return;
 
     for (uint8_t i = 0; i < height; i += 1)
     {
@@ -595,8 +614,9 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
             }
         }
         lineAddr += (y << 1);
-        memcpy(buffer + lineAddr, lineBuffer, sizeof(lineBuffer));
+        memcpy(buffer + lineAddr, lineBuffer, lineBufferSize);
     }
+    free(lineBuffer);
 }
 
 static IPainter painter = {

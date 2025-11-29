@@ -66,7 +66,7 @@ static void write(uint32_t pin, uint8_t value)
 
 static uint8_t read(uint32_t pin)
 {
-    gpio_get(pin);
+    return gpio_get(pin);
 }
 
 static void spi_write_byte(uint8_t value)
@@ -150,10 +150,10 @@ static void init_hardware(void)
     gpio_mode(SD_CS_PIN, GPIO_OUT);
     gpio_set_pulls(TP_IRQ_PIN, true, false);
 
-    write(TP_CS_PIN, GPIO_OUT);
-    write(LCD_CS_PIN, GPIO_OUT);
-    write(LCD_BL_PIN, GPIO_OUT);
-    write(SD_CS_PIN, GPIO_OUT);
+    write(TP_CS_PIN, 1);
+    write(LCD_CS_PIN, 1);
+    write(LCD_BL_PIN, 1);
+    write(SD_CS_PIN, 1);
 
     spi_spinlock = spin_lock_init(spin_lock_claim_unused(true));
 }
