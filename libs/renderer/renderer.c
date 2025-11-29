@@ -5,28 +5,73 @@
 static volatile const IHardware *_hardware = NULL;
 static volatile const IPainter *_painter = NULL;
 
-static const uint8_t SCALE = 2;
 static const uint8_t FOCAL_LENGTH = 90;
-static const uint16_t WIDTH_DISPLAY = 320 >> (SCALE - 1);
-static const uint16_t HEIGHT_DISPLAY = 240 >> (SCALE - 1);
-static const uint16_t WIDTH_DOUBLED = 640 >> (SCALE - 1);
-static const uint16_t HEIGHT_DOUBLED = 480 >> (SCALE - 1);
-static const uint32_t ARRAY_SIZE = 153600;
-static const uint16_t WIDTH_HALF = 160 >> (SCALE - 1);
-static const uint16_t HEIGHT_HALF = 120 >> (SCALE - 1);
 static const uint32_t FIRE_FLOOR_ADR = 76480;
 static const uint32_t FIXED_FOCAL_LENGTH = 90 << SHIFT_FACTOR;
 static const uint32_t TRIANGLE_CENTER_DIVIDER = 3 << SHIFT_FACTOR;
-static const uint16_t ZBUFFERSIZE = 19200; // 160*120
-static int zBuffer[19200];
+static const uint16_t BASE_WIDTH = 320;
+static const uint16_t BASE_HEIGHT = 240;
+
+static uint8_t render_scale = 2; // 2 => 160x120 render; 1 => 320x240 render
+static uint8_t output_scale = 2;
+static uint16_t render_width = 160;
+static uint16_t render_height = 120;
+static uint16_t render_width_half = 80;
+static uint16_t render_height_half = 60;
+static uint32_t zBufferSize = 0;
+static int32_t *zBuffer = NULL;
+#define MAX_ZBUFFER_BYTES 200000 
 #define SHADING_ENABLED 1
 
 void clear_zbuffuer();
+static void configure_render_dimensions(void)
+{
+    if (render_scale == 0)
+        render_scale = 2;
+    output_scale = render_scale;
+    render_width = BASE_WIDTH / render_scale;
+    render_height = BASE_HEIGHT / render_scale;
+    render_width_half = render_width >> 1;
+    render_height_half = render_height >> 1;
+
+    uint32_t newSize = render_width * render_height;
+    uint32_t neededBytes = newSize * sizeof(int32_t);
+    if (neededBytes > MAX_ZBUFFER_BYTES)
+    {
+        render_scale = 2;
+        output_scale = render_scale;
+        render_width = BASE_WIDTH / render_scale;
+        render_height = BASE_HEIGHT / render_scale;
+        render_width_half = render_width >> 1;
+        render_height_half = render_height >> 1;
+        newSize = render_width * render_height;
+        neededBytes = newSize * sizeof(int32_t);
+    }
+
+    if (zBufferSize != newSize)
+    {
+        free(zBuffer);
+        zBuffer = (int32_t *)malloc(neededBytes);
+        if (zBuffer != NULL)
+            zBufferSize = newSize;
+        else
+            zBufferSize = 0;
+    }
+}
+
+void renderer_set_scale(uint8_t scale)
+{
+    if (scale == 0)
+        return;
+    render_scale = scale;
+    configure_render_dimensions();
+}
 
 void init_renderer(volatile const IHardware *hardware, volatile const IPainter *painter)
 {
     _hardware = hardware;
     _painter = painter;
+    configure_render_dimensions();
     clear_zbuffuer();
     // init_sin_cos();
 }
@@ -240,14 +285,17 @@ void calc_bar_coords(Triangle2D *triangle, int *Ba, int *Bb, int *Bc, int32_t di
 
 void clear_zbuffuer()
 {
-    // memset(zBuffer, UINT16_MAX, sizeof(zBuffer));
-    for (uint16_t i = 0; i < ZBUFFERSIZE; i++)
+    if (zBuffer == NULL)
+        return;
+    for (uint32_t i = 0; i < zBufferSize; i++)
         zBuffer[i] = INT32_MAX;
 }
 
 uint8_t check_zbuffer(int x, int y, int z)
 {
-    uint16_t addr = x * HEIGHT_DISPLAY + y;
+    if (zBuffer == NULL)
+        return 0;
+    uint32_t addr = x * render_height + y;
     if (z < zBuffer[addr])
     {
         zBuffer[addr] = z;
@@ -259,7 +307,7 @@ uint8_t check_zbuffer(int x, int y, int z)
 
 void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32_t lightDistances[], int32_t divider, PointLight *light)
 {
-    if (y < 0 || y >= HEIGHT_DISPLAY)
+    if (y < 0 || y >= render_height)
         return;
     int n = (y & 1) >> 1;
     x0 += n;
@@ -272,19 +320,23 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
         x1 = q;
     }
     x1 += 1;
-    if (x1 < 0 || x0 >= WIDTH_DISPLAY)
+    if (x1 < 0 || x0 >= render_width)
         return;
     if (x0 < 0)
         x0 = 0;
-    if (x1 > WIDTH_DISPLAY)
-        x1 = WIDTH_DISPLAY;
+    if (x1 > render_width)
+        x1 = render_width;
     if (mat->isSkyBox == 0)
     {
+        int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
+        int dTempBbDx = (triangle->c.y - triangle->a.y) << SHIFT_FACTOR;
+        int Ba, Bb, Bc;
+        calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x0, y);
+        int stepBa = fixed_div(dTempBaDx, divider);
+        int stepBb = fixed_div(dTempBbDx, divider);
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
-            int Ba, Bb, Bc;
-            calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x, y);
             int z = calc_pixel_depth(Ba, Bb, Bc, triangle->a.z, triangle->b.z, triangle->c.z);
             if (check_zbuffer(x, y, z))
             {
@@ -294,30 +346,38 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
                     color = texturing(triangle, mat, Ba, Bb, Bc);
                 if (SHADING_ENABLED)
                     shading(&color, lightDistances, light, Ba, Bb, Bc);
-                _painter->draw_pixel(x * 2, y * 2, color);
-                _painter->draw_pixel(x * 2 + 1, y * 2, color);
-                _painter->draw_pixel(x * 2, y * 2 + 1, color);
-                _painter->draw_pixel(x * 2 + 1, y * 2 + 1, color);
+                for (uint8_t dy = 0; dy < output_scale; dy++)
+                    for (uint8_t dx = 0; dx < output_scale; dx++)
+                        _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
                 // draw_pixel(x, y, color);
             }
+            Ba += stepBa;
+            Bb += stepBb;
+            Bc = SCALE_FACTOR - Ba - Bb;
         }
     }
     else
     {
+        int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
+        int dTempBbDx = (triangle->c.y - triangle->a.y) << SHIFT_FACTOR;
+        int Ba, Bb, Bc;
+        calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x0, y);
+        int stepBa = fixed_div(dTempBaDx, divider);
+        int stepBb = fixed_div(dTempBbDx, divider);
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
-            int Ba, Bb, Bc;
-            calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x, y);
             if (mat->textureSize == 0)
                 color = mat->diffuse;
             else
                 color = texturing(triangle, mat, Ba, Bb, Bc);
-            _painter->draw_pixel(x * 2, y * 2, color);
-            _painter->draw_pixel(x * 2 + 1, y * 2, color);
-            _painter->draw_pixel(x * 2, y * 2 + 1, color);
-            _painter->draw_pixel(x * 2 + 1, y * 2 + 1, color);
+            for (uint8_t dy = 0; dy < output_scale; dy++)
+                for (uint8_t dx = 0; dx < output_scale; dx++)
+                    _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
             // draw_pixel(x, y, color);
+            Ba += stepBa;
+            Bb += stepBb;
+            Bc = SCALE_FACTOR - Ba - Bb;
         }
     }
 }
@@ -365,7 +425,7 @@ void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLig
 
         swap_int32(&lightDistances[1], &lightDistances[2]);
     }
-    if (triangle->c.y < 0 || triangle->a.y > HEIGHT_DISPLAY)
+    if (triangle->c.y < 0 || triangle->a.y > render_height)
         return;
     y = triangle->a.y;
     int xx = x = triangle->a.x;
@@ -421,9 +481,9 @@ void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLig
         if (triangle->c.x < triangle->b.x)
             xd = -1;
 
-        while (y <= triangle->c.y && y < HEIGHT_DISPLAY)
-        {
-            rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
+        while (y <= triangle->c.y && y < render_height)
+            {
+                rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
             y += 1;
             q += dx12;
             q2 += dx02;
@@ -480,8 +540,8 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
             vertexValid[i / 3] = 0;
             continue;
         }
-        verticesOnScreen[i] = fixed_div(x, w) + WIDTH_HALF;
-        verticesOnScreen[i + 1] = fixed_div(y, w) + HEIGHT_HALF;
+        verticesOnScreen[i] = fixed_div(x, w) + render_width_half;
+        verticesOnScreen[i + 1] = fixed_div(y, w) + render_height_half;
         verticesOnScreen[i + 2] = z;
         vertexValid[i / 3] = 1;
     }
@@ -598,7 +658,8 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
 static IRenderer renderer = {
     .init_renderer = init_renderer,
     .draw_model = draw_model,
-    .clear_zbuffer = clear_zbuffuer};
+    .clear_zbuffer = clear_zbuffuer,
+    .set_scale = renderer_set_scale};
 
 const IRenderer *get_renderer(void)
 {

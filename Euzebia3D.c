@@ -50,6 +50,7 @@ int main()
 
     renderer = get_renderer();
     renderer->init_renderer(hardware_core, painter);
+    renderer->set_scale(1);
 
     meshFactory = get_meshFactory();
     Mesh *triangle1 = meshFactory->create_colored_mesh(0x1234, 0);

@@ -48,6 +48,8 @@
         "math.h": "c",
         "camerafactory.h": "c",
         "light.h": "c",
-        "icamerafactory.h": "c"
+        "icamerafactory.h": "c",
+        "ipainter.h": "c",
+        "ihardware.h": "c"
     }
 }

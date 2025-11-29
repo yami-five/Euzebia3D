@@ -26,5 +26,6 @@ typedef struct
 } Triangle3D;
 
 const IRenderer *get_renderer(void);
+void renderer_set_scale(uint8_t scale);
 
 #endif
