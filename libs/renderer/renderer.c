@@ -22,7 +22,9 @@ static uint32_t zBufferSize = 0;
 static int32_t *zBuffer = NULL;
 #define MAX_ZBUFFER_BYTES 200000 
 #define SHADING_ENABLED 1
+// Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
+// Normalize vector but bail out on zero-length to avoid NaNs.
 static inline uint8_t norm_vector_safe(Vector3 *vec)
 {
     int32_t len = len_vector(vec);
@@ -37,6 +39,7 @@ static inline uint8_t norm_vector_safe(Vector3 *vec)
 void clear_zbuffuer();
 static void configure_render_dimensions(void)
 {
+    // Adjust render dims and (re)allocate z-buffer when scale changes.
     if (render_scale == 0)
         render_scale = 2;
     output_scale = render_scale;
@@ -212,6 +215,7 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     //     *color = 0;
     //     return;
     // }
+    // Clamp minimum light to keep pixels from going fully dark on edges
     const int32_t AMBIENT_MIN = SCALE_FACTOR / 20;
     if (lightDistance < AMBIENT_MIN)
         lightDistance = AMBIENT_MIN;
@@ -241,6 +245,7 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     if (intensity > INTENSITY_MAX)
         intensity = INTENSITY_MAX;
 
+    // LightColor * MaterialColor scaled by light factor
     int32_t lightFactor = fixed_mul(lightDistance, intensity);
     if (lightFactor < 0)
         lightFactor = 0;
@@ -362,6 +367,7 @@ uint8_t check_zbuffer(int x, int y, int z)
 
 void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32_t lightDistances[], int32_t divider, PointLight *light)
 {
+    // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
         return;
     int n = (y & 1) >> 1;
@@ -401,6 +407,7 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
                     color = texturing(triangle, mat, Ba, Bb, Bc);
                 if (SHADING_ENABLED)
                     shading(&color, lightDistances, light, Ba, Bb, Bc);
+                // Upscale to output buffer (output_scale handles LCD scaling)
                 for (uint8_t dy = 0; dy < output_scale; dy++)
                     for (uint8_t dx = 0; dx < output_scale; dx++)
                         _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
