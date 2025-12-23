@@ -20,6 +20,7 @@
 #include "painter.h"
 #include "renderer.h"
 #include "mesh.h"
+#include "camera.h"
 #include "puppetFactory.h"
 #include "puppet.h"
 
@@ -68,6 +69,7 @@ int main()
 
     cameraFactory = get_cameraFactory();
     Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0, 0.0f, 0.0f, 0.0f, 0);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
@@ -77,11 +79,16 @@ int main()
     {
         float qt = t * 0.02f;
         modify_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
-        renderer->draw_model(mug, pointLight, camera);
+        //modify_camera_transformation(camera->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
+        cameraFactory->update_camera(camera);
+        renderer->clean_scene();
+        renderer->add_model_to_scene(mug, camera, pointLight);
+        renderer->render_scene(pointLight);
         // painter->apply_post_process_effect(0);
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
+        renderer->clean_scene();
         // sleep_ms(2000);
         // painter->clear_buffer(0x11);
     }

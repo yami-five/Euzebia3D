@@ -10,25 +10,28 @@
 #define ASPECTRATIO 4096 // 1:1
 #define TANFOV2 6634     // tan(fov/2)
 
-Vector3 *calculateForwardVector(Vector3 *pos, Vector3 *target)
+static void calculate_forward_vector(Vector3 *out, const Vector3 *pos, const Vector3 *target)
 {
-    Vector3 *result = sub_vectors(pos, target);
-    norm_vector(result);
-    return result;
+    out->x = pos->x - target->x;
+    out->y = pos->y - target->y;
+    out->z = pos->z - target->z;
+    norm_vector(out);
 }
 
-Vector3 *calculateRightVector(Vector3 *up, Vector3 *forward)
+static void calculate_right_vector(Vector3 *out, const Vector3 *up, const Vector3 *forward)
 {
-    Vector3 *result = mul_vectors(up, forward);
-    norm_vector(result);
-    return result;
+    out->x = fixed_mul(up->y, forward->z) - fixed_mul(up->z, forward->y);
+    out->y = fixed_mul(up->z, forward->x) - fixed_mul(up->x, forward->z);
+    out->z = fixed_mul(up->x, forward->y) - fixed_mul(up->y, forward->x);
+    norm_vector(out);
 }
 
-Vector3 *calculateUpVector(Vector3 *forward, Vector3 *right)
+static void calculate_up_vector(Vector3 *out, const Vector3 *forward, const Vector3 *right)
 {
-    Vector3 *result = mul_vectors(forward, right);
-    norm_vector(result);
-    return result;
+    out->x = fixed_mul(forward->y, right->z) - fixed_mul(forward->z, right->y);
+    out->y = fixed_mul(forward->z, right->x) - fixed_mul(forward->x, right->z);
+    out->z = fixed_mul(forward->x, right->y) - fixed_mul(forward->y, right->x);
+    norm_vector(out);
 }
 
 void calculateViewMatrix(Camera *camera)
@@ -71,6 +74,17 @@ void calculatePerspectiveMatrix(Camera *camera)
     camera->pMatrix[15] = 0;
 }
 
+void update_camera(Camera *camera)
+{
+    if (camera == NULL || camera->pos == NULL || camera->target == NULL || camera->up == NULL || camera->right == NULL || camera->forward == NULL)
+        return;
+    camera_apply_transformations(camera);
+    calculate_forward_vector(camera->forward, camera->pos, camera->target);
+    calculate_right_vector(camera->right, camera->up, camera->forward);
+    calculate_up_vector(camera->up, camera->forward, camera->right);
+    calculateViewMatrix(camera);
+}
+
 Camera *create_camera(float camX, float camY, float camZ, float targetX, float targetY, float targetZ, float upX, float upY, float upZ)
 {
     Camera *cam = (Camera *)malloc(sizeof(Camera));
@@ -86,18 +100,20 @@ Camera *create_camera(float camX, float camY, float camZ, float targetX, float t
     cam->up->x = float_to_fixed(upX);
     cam->up->y = float_to_fixed(upY);
     cam->up->z = float_to_fixed(upZ);
-    cam->forward = calculateForwardVector(cam->pos, cam->target);
-    cam->right = calculateRightVector(cam->up, cam->forward);
-    cam->up = calculateUpVector(cam->forward, cam->right);
+    cam->forward = (Vector3 *)malloc(sizeof(Vector3));
+    cam->right = (Vector3 *)malloc(sizeof(Vector3));
     cam->vMatrix = (int32_t *)malloc(sizeof(int32_t) * 16);
     cam->pMatrix = (int32_t *)malloc(sizeof(int32_t) * 16);
-    calculateViewMatrix(cam);
+    cam->transformations = NULL;
+    cam->transformationsNum = 0;
+    update_camera(cam);
     calculatePerspectiveMatrix(cam);
     return cam;
 }
 
 static ICameraFactory camera = {
     .create_camera = create_camera,
+    .update_camera = update_camera,
 };
 
 const ICameraFactory *get_cameraFactory(void)

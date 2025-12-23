@@ -34,12 +34,10 @@ typedef struct
 
 typedef struct
 {
-    Triangle3D TriangleModified;
     Triangle3D TriangleOnScreen;
-    Triangle3D Normals;
     Triangle2D UV;
-    Material* mat;
-
+    int32_t LightDistances[3];
+    Material *mat;
 } TriangleInScene;
 
 const IRenderer *get_renderer(void);

@@ -18,8 +18,13 @@ static uint16_t render_width = 160;
 static uint16_t render_height = 120;
 static uint16_t render_width_half = 80;
 static uint16_t render_height_half = 60;
+
+#define MAX_TRIANGLES_IN_SCENE 1500
 #define SHADING_ENABLED 1
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
+
+static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
+static uint16_t sceneCounter = 0;
 
 // Normalize vector but bail out on zero-length to avoid NaNs.
 static inline uint8_t norm_vector_safe(Vector3 *vec)
@@ -488,8 +493,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             xd = -1;
 
         while (y <= triangle->c.y && y < render_height)
-            {
-                rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
+        {
+            rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
             y += 1;
             q += dx12;
             q2 += dx02;
@@ -509,15 +514,14 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
 typedef struct
 {
-    TriangleToRender triangle;
-    int32_t lightDistances[3];
+    uint16_t index;
     int32_t depth;
-} TriangleDrawItem;
+} SceneDrawItem;
 
-static int compare_triangle_depth_desc(const void *a, const void *b)
+static int compare_scene_depth_desc(const void *a, const void *b)
 {
-    const TriangleDrawItem *ta = (const TriangleDrawItem *)a;
-    const TriangleDrawItem *tb = (const TriangleDrawItem *)b;
+    const SceneDrawItem *ta = (const SceneDrawItem *)a;
+    const SceneDrawItem *tb = (const SceneDrawItem *)b;
     if (ta->depth < tb->depth)
         return 1;
     if (ta->depth > tb->depth)
@@ -525,7 +529,63 @@ static int compare_triangle_depth_desc(const void *a, const void *b)
     return 0;
 }
 
-void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
+void render_scene(PointLight *pLight)
+{
+    if (sceneCounter == 0)
+        return;
+
+    SceneDrawItem *drawItems = (SceneDrawItem *)malloc(sizeof(SceneDrawItem) * sceneCounter);
+    if (drawItems == NULL)
+        return;
+
+    for (uint16_t i = 0; i < sceneCounter; i++)
+    {
+        const TriangleInScene *triScene = &scene[i];
+        drawItems[i].index = i;
+        drawItems[i].depth = (triScene->TriangleOnScreen.a.z + triScene->TriangleOnScreen.b.z + triScene->TriangleOnScreen.c.z) / 3;
+    }
+
+    if (sceneCounter > 1)
+        qsort(drawItems, sceneCounter, sizeof(SceneDrawItem), compare_scene_depth_desc);
+
+    for (uint16_t i = 0; i < sceneCounter; i++)
+    {
+        const TriangleInScene *triScene = &scene[drawItems[i].index];
+        TriangleToRender triangle =
+            {
+                {triScene->TriangleOnScreen.a.x,
+                 triScene->TriangleOnScreen.a.y,
+                 inverse(triScene->TriangleOnScreen.a.z)},
+                {triScene->TriangleOnScreen.b.x,
+                 triScene->TriangleOnScreen.b.y,
+                 inverse(triScene->TriangleOnScreen.b.z)},
+                {triScene->TriangleOnScreen.c.x,
+                 triScene->TriangleOnScreen.c.y,
+                 inverse(triScene->TriangleOnScreen.c.z)},
+                {triScene->UV.a.x,
+                 triScene->UV.a.y},
+                {triScene->UV.b.x,
+                 triScene->UV.b.y},
+                {triScene->UV.c.x,
+                 triScene->UV.c.y}};
+
+        int32_t lightDistances[3] = {0, 0, 0};
+#ifdef SHADING_ENABLED
+        if (triScene->mat->isSkyBox == 0)
+        {
+            lightDistances[0] = triScene->LightDistances[0];
+            lightDistances[1] = triScene->LightDistances[1];
+            lightDistances[2] = triScene->LightDistances[2];
+        }
+#endif
+
+        tri(&triangle, triScene->mat, lightDistances, pLight);
+    }
+
+    free(drawItems);
+}
+
+void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
 {
     uint16_t verticesCounter = mesh->verticesCounter;
     uint16_t vnCounter = mesh->vnCounter;
@@ -569,23 +629,13 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
         verticesOnScreen[i + 2] = z;
         vertexValid[i / 3] = 1;
     }
+
     Vector3 normalVectorA;
     Vector3 normalVectorB;
     Vector3 normalVectorC;
     Vector3 lightDirectionA;
     Vector3 lightDirectionB;
     Vector3 lightDirectionC;
-
-    TriangleDrawItem *drawItems = (TriangleDrawItem *)malloc(sizeof(TriangleDrawItem) * mesh->facesCounter);
-    if (drawItems == NULL)
-    {
-        free(verticesModified);
-        free(verticesOnScreen);
-        free(normalsModified);
-        free(vertexValid);
-        return;
-    }
-    uint16_t drawCount = 0;
 
     for (uint16_t i = 0; i < mesh->facesCounter * 3; i += 3)
     {
@@ -594,12 +644,11 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
         uint16_t c = mesh->faces[i + 2];
         if (vertexValid[a] == 0 || vertexValid[b] == 0 || vertexValid[c] == 0)
             continue;
+
         uint16_t uvA = mesh->uv[i];
         uint16_t uvB = mesh->uv[i + 1];
         uint16_t uvC = mesh->uv[i + 2];
-        uint16_t normalA = mesh->normals[i];
-        uint16_t normalB = mesh->normals[i + 1];
-        uint16_t normalC = mesh->normals[i + 2];
+
         TriangleToRender triangle =
             {
                 {verticesOnScreen[a * 3],
@@ -619,91 +668,109 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
                  mesh->textureCoords[uvC * 2 + 1]}};
         if (!check_if_triangle_visible(&triangle))
             continue;
-        // normal vector
-        int32_t lightDistances[3] = {0, 0, 0};
-#ifdef SHADING_ENABLED
+
+        if (sceneCounter >= MAX_TRIANGLES_IN_SCENE)
+            break;
+
+        TriangleInScene *outTriangle = &scene[sceneCounter++];
+        outTriangle->TriangleOnScreen.a.x = verticesOnScreen[a * 3];
+        outTriangle->TriangleOnScreen.a.y = verticesOnScreen[a * 3 + 1];
+        outTriangle->TriangleOnScreen.a.z = verticesOnScreen[a * 3 + 2];
+        outTriangle->TriangleOnScreen.b.x = verticesOnScreen[b * 3];
+        outTriangle->TriangleOnScreen.b.y = verticesOnScreen[b * 3 + 1];
+        outTriangle->TriangleOnScreen.b.z = verticesOnScreen[b * 3 + 2];
+        outTriangle->TriangleOnScreen.c.x = verticesOnScreen[c * 3];
+        outTriangle->TriangleOnScreen.c.y = verticesOnScreen[c * 3 + 1];
+        outTriangle->TriangleOnScreen.c.z = verticesOnScreen[c * 3 + 2];
+
+        outTriangle->UV.a.x = mesh->textureCoords[uvA * 2];
+        outTriangle->UV.a.y = mesh->textureCoords[uvA * 2 + 1];
+        outTriangle->UV.b.x = mesh->textureCoords[uvB * 2];
+        outTriangle->UV.b.y = mesh->textureCoords[uvB * 2 + 1];
+        outTriangle->UV.c.x = mesh->textureCoords[uvC * 2];
+        outTriangle->UV.c.y = mesh->textureCoords[uvC * 2 + 1];
+
+        outTriangle->LightDistances[0] = 0;
+        outTriangle->LightDistances[1] = 0;
+        outTriangle->LightDistances[2] = 0;
         if (mesh->mat->isSkyBox == 0)
         {
-            normalVectorA.x = normalsModified[normalA * 3];
-            normalVectorA.y = normalsModified[normalA * 3 + 1];
-            normalVectorA.z = normalsModified[normalA * 3 + 2];
-            normalVectorB.x = normalsModified[normalB * 3];
-            normalVectorB.y = normalsModified[normalB * 3 + 1];
-            normalVectorB.z = normalsModified[normalB * 3 + 2];
-            normalVectorC.x = normalsModified[normalC * 3];
-            normalVectorC.y = normalsModified[normalC * 3 + 1];
-            normalVectorC.z = normalsModified[normalC * 3 + 2];
+            normalVectorA.x = normalsModified[mesh->normals[i] * 3];
+            normalVectorA.y = normalsModified[mesh->normals[i] * 3 + 1];
+            normalVectorA.z = normalsModified[mesh->normals[i] * 3 + 2];
+            normalVectorB.x = normalsModified[mesh->normals[i + 1] * 3];
+            normalVectorB.y = normalsModified[mesh->normals[i + 1] * 3 + 1];
+            normalVectorB.z = normalsModified[mesh->normals[i + 1] * 3 + 2];
+            normalVectorC.x = normalsModified[mesh->normals[i + 2] * 3];
+            normalVectorC.y = normalsModified[mesh->normals[i + 2] * 3 + 1];
+            normalVectorC.z = normalsModified[mesh->normals[i + 2] * 3 + 2];
 
             if (!norm_vector_safe(&normalVectorA) || !norm_vector_safe(&normalVectorB) || !norm_vector_safe(&normalVectorC))
-                continue;
+            {
+                outTriangle->LightDistances[0] = 0;
+                outTriangle->LightDistances[1] = 0;
+                outTriangle->LightDistances[2] = 0;
+            }
+            else
+            {
+                lightDirectionA.x = pLight->position.x - verticesModified[a * 3];
+                lightDirectionA.y = pLight->position.y - verticesModified[a * 3 + 1];
+                lightDirectionA.z = pLight->position.z - verticesModified[a * 3 + 2];
+                lightDirectionB.x = pLight->position.x - verticesModified[b * 3];
+                lightDirectionB.y = pLight->position.y - verticesModified[b * 3 + 1];
+                lightDirectionB.z = pLight->position.z - verticesModified[b * 3 + 2];
+                lightDirectionC.x = pLight->position.x - verticesModified[c * 3];
+                lightDirectionC.y = pLight->position.y - verticesModified[c * 3 + 1];
+                lightDirectionC.z = pLight->position.z - verticesModified[c * 3 + 2];
 
-            // light direction
-            Triangle3D triangle3D = {
-                {verticesModified[a * 3],
-                 verticesModified[a * 3 + 1],
-                 verticesModified[a * 3 + 2]},
-                {verticesModified[b * 3],
-                 verticesModified[b * 3 + 1],
-                 verticesModified[b * 3 + 2]},
-                {verticesModified[c * 3],
-                 verticesModified[c * 3 + 1],
-                 verticesModified[c * 3 + 2]}};
+                if (!norm_vector_safe(&lightDirectionA) || !norm_vector_safe(&lightDirectionB) || !norm_vector_safe(&lightDirectionC))
+                {
+                    outTriangle->LightDistances[0] = 0;
+                    outTriangle->LightDistances[1] = 0;
+                    outTriangle->LightDistances[2] = 0;
+                }
+                else
+                {
+                    outTriangle->LightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
+                    if (outTriangle->LightDistances[0] < 0)
+                        outTriangle->LightDistances[0] = 0;
+                    if (outTriangle->LightDistances[0] > SCALE_FACTOR)
+                        outTriangle->LightDistances[0] = SCALE_FACTOR;
 
-            lightDirectionA.x = pLight->position.x - triangle3D.a.x;
-            lightDirectionA.y = pLight->position.y - triangle3D.a.y;
-            lightDirectionA.z = pLight->position.z - triangle3D.a.z;
-            lightDirectionB.x = pLight->position.x - triangle3D.b.x;
-            lightDirectionB.y = pLight->position.y - triangle3D.b.y;
-            lightDirectionB.z = pLight->position.z - triangle3D.b.z;
-            lightDirectionC.x = pLight->position.x - triangle3D.c.x;
-            lightDirectionC.y = pLight->position.y - triangle3D.c.y;
-            lightDirectionC.z = pLight->position.z - triangle3D.c.z;
+                    outTriangle->LightDistances[1] = dot_product(&normalVectorB, &lightDirectionB);
+                    if (outTriangle->LightDistances[1] < 0)
+                        outTriangle->LightDistances[1] = 0;
+                    if (outTriangle->LightDistances[1] > SCALE_FACTOR)
+                        outTriangle->LightDistances[1] = SCALE_FACTOR;
 
-            if (!norm_vector_safe(&lightDirectionA) || !norm_vector_safe(&lightDirectionB) || !norm_vector_safe(&lightDirectionC))
-                continue;
-
-            lightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
-            if (lightDistances[0] < 0)
-                lightDistances[0] = 0;
-            if (lightDistances[0] > SCALE_FACTOR)
-                lightDistances[0] = SCALE_FACTOR;
-
-            lightDistances[1] = dot_product(&normalVectorB, &lightDirectionB);
-            if (lightDistances[1] < 0)
-                lightDistances[1] = 0;
-            if (lightDistances[1] > SCALE_FACTOR)
-                lightDistances[1] = SCALE_FACTOR;
-            lightDistances[2] = dot_product(&normalVectorC, &lightDirectionC);
-            if (lightDistances[2] < 0)
-                lightDistances[2] = 0;
-            if (lightDistances[2] > SCALE_FACTOR)
-                lightDistances[2] = SCALE_FACTOR;
+                    outTriangle->LightDistances[2] = dot_product(&normalVectorC, &lightDirectionC);
+                    if (outTriangle->LightDistances[2] < 0)
+                        outTriangle->LightDistances[2] = 0;
+                    if (outTriangle->LightDistances[2] > SCALE_FACTOR)
+                        outTriangle->LightDistances[2] = SCALE_FACTOR;
+                }
+            }
         }
-#endif
 
-        drawItems[drawCount].triangle = triangle;
-        drawItems[drawCount].lightDistances[0] = lightDistances[0];
-        drawItems[drawCount].lightDistances[1] = lightDistances[1];
-        drawItems[drawCount].lightDistances[2] = lightDistances[2];
-        drawItems[drawCount].depth = (verticesOnScreen[a * 3 + 2] + verticesOnScreen[b * 3 + 2] + verticesOnScreen[c * 3 + 2]) / 3;
-        drawCount++;
+        outTriangle->mat = mesh->mat;
     }
 
-    if (drawCount > 1)
-        qsort(drawItems, drawCount, sizeof(TriangleDrawItem), compare_triangle_depth_desc);
-    for (uint16_t i = 0; i < drawCount; i++)
-        tri(&drawItems[i].triangle, mesh->mat, drawItems[i].lightDistances, pLight);
-
-    free(drawItems);
     free(verticesModified);
     free(verticesOnScreen);
     free(normalsModified);
     free(vertexValid);
 }
 
+void clean_scene()
+{
+    sceneCounter = 0;
+}
+
 static IRenderer renderer = {
     .init_renderer = init_renderer,
-    .draw_model = draw_model,
+    .render_scene = render_scene,
+    .add_model_to_scene = add_model_to_scene,
+    .clean_scene = clean_scene,
     .set_scale = renderer_set_scale};
 
 const IRenderer *get_renderer(void)

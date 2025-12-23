@@ -15,7 +15,7 @@ typedef struct
     uint8_t isSkyBox;
 } Material;
 
-typedef struct
+typedef struct TransformVector
 {
     int32_t w;
     int32_t x;
@@ -23,7 +23,7 @@ typedef struct
     int32_t z;
 } TransformVector;
 
-typedef struct
+typedef struct TransformInfo
 {
     uint8_t transformType;
     TransformVector *transformVector;
