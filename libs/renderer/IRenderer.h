@@ -12,7 +12,6 @@ typedef struct
 {
     void (*init_renderer)(volatile const IHardware * hardware, volatile const IPainter * painter);
     void (*draw_model)();
-    void (*clear_zbuffer)(void);
     void (*set_scale)(uint8_t scale);
 } IRenderer;
 

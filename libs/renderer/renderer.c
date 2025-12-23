@@ -18,9 +18,6 @@ static uint16_t render_width = 160;
 static uint16_t render_height = 120;
 static uint16_t render_width_half = 80;
 static uint16_t render_height_half = 60;
-static uint32_t zBufferSize = 0;
-static int32_t *zBuffer = NULL;
-#define MAX_ZBUFFER_BYTES 200000 
 #define SHADING_ENABLED 1
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
@@ -36,10 +33,8 @@ static inline uint8_t norm_vector_safe(Vector3 *vec)
     return 1;
 }
 
-void clear_zbuffuer();
 static void configure_render_dimensions(void)
 {
-    // Adjust render dims and (re)allocate z-buffer when scale changes.
     if (render_scale == 0)
         render_scale = 2;
     output_scale = render_scale;
@@ -47,30 +42,6 @@ static void configure_render_dimensions(void)
     render_height = BASE_HEIGHT / render_scale;
     render_width_half = render_width >> 1;
     render_height_half = render_height >> 1;
-
-    uint32_t newSize = render_width * render_height;
-    uint32_t neededBytes = newSize * sizeof(int32_t);
-    if (neededBytes > MAX_ZBUFFER_BYTES)
-    {
-        render_scale = 2;
-        output_scale = render_scale;
-        render_width = BASE_WIDTH / render_scale;
-        render_height = BASE_HEIGHT / render_scale;
-        render_width_half = render_width >> 1;
-        render_height_half = render_height >> 1;
-        newSize = render_width * render_height;
-        neededBytes = newSize * sizeof(int32_t);
-    }
-
-    if (zBufferSize != newSize)
-    {
-        free(zBuffer);
-        zBuffer = (int32_t *)malloc(neededBytes);
-        if (zBuffer != NULL)
-            zBufferSize = newSize;
-        else
-            zBufferSize = 0;
-    }
 }
 
 void renderer_set_scale(uint8_t scale)
@@ -86,7 +57,6 @@ void init_renderer(volatile const IHardware *hardware, volatile const IPainter *
     _hardware = hardware;
     _painter = painter;
     configure_render_dimensions();
-    clear_zbuffuer();
     // init_sin_cos();
 }
 
@@ -197,7 +167,7 @@ void inf(float *x, float *y, float qt)
     *y += 2.0f * fast_cos(qt_rad) * fast_sin(qt_rad);
 }
 
-int check_if_triangle_visible(Triangle2D *triangle)
+int check_if_triangle_visible(TriangleToRender *triangle)
 {
     int e1x = triangle->b.x - triangle->a.x;
     int e1y = triangle->b.y - triangle->a.y;
@@ -271,7 +241,7 @@ void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int B
     *color = (r << 11) | (g << 5) | b;
 }
 
-uint16_t texturing(Triangle2D *triangle, Material *mat, int Ba, int Bb, int Bc)
+uint16_t texturing(TriangleToRender *triangle, Material *mat, int Ba, int Bb, int Bc)
 {
     int uv_x = (fixed_mul(Ba, triangle->uvA.x) + fixed_mul(Bb, triangle->uvB.x) + fixed_mul(Bc, triangle->uvC.x)) * mat->textureSize;
     int uv_y = (fixed_mul(Ba, triangle->uvA.y) + fixed_mul(Bb, triangle->uvB.y) + fixed_mul(Bc, triangle->uvC.y)) * mat->textureSize;
@@ -330,7 +300,7 @@ inline int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
     return inverse(z);
 }
 
-void calc_bar_coords(Triangle2D *triangle, int *Ba, int *Bb, int *Bc, int32_t divider, int x, int y)
+void calc_bar_coords(TriangleToRender *triangle, int *Ba, int *Bb, int *Bc, int32_t divider, int x, int y)
 {
     int tempBa, tempBb, tempBc;
     tempBa = ((triangle->b.y - triangle->c.y) * (x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (y - triangle->c.y)) << SHIFT_FACTOR;
@@ -343,29 +313,7 @@ void calc_bar_coords(Triangle2D *triangle, int *Ba, int *Bb, int *Bc, int32_t di
     *Bc = tempBc;
 }
 
-void clear_zbuffuer()
-{
-    if (zBuffer == NULL)
-        return;
-    for (uint32_t i = 0; i < zBufferSize; i++)
-        zBuffer[i] = INT32_MAX;
-}
-
-uint8_t check_zbuffer(int x, int y, int z)
-{
-    if (zBuffer == NULL)
-        return 0;
-    uint32_t addr = x * render_height + y;
-    if (z < zBuffer[addr])
-    {
-        zBuffer[addr] = z;
-        return 1;
-    }
-    else
-        return 0;
-}
-
-void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32_t lightDistances[], int32_t divider, PointLight *light)
+void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t lightDistances[], int32_t divider, PointLight *light)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
@@ -398,21 +346,17 @@ void rasterize(int y, int x0, int x1, Triangle2D *triangle, Material *mat, int32
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
-            int z = calc_pixel_depth(Ba, Bb, Bc, triangle->a.z, triangle->b.z, triangle->c.z);
-            if (check_zbuffer(x, y, z))
-            {
-                if (mat->textureSize == 0)
-                    color = mat->diffuse;
-                else
-                    color = texturing(triangle, mat, Ba, Bb, Bc);
-                if (SHADING_ENABLED)
-                    shading(&color, lightDistances, light, Ba, Bb, Bc);
-                // Upscale to output buffer (output_scale handles LCD scaling)
-                for (uint8_t dy = 0; dy < output_scale; dy++)
-                    for (uint8_t dx = 0; dx < output_scale; dx++)
-                        _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
-                // draw_pixel(x, y, color);
-            }
+            if (mat->textureSize == 0)
+                color = mat->diffuse;
+            else
+                color = texturing(triangle, mat, Ba, Bb, Bc);
+            if (SHADING_ENABLED)
+                shading(&color, lightDistances, light, Ba, Bb, Bc);
+            // Upscale to output buffer (output_scale handles LCD scaling)
+            for (uint8_t dy = 0; dy < output_scale; dy++)
+                for (uint8_t dx = 0; dx < output_scale; dx++)
+                    _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
+            // draw_pixel(x, y, color);
             Ba += stepBa;
             Bb += stepBb;
             Bc = SCALE_FACTOR - Ba - Bb;
@@ -451,7 +395,7 @@ inline void swap_int32(int32_t *x, int32_t *y)
     *y = temp;
 }
 
-void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
+void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
     int32_t x, y, z, uv, l;
     if (triangle->a.y > triangle->b.y)
@@ -563,6 +507,24 @@ void tri(Triangle2D *triangle, Material *mat, int32_t lightDistances[], PointLig
     }
 }
 
+typedef struct
+{
+    TriangleToRender triangle;
+    int32_t lightDistances[3];
+    int32_t depth;
+} TriangleDrawItem;
+
+static int compare_triangle_depth_desc(const void *a, const void *b)
+{
+    const TriangleDrawItem *ta = (const TriangleDrawItem *)a;
+    const TriangleDrawItem *tb = (const TriangleDrawItem *)b;
+    if (ta->depth < tb->depth)
+        return 1;
+    if (ta->depth > tb->depth)
+        return -1;
+    return 0;
+}
+
 void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
 {
     uint16_t verticesCounter = mesh->verticesCounter;
@@ -613,6 +575,18 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
     Vector3 lightDirectionA;
     Vector3 lightDirectionB;
     Vector3 lightDirectionC;
+
+    TriangleDrawItem *drawItems = (TriangleDrawItem *)malloc(sizeof(TriangleDrawItem) * mesh->facesCounter);
+    if (drawItems == NULL)
+    {
+        free(verticesModified);
+        free(verticesOnScreen);
+        free(normalsModified);
+        free(vertexValid);
+        return;
+    }
+    uint16_t drawCount = 0;
+
     for (uint16_t i = 0; i < mesh->facesCounter * 3; i += 3)
     {
         uint16_t a = mesh->faces[i];
@@ -626,7 +600,7 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
         uint16_t normalA = mesh->normals[i];
         uint16_t normalB = mesh->normals[i + 1];
         uint16_t normalC = mesh->normals[i + 2];
-        Triangle2D triangle =
+        TriangleToRender triangle =
             {
                 {verticesOnScreen[a * 3],
                  verticesOnScreen[a * 3 + 1],
@@ -706,9 +680,21 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
                 lightDistances[2] = SCALE_FACTOR;
         }
 #endif
-        tri(&triangle, mesh->mat, lightDistances, pLight);
+
+        drawItems[drawCount].triangle = triangle;
+        drawItems[drawCount].lightDistances[0] = lightDistances[0];
+        drawItems[drawCount].lightDistances[1] = lightDistances[1];
+        drawItems[drawCount].lightDistances[2] = lightDistances[2];
+        drawItems[drawCount].depth = (verticesOnScreen[a * 3 + 2] + verticesOnScreen[b * 3 + 2] + verticesOnScreen[c * 3 + 2]) / 3;
+        drawCount++;
     }
 
+    if (drawCount > 1)
+        qsort(drawItems, drawCount, sizeof(TriangleDrawItem), compare_triangle_depth_desc);
+    for (uint16_t i = 0; i < drawCount; i++)
+        tri(&drawItems[i].triangle, mesh->mat, drawItems[i].lightDistances, pLight);
+
+    free(drawItems);
     free(verticesModified);
     free(verticesOnScreen);
     free(normalsModified);
@@ -718,7 +704,6 @@ void draw_model(Mesh *mesh, PointLight *pLight, Camera *camera)
 static IRenderer renderer = {
     .init_renderer = init_renderer,
     .draw_model = draw_model,
-    .clear_zbuffer = clear_zbuffuer,
     .set_scale = renderer_set_scale};
 
 const IRenderer *get_renderer(void)

@@ -67,7 +67,7 @@ int main()
     PointLight *pointLight = lightFactory->create_point_light(-1.0f, 0.0f, 1.0f, 5.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
@@ -81,7 +81,6 @@ int main()
         // painter->apply_post_process_effect(0);
         painter->draw_buffer();
         t++;
-        renderer->clear_zbuffer();
         painter->clear_buffer(10);
         // sleep_ms(2000);
         // painter->clear_buffer(0x11);
