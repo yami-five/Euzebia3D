@@ -82,7 +82,7 @@ int main()
         painter->draw_buffer();
         t++;
         renderer->clear_zbuffer();
-        painter->clear_buffer(255);
+        painter->clear_buffer(10);
         // sleep_ms(2000);
         // painter->clear_buffer(0x11);
     }
