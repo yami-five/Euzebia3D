@@ -1,6 +1,85 @@
 #include "camera.h"
-#include "mesh.h"
-#include "fpa.h"
+
+#define ZNEAR 4096       // floatToFixed(1.0f)
+#define ZFAR 409600      // floatToFixed(100.0f)
+#define ASPECTRATIO 4096 // 1:1
+#define TANFOV2 6634     // tan(fov/2)
+
+static void calculate_forward_vector(Vector3 *out, const Vector3 *pos, const Vector3 *target)
+{
+    out->x = pos->x - target->x;
+    out->y = pos->y - target->y;
+    out->z = pos->z - target->z;
+    norm_vector(out);
+}
+
+static void calculate_right_vector(Vector3 *out, const Vector3 *up, const Vector3 *forward)
+{
+    out->x = fixed_mul(up->y, forward->z) - fixed_mul(up->z, forward->y);
+    out->y = fixed_mul(up->z, forward->x) - fixed_mul(up->x, forward->z);
+    out->z = fixed_mul(up->x, forward->y) - fixed_mul(up->y, forward->x);
+    norm_vector(out);
+}
+
+static void calculate_up_vector(Vector3 *out, const Vector3 *forward, const Vector3 *right)
+{
+    out->x = fixed_mul(forward->y, right->z) - fixed_mul(forward->z, right->y);
+    out->y = fixed_mul(forward->z, right->x) - fixed_mul(forward->x, right->z);
+    out->z = fixed_mul(forward->x, right->y) - fixed_mul(forward->y, right->x);
+    norm_vector(out);
+}
+
+void calculateViewMatrix(Camera *camera)
+{
+    camera->vMatrix[0] = camera->right->x;
+    camera->vMatrix[1] = camera->right->y;
+    camera->vMatrix[2] = camera->right->z;
+    camera->vMatrix[3] = -dot_product(camera->right, camera->pos);
+    camera->vMatrix[4] = camera->up->x;
+    camera->vMatrix[5] = camera->up->y;
+    camera->vMatrix[6] = camera->up->z;
+    camera->vMatrix[7] = -dot_product(camera->up, camera->pos);
+    camera->vMatrix[8] = camera->forward->x;
+    camera->vMatrix[9] = camera->forward->y;
+    camera->vMatrix[10] = camera->forward->z;
+    camera->vMatrix[11] = -dot_product(camera->forward, camera->pos);
+    camera->vMatrix[12] =
+        camera->vMatrix[13] =
+            camera->vMatrix[14] = 0;
+    camera->vMatrix[15] = SCALE_FACTOR;
+}
+
+void calculatePerspectiveMatrix(Camera *camera)
+{
+    camera->pMatrix[0] = fixed_div(SCALE_FACTOR, fixed_mul(TANFOV2, ASPECTRATIO));
+    camera->pMatrix[1] =
+        camera->pMatrix[2] =
+            camera->pMatrix[3] = 0;
+    camera->pMatrix[4] = 0;
+    camera->pMatrix[5] = fixed_div(SCALE_FACTOR, TANFOV2);
+    camera->pMatrix[6] =
+        camera->pMatrix[7] = 0;
+    camera->pMatrix[8] =
+        camera->pMatrix[9] = 0;
+    camera->pMatrix[10] = -fixed_div((ZFAR + ZNEAR), (ZFAR - ZNEAR));
+    camera->pMatrix[11] = -fixed_div(2 * fixed_mul(ZFAR, ZNEAR), (ZFAR - ZNEAR));
+    camera->pMatrix[12] =
+        camera->pMatrix[13] = 0;
+    camera->pMatrix[14] = -SCALE_FACTOR;
+    camera->pMatrix[15] = 0;
+}
+
+void update_camera(Camera *camera)
+{
+    if (camera == NULL || camera->pos == NULL || camera->target == NULL || camera->up == NULL || camera->right == NULL || camera->forward == NULL)
+        return;
+    camera_apply_transformations(camera);
+    calculate_forward_vector(camera->forward, camera->pos, camera->target);
+    calculate_right_vector(camera->right, camera->up, camera->forward);
+    calculate_up_vector(camera->up, camera->forward, camera->right);
+    calculateViewMatrix(camera);
+    calculatePerspectiveMatrix(camera);
+}
 
 TransformInfo *add_camera_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType)
 {
@@ -29,15 +108,15 @@ void modify_camera_transformation(TransformInfo *currentTransformations, float w
     modify_transformation(currentTransformations, w, x, y, z, transformationIndex);
 }
 
-static void rotate_vectors(Vector3 *vertices, uint16_t verticesCounter, TransformVector *vector)
+static void rotate_vector(Vector3 *resultVec, TransformVector *transVec)
 {
-    int32_t qt_rad = fixed_mul(vector->w, PI2);
+    int32_t qt_rad = fixed_mul(transVec->w, PI2);
     int32_t c = fast_cos(qt_rad >> 1);
     int32_t s = fast_sin(qt_rad >> 1);
     Vector3 qVec = {
-        .x = vector->x,
-        .y = vector->y,
-        .z = vector->z};
+        .x = transVec->x,
+        .y = transVec->y,
+        .z = transVec->z};
     Quaternion q = {
         .w = c,
         .vec = &qVec};
@@ -50,79 +129,45 @@ static void rotate_vectors(Vector3 *vertices, uint16_t verticesCounter, Transfor
     Quaternion qInv = {
         .w = c,
         .vec = &qVecInv};
-    for (uint16_t i = 0; i < verticesCounter; i++)
+    Quaternion q_vertex = {
+        .w = 0,
+        .vec = resultVec};
+    Quaternion *result = mul_quaternion(&q, &q_vertex);
+    if (result == NULL || result->vec == NULL)
     {
-        Quaternion q_vertex = {
-            .w = 0,
-            .vec = &vertices[i]};
-        Quaternion *result = mul_quaternion(&q, &q_vertex);
-        if (result == NULL || result->vec == NULL)
-        {
-            if (result != NULL)
-            {
-                free(result->vec);
-                free(result);
-            }
-            return;
-        }
-        Quaternion *result2 = mul_quaternion(result, &qInv);
-        if (result2 == NULL || result2->vec == NULL)
+        if (result != NULL)
         {
             free(result->vec);
             free(result);
-            if (result2 != NULL)
-            {
-                free(result2->vec);
-                free(result2);
-            }
-            return;
         }
-        vertices[i].x = result2->vec->x;
-        vertices[i].y = result2->vec->y;
-        vertices[i].z = result2->vec->z;
+        return;
+    }
+    Quaternion *result2 = mul_quaternion(result, &qInv);
+    if (result2 == NULL || result2->vec == NULL)
+    {
         free(result->vec);
         free(result);
-        free(result2->vec);
-        free(result2);
+        if (result2 != NULL)
+        {
+            free(result2->vec);
+            free(result2);
+        }
+        return;
     }
+    resultVec->x = result2->vec->x;
+    resultVec->y = result2->vec->y;
+    resultVec->z = result2->vec->z;
+    free(result->vec);
+    free(result);
+    free(result2->vec);
+    free(result2);
 }
 
-static void translate_vectors(Vector3 *vertices, uint16_t verticesCounter, TransformVector *vector)
+static void translate_vector(Vector3 *resultVec, TransformVector *transVec)
 {
-    for (uint16_t i = 0; i < verticesCounter; i++)
-    {
-        vertices[i].x += vector->x;
-        vertices[i].y += vector->y;
-        vertices[i].z += vector->z;
-    }
-}
-
-static void scale_vectors(Vector3 *vertices, uint16_t verticesCounter, TransformVector *vector)
-{
-    for (uint16_t i = 0; i < verticesCounter; i++)
-    {
-        vertices[i].x = fixed_mul(vertices[i].x, vector->x);
-        vertices[i].y = fixed_mul(vertices[i].y, vector->y);
-        vertices[i].z = fixed_mul(vertices[i].z, vector->z);
-    }
-}
-
-static void rotate_vector(Vector3 *vec, float w, float x, float y, float z)
-{
-    TransformVector vector = {
-        .w = float_to_fixed(w),
-        .x = float_to_fixed(x),
-        .y = float_to_fixed(y),
-        .z = float_to_fixed(z),
-    };
-    rotate_vectors(vec, 1, &vector);
-}
-
-static void translate_vector(Vector3 *vec, float x, float y, float z)
-{
-    vec->x += float_to_fixed(x);
-    vec->y += float_to_fixed(y);
-    vec->z += float_to_fixed(z);
+    resultVec->x += transVec->x;
+    resultVec->y += transVec->y;
+    resultVec->z += transVec->z;
 }
 
 void camera_apply_transformations(Camera *camera)
@@ -134,14 +179,14 @@ void camera_apply_transformations(Camera *camera)
     {
         TransformInfo *info = &camera->transformations[i];
         if (info->transformType == 0) /* translate */
-            translate_vectors(camera->pos, 1, info->transformVector);
+            translate_vector(camera->pos, info->transformVector);
         if (info->transformType == 1) /* rotate */
         {
-            rotate_vectors(camera->pos, 1, info->transformVector);
-            rotate_vectors(camera->up, 1, info->transformVector);
+            rotate_vector(camera->pos, info->transformVector);
+            rotate_vector(camera->up, info->transformVector);
         }
         if (info->transformType == 2) /* translateTarget */
-            translate_vectors(camera->target, 1, info->transformVector);
+            translate_vector(camera->target, info->transformVector);
         if (info->transformType == 3) /* rotateTarget */
         {
             Vector3 offset = {
@@ -149,47 +194,10 @@ void camera_apply_transformations(Camera *camera)
                 .y = camera->target->y - camera->pos->y,
                 .z = camera->target->z - camera->pos->z,
             };
-            rotate_vectors(&offset, 1, info->transformVector);
+            rotate_vector(&offset, info->transformVector);
             camera->target->x = camera->pos->x + offset.x;
             camera->target->y = camera->pos->y + offset.y;
             camera->target->z = camera->pos->z + offset.z;
         }
     }
-}
-
-void rotate_camera(Camera *camera, float w, float x, float y, float z)
-{
-    if (camera == NULL || camera->pos == NULL || camera->up == NULL)
-        return;
-    rotate_vector(camera->pos, w, x, y, z);
-    rotate_vector(camera->up, w, x, y, z);
-}
-
-void translate_camera(Camera *camera, float x, float y, float z)
-{
-    if (camera == NULL || camera->pos == NULL)
-        return;
-    translate_vector(camera->pos, x, y, z);
-}
-
-void rotate_camera_target(Camera *camera, float w, float x, float y, float z)
-{
-    if (camera == NULL || camera->target == NULL || camera->pos == NULL)
-        return;
-    Vector3 offset = {
-        .x = camera->target->x - camera->pos->x,
-        .y = camera->target->y - camera->pos->y,
-        .z = camera->target->z - camera->pos->z,
-    };
-    rotate_vector(&offset, w, x, y, z);
-    camera->target->x = camera->pos->x + offset.x;
-    camera->target->y = camera->pos->y + offset.y;
-    camera->target->z = camera->pos->z + offset.z;
-}
-
-void translate_camera_target(Camera *camera, float x, float y, float z)
-{
-    if (camera == NULL || camera->target == NULL)
-        return;
-    translate_vector(camera->target, x, y, z);
 }

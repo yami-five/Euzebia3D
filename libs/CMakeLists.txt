@@ -29,6 +29,7 @@ add_library(
     ${CMAKE_CURRENT_SOURCE_DIR}/storage/scrollers.c
     ${CMAKE_CURRENT_SOURCE_DIR}/storage/sprites.c
     ${CMAKE_CURRENT_SOURCE_DIR}/storage/rawPuppets.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/transformations/transformations.c
 )
 
 target_link_libraries(
@@ -62,6 +63,7 @@ target_include_directories(Euzebia3D_libs
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
+    ${CMAKE_CURRENT_SOURCE_DIR}/transformations
 )
 
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)
@@ -73,6 +75,7 @@ add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
 add_library(Euzebia3D_PuppetFactoryInterface INTERFACE)
 add_library(Euzebia3D_RendererInterface INTERFACE)
+add_library(Euzebia3D_Transformations INTERFACE)
 
 target_include_directories(
     Euzebia3D_CameraFactoryInterface 
@@ -126,4 +129,10 @@ target_include_directories(
     Euzebia3D_RendererInterface 
     INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/renderer  
+)
+
+target_include_directories(
+    Euzebia3D_Transformations 
+    INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/transformations  
 )

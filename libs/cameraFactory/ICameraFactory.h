@@ -7,7 +7,6 @@
 typedef struct
 {
     Camera* (*create_camera)(float camX, float camY, float camZ, float targetX, float targetY, float targetZ, float upX, float upY, float upZ);
-    void (*update_camera)(Camera *camera);
 } ICameraFactory;
 
 #endif

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "fpa.h"
 #include "../storage/gfx.h"
+#include "transformations.h"
 
 typedef struct
 {
@@ -14,20 +15,6 @@ typedef struct
     int textureSize;
     uint8_t isSkyBox;
 } Material;
-
-typedef struct TransformVector
-{
-    int32_t w;
-    int32_t x;
-    int32_t y;
-    int32_t z;
-} TransformVector;
-
-typedef struct TransformInfo
-{
-    uint8_t transformType;
-    TransformVector *transformVector;
-} TransformInfo;
 
 typedef struct
 {
@@ -47,7 +34,7 @@ typedef struct
 } Mesh;
 
 TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType);
-void modify_transformation(TransformInfo *currentTransformations, float w, float x, float y, float z, uint32_t transformationIndex);
+void modify_mesh_transformation(TransformInfo *currentTransformations, float w, float x, float y, float z, uint32_t transformationIndex);
 void free_model(Mesh *mesh);
 
 #endif
