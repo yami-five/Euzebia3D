@@ -67,7 +67,7 @@ int main()
     PointLight *pointLight = lightFactory->create_point_light(-1.0f, 0.0f, 1.0f, 15.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, 0);
 
     painter->clear_buffer(0x1100);
@@ -79,7 +79,7 @@ int main()
         float qt = t * 0.02f;
         modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
         modify_mesh_transformation(mug2->transformations, -qt, 10.0f, 10.0f, 10.0f, 0);
-        modify_camera_transformation(camera->transformations, 0.0f, 0.0f, 0.00f, 0.0f, 0);
+        modify_camera_transformation(camera->transformations, 0.0f, 0.0f, 0.01f, 0.0f, 0);
         update_camera(camera);
         renderer->clean_scene();
         renderer->add_model_to_scene(mug, camera, pointLight);

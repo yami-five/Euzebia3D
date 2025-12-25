@@ -7,19 +7,19 @@
 
 static void calculate_forward_vector(Vector3 *out, const Vector3 *pos, const Vector3 *target)
 {
-    sub_vectors(out,pos,target);
+    sub_vectors(out, pos, target);
     norm_vector(out);
 }
 
 static void calculate_right_vector(Vector3 *out, const Vector3 *up, const Vector3 *forward)
 {
-    mul_vectors(out,up,forward);
+    mul_vectors(out, up, forward);
     norm_vector(out);
 }
 
 static void calculate_up_vector(Vector3 *out, const Vector3 *forward, const Vector3 *right)
 {
-    mul_vectors(out,forward,right);
+    mul_vectors(out, forward, right);
     norm_vector(out);
 }
 
@@ -28,15 +28,15 @@ void calculateViewMatrix(Camera *camera)
     camera->vMatrix[0] = camera->right->x;
     camera->vMatrix[1] = camera->right->y;
     camera->vMatrix[2] = camera->right->z;
-    camera->vMatrix[3] = -dot_product(camera->pos,camera->right);
+    camera->vMatrix[3] = -dot_product(camera->pos, camera->right);
     camera->vMatrix[4] = camera->up->x;
     camera->vMatrix[5] = camera->up->y;
     camera->vMatrix[6] = camera->up->z;
-    camera->vMatrix[7] = -dot_product(camera->pos,camera->up);
+    camera->vMatrix[7] = -dot_product(camera->pos, camera->up);
     camera->vMatrix[8] = camera->forward->x;
     camera->vMatrix[9] = camera->forward->y;
     camera->vMatrix[10] = camera->forward->z;
-        camera->vMatrix[11] = -dot_product(camera->pos,camera->forward);
+    camera->vMatrix[11] = -dot_product(camera->pos, camera->forward);
     camera->vMatrix[12] =
         camera->vMatrix[13] =
             camera->vMatrix[14] = 0;
@@ -56,10 +56,11 @@ void calculatePerspectiveMatrix(Camera *camera)
     camera->pMatrix[8] =
         camera->pMatrix[9] = 0;
     camera->pMatrix[10] = -fixed_div((ZFAR + ZNEAR), (ZFAR - ZNEAR));
-    camera->pMatrix[11] = -fixed_div(2 * fixed_mul(ZFAR, ZNEAR), (ZFAR - ZNEAR));
+    camera->pMatrix[11] = -SCALE_FACTOR;
     camera->pMatrix[12] =
         camera->pMatrix[13] = 0;
-    camera->pMatrix[14] = -SCALE_FACTOR;
+    camera->pMatrix[14] = -fixed_div(2 * fixed_mul(ZFAR, ZNEAR), (ZFAR - ZNEAR));
+    ;
     camera->pMatrix[15] = 0;
 }
 
