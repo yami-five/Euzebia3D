@@ -103,35 +103,19 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         Quaternion q_vertex = {
             .w = 0,
             .vec = &vec_vertex};
-        Quaternion *result = mul_quaternion(&q, &q_vertex);
-        if (result == NULL || result->vec == NULL)
-        {
-            if (result != NULL)
-            {
-                free(result->vec);
-                free(result);
-            }
-            return;
-        }
-        Quaternion *result2 = mul_quaternion(result, &qInv);
-        if (result2 == NULL || result2->vec == NULL)
-        {
-            free(result->vec);
-            free(result);
-            if (result2 != NULL)
-            {
-                free(result2->vec);
-                free(result2);
-            }
-            return;
-        }
-        vertices[i * 3] = result2->vec->x;
-        vertices[i * 3 + 1] = result2->vec->y;
-        vertices[i * 3 + 2] = result2->vec->z;
-        free(result->vec);
-        free(result);
-        free(result2->vec);
-        free(result2);
+        Vector3 resultVec1;
+        Quaternion result = {
+            .w = 0,
+            .vec = &resultVec1};
+        mul_quaternion(&result, &q, &q_vertex);
+        Vector3 resultVec2;
+        Quaternion result2 = {
+            .w = 0,
+            .vec = &resultVec2};
+        mul_quaternion(&result2, &result, &qInv);
+        vertices[i * 3] = result2.vec->x;
+        vertices[i * 3 + 1] = result2.vec->y;
+        vertices[i * 3 + 2] = result2.vec->z;
     }
 }
 

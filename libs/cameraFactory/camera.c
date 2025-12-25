@@ -2,30 +2,24 @@
 
 #define ZNEAR 4096       // floatToFixed(1.0f)
 #define ZFAR 409600      // floatToFixed(100.0f)
-#define ASPECTRATIO 4096 // 1:1
-#define TANFOV2 6634     // tan(fov/2)
+#define ASPECTRATIO 5461 // 4:3
+#define TANFOV2 4096     // tan(fov/2) fov=90
 
 static void calculate_forward_vector(Vector3 *out, const Vector3 *pos, const Vector3 *target)
 {
-    out->x = pos->x - target->x;
-    out->y = pos->y - target->y;
-    out->z = pos->z - target->z;
+    sub_vectors(out,pos,target);
     norm_vector(out);
 }
 
 static void calculate_right_vector(Vector3 *out, const Vector3 *up, const Vector3 *forward)
 {
-    out->x = fixed_mul(up->y, forward->z) - fixed_mul(up->z, forward->y);
-    out->y = fixed_mul(up->z, forward->x) - fixed_mul(up->x, forward->z);
-    out->z = fixed_mul(up->x, forward->y) - fixed_mul(up->y, forward->x);
+    mul_vectors(out,up,forward);
     norm_vector(out);
 }
 
 static void calculate_up_vector(Vector3 *out, const Vector3 *forward, const Vector3 *right)
 {
-    out->x = fixed_mul(forward->y, right->z) - fixed_mul(forward->z, right->y);
-    out->y = fixed_mul(forward->z, right->x) - fixed_mul(forward->x, right->z);
-    out->z = fixed_mul(forward->x, right->y) - fixed_mul(forward->y, right->x);
+    mul_vectors(out,forward,right);
     norm_vector(out);
 }
 
@@ -34,15 +28,15 @@ void calculateViewMatrix(Camera *camera)
     camera->vMatrix[0] = camera->right->x;
     camera->vMatrix[1] = camera->right->y;
     camera->vMatrix[2] = camera->right->z;
-    camera->vMatrix[3] = -dot_product(camera->right, camera->pos);
+    camera->vMatrix[3] = -dot_product(camera->pos,camera->right);
     camera->vMatrix[4] = camera->up->x;
     camera->vMatrix[5] = camera->up->y;
     camera->vMatrix[6] = camera->up->z;
-    camera->vMatrix[7] = -dot_product(camera->up, camera->pos);
+    camera->vMatrix[7] = -dot_product(camera->pos,camera->up);
     camera->vMatrix[8] = camera->forward->x;
     camera->vMatrix[9] = camera->forward->y;
     camera->vMatrix[10] = camera->forward->z;
-    camera->vMatrix[11] = -dot_product(camera->forward, camera->pos);
+        camera->vMatrix[11] = -dot_product(camera->pos,camera->forward);
     camera->vMatrix[12] =
         camera->vMatrix[13] =
             camera->vMatrix[14] = 0;
@@ -67,18 +61,6 @@ void calculatePerspectiveMatrix(Camera *camera)
         camera->pMatrix[13] = 0;
     camera->pMatrix[14] = -SCALE_FACTOR;
     camera->pMatrix[15] = 0;
-}
-
-void update_camera(Camera *camera)
-{
-    if (camera == NULL || camera->pos == NULL || camera->target == NULL || camera->up == NULL || camera->right == NULL || camera->forward == NULL)
-        return;
-    camera_apply_transformations(camera);
-    calculate_forward_vector(camera->forward, camera->pos, camera->target);
-    calculate_right_vector(camera->right, camera->up, camera->forward);
-    calculate_up_vector(camera->up, camera->forward, camera->right);
-    calculateViewMatrix(camera);
-    calculatePerspectiveMatrix(camera);
 }
 
 TransformInfo *add_camera_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType)
@@ -132,35 +114,19 @@ static void rotate_vector(Vector3 *resultVec, TransformVector *transVec)
     Quaternion q_vertex = {
         .w = 0,
         .vec = resultVec};
-    Quaternion *result = mul_quaternion(&q, &q_vertex);
-    if (result == NULL || result->vec == NULL)
-    {
-        if (result != NULL)
-        {
-            free(result->vec);
-            free(result);
-        }
-        return;
-    }
-    Quaternion *result2 = mul_quaternion(result, &qInv);
-    if (result2 == NULL || result2->vec == NULL)
-    {
-        free(result->vec);
-        free(result);
-        if (result2 != NULL)
-        {
-            free(result2->vec);
-            free(result2);
-        }
-        return;
-    }
-    resultVec->x = result2->vec->x;
-    resultVec->y = result2->vec->y;
-    resultVec->z = result2->vec->z;
-    free(result->vec);
-    free(result);
-    free(result2->vec);
-    free(result2);
+    Vector3 resultVec1;
+    Quaternion result = {
+        .w = 0,
+        .vec = &resultVec1};
+    mul_quaternion(&result, &q, &q_vertex);
+    Vector3 resultVec2;
+    Quaternion result2 = {
+        .w = 0,
+        .vec = &resultVec2};
+    mul_quaternion(&result2, &result, &qInv);
+    resultVec->x = result2.vec->x;
+    resultVec->y = result2.vec->y;
+    resultVec->z = result2.vec->z;
 }
 
 static void translate_vector(Vector3 *resultVec, TransformVector *transVec)
@@ -200,4 +166,16 @@ void camera_apply_transformations(Camera *camera)
             camera->target->z = camera->pos->z + offset.z;
         }
     }
+}
+
+void update_camera(Camera *camera)
+{
+    if (camera == NULL || camera->pos == NULL || camera->target == NULL || camera->up == NULL || camera->right == NULL || camera->forward == NULL)
+        return;
+    camera_apply_transformations(camera);
+    calculate_forward_vector(camera->forward, camera->pos, camera->target);
+    calculate_right_vector(camera->right, camera->up, camera->forward);
+    calculate_up_vector(camera->up, camera->forward, camera->right);
+    calculateViewMatrix(camera);
+    calculatePerspectiveMatrix(camera);
 }

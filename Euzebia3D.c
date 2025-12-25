@@ -79,7 +79,7 @@ int main()
         float qt = t * 0.02f;
         modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
         modify_mesh_transformation(mug2->transformations, -qt, 10.0f, 10.0f, 10.0f, 0);
-        modify_camera_transformation(camera->transformations, 0.0f, 0.0f, 0.0f, 0.01f, 0);
+        modify_camera_transformation(camera->transformations, 0.0f, 0.0f, 0.00f, 0.0f, 0);
         update_camera(camera);
         renderer->clean_scene();
         renderer->add_model_to_scene(mug, camera, pointLight);
