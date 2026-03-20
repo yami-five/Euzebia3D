@@ -1,53 +1,53 @@
-﻿# Euzebia3D - Rendering Explained (EN)
+﻿# Euzebia3D - Step-by-Step Rendering Explanation (EN)
 
-This document is for a person who:
+This document is for someone who:
 - receives the project from someone else,
 - has never programmed in C for Raspberry Pi Pico,
 - wants to understand "what happens from a 3D model to a pixel on the LCD".
 
-You do not need deep 3D math knowledge to follow this.
+You do not need to know all the 3D math details to understand this description.
 
 ---
 
-## 1. What does this project do?
+## 1. What does this actually do?
 
 The project renders a 3D scene in software (CPU), without a GPU.
 
-In short, it:
-1. takes a 3D model (vertices + triangles),
+So:
+1. it takes a 3D model (vertices + triangles),
 2. rotates/moves it,
 3. projects it to a 2D screen,
 4. converts triangles into pixels,
-5. sends the whole frame to the LCD via DMA.
+5. sends the whole image to the LCD through DMA.
 
-Right now, the project uses **triangle sorting** (painter's algorithm), not a z-buffer.
+At the moment, the project uses **triangle sorting** (painter's algorithm), not a z-buffer.
 
 ---
 
 ## 2. Most important files (project map)
 
 - `Euzebia3D.c`
-  Main program loop, shows what happens each frame.
+  Main program loop, where you can see "what happens every frame".
 - `libs/renderer/renderer.c`
-  Core 3D renderer: clipping, culling, sorting, rasterization, shading, texturing.
+  The core of 3D rendering: clipping, culling, sorting, rasterization, shading, texturing.
 - `libs/cameraFactory/camera.c`
   Camera: view matrix (`vMatrix`) and projection matrix (`pMatrix`).
 - `libs/meshFactory/meshFactory.c`
-  Creates Mesh objects from embedded project data.
+  Creation of Mesh objects from data embedded in the project.
 - `libs/painter/painter.c`
-  Framebuffer + DMA transfer to LCD.
+  Screen buffer + DMA transfer to LCD.
 - `libs/display/display.c`
   LCD initialization.
 - `libs/hardware/hardware.c`
   SPI, GPIO, PWM, etc. initialization.
 - `libs/storage/gfx.c`
-  Models and textures embedded in firmware.
+  Model and texture data compiled into firmware.
 
 ---
 
-## 3. Program startup (step by step)
+## 3. How the program starts (step by step)
 
-In `main()` (`Euzebia3D.c`):
+In `main()` (`Euzebia3D.c`) this happens:
 
 1. Pico clock is set to 300 MHz.
 2. Hardware layer starts (`init_hardware`).
@@ -58,23 +58,23 @@ In `main()` (`Euzebia3D.c`):
    - 2 meshes (currently 2 mugs),
    - 1 point light,
    - 1 camera.
-7. Program enters `while(1)` - frame rendering loop.
+7. Enter `while(1)` loop - this is rendering of consecutive frames.
 
 ---
 
-## 4. What happens every frame?
+## 4. What happens in every frame?
 
-For each loop iteration:
+In each loop iteration:
 
-1. Transformations are updated (e.g., object rotation, camera movement).
+1. Transformations are changed (e.g. object rotation, camera movement).
 2. Camera is updated (`update_camera`) - matrices are recalculated.
-3. Renderer clears scene triangle list (`clean_scene`).
-4. Each model is added to scene (`add_model_to_scene`).
-5. Renderer draws the full scene (`render_scene`).
+3. Renderer clears the scene triangle list (`clean_scene`).
+4. Each model is added to the scene (`add_model_to_scene`).
+5. Renderer draws the entire scene (`render_scene`).
 6. Painter sends final buffer to LCD (`draw_buffer`).
-7. Buffer is cleared with background color for next frame.
+7. Buffer is cleared with background color for the next frame.
 
-Simple view: **compute -> draw -> send -> clear -> repeat**.
+So, simply: **compute -> draw -> send -> clear -> repeat**.
 
 ---
 
@@ -82,20 +82,20 @@ Simple view: **compute -> draw -> send -> clear -> repeat**.
 
 ### Mesh
 A Mesh is a 3D object:
-- vertex list,
-- triangle list (faces),
-- UV coordinates,
+- list of vertices,
+- list of triangles (faces),
+- UV (texture coordinates),
 - normals,
 - material.
 
 ### Material
-Material tells renderer:
-- use texture (`texture` + `textureSize`) or not,
-- use flat color (`diffuse`) or not,
-- whether it is skybox (`isSkyBox`).
+Material tells the renderer:
+- whether to use a texture (`texture` + `textureSize`),
+- whether to use a flat color (`diffuse`),
+- whether it is a skybox (`isSkyBox`).
 
 ### Triangle
-Renderer finally works with triangles.
+The renderer finally works on triangles.
 Each triangle has:
 - 3 points,
 - UV,
@@ -105,39 +105,39 @@ Each triangle has:
 
 ## 6. Most important part: 3D rendering pipeline
 
-Main path "from model to pixels":
+Below is the main path "from model to pixels":
 
 ### Stage A: model transformations
 
 For each model:
-- source data is copied into working buffers,
+- its data is copied to working buffers,
 - transformations are applied (rotation/translation/scale).
 
-Done in `add_model_to_scene`.
+This happens in `add_model_to_scene`.
 
 ### Stage B: camera (view + projection)
 
 Each vertex goes through:
-1. view matrix (`vMatrix`) - "how camera looks",
-2. projection matrix (`pMatrix`) - "how 3D maps to 2D".
+1. view matrix (`vMatrix`) - "how the camera looks",
+2. projection matrix (`pMatrix`) - "how to convert 3D to 2D".
 
-After this, vertex is in clip-space (`x, y, z, w`).
+After this step we have clip-space coordinates (`x, y, z, w`).
 
 ### Stage C: clipping (near plane)
 
-This was recently improved.
+This is the recently improved stage.
 
-Instead of dropping full triangles when partly behind camera:
-- triangle is clipped against near plane (`z > 0`),
+Instead of discarding the whole triangle when part of it is behind the camera:
+- the triangle is clipped to near plane (`z > 0`),
 - new edge vertices are interpolated,
-- UV and lighting are interpolated too.
+- UV and light are interpolated too.
 
-Result: fewer disappearing triangles near camera.
+Effect: fewer "disappearing" triangles near the camera.
 
 ### Stage D: triangulation after clipping
 
-After clipping, polygon can have:
-- 3 vertices -> keep 1 triangle,
+After clipping, a polygon can have:
+- 3 vertices -> remains 1 triangle,
 - 4 vertices -> split into 2 triangles.
 
 ### Stage E: perspective divide
@@ -150,125 +150,296 @@ This gives 2D screen position.
 
 ### Stage F: back-face culling
 
-If triangle faces away from camera, it is not drawn.
+If a triangle "faces away" from the camera, it is not drawn.
 This saves CPU time.
 
-### Stage G: write triangles into scene list
+### Stage G: writing triangles to scene list
 
-Triangles are stored in static array `scene[]`.
-There is a hard limit (`MAX_TRIANGLES_IN_SCENE = 1500`).
+Triangles go into static array `scene[]`.
+There is a limit (`MAX_TRIANGLES_IN_SCENE = 1500`).
 
 ### Stage H: triangle sorting
 
 Before drawing, triangles are sorted by depth (average `z`):
 - far first,
-- near last.
+- near later.
 
 This replaces z-buffer.
 
 ### Stage I: rasterization (triangle -> pixels)
 
-Each triangle is drawn scanline by scanline:
+Each triangle is drawn scanline-style:
 - line by line,
 - pixel by pixel.
 
-Barycentric coordinates (`Ba/Bb/Bc`) are used internally.
+Inside, barycentric coordinates are calculated (`Ba/Bb/Bc`).
 
-### Stage J: final pixel color
+### Stage J: pixel color
 
 For each pixel:
-1. Get base color (texture or flat color).
-2. Apply shading:
-   - interpolate vertex lighting,
-   - clamp values to safe range.
-3. Write RGB565 pixel into LCD buffer.
+1. Get color (texture or flat color).
+2. Shading (light):
+   - interpolation of per-vertex light,
+   - clamp (to prevent values from "blowing up").
+3. Write RGB565 color into LCD buffer.
 
-### Stage K: send full frame to LCD
+### Stage K: send full image to LCD
 
 `painter.draw_buffer()`:
-- takes whole framebuffer,
-- sends it via DMA in chunks through SPI to LCD.
+- takes the entire frame buffer,
+- sends it via DMA, in chunks, through SPI to the display.
+
+---
+
+## 6A. Renderer math (detailed)
+
+This section describes formulas and operations used by the code in more detail.
+
+### 6A.1. Fixed-point (Q20.12)
+
+The project uses fixed-point number representation:
+- `SHIFT_FACTOR = 12`
+- `SCALE_FACTOR = 1 << 12 = 4096`
+
+Meaning:
+- `1.0` is `4096`
+- `0.5` is `2048`
+
+Basic operations:
+- `fixed = real * 4096`
+- `real = fixed / 4096`
+- `fixed_mul(a,b) ~= (a*b) >> 12`
+- `fixed_div(a,b) ~= (a<<12) / b`
+
+Why this:
+- on Pico, this is usually faster and more predictable than using full `float` everywhere,
+- easier to control CPU and memory cost.
+
+### 6A.2. Rotation (quaternions)
+
+In `rotate(...)` rotation is computed using quaternions:
+- `theta = w * 2*pi`
+- `q = [cos(theta/2), axis * sin(theta/2)]`
+- result: `v' = q * v * q^-1`
+
+Rotation axis (`axis`) is normalized before use.
+
+### 6A.3. View matrix (camera)
+
+In `camera.c`:
+- `forward = normalize(pos - target)`
+- `right = normalize(up x forward)` (in code via `mul_vectors`)
+- `up = normalize(forward x right)`
+
+Then the view matrix is built:
+- camera axes go into rotational part,
+- translation is `-dot(pos, axis)`.
+
+This gives classic world -> camera-space transform.
+
+### 6A.4. Perspective projection matrix
+
+Code uses perspective form with `znear`, `zfar`, `aspect`, `tan(fov/2)`.
+
+Logical formula is classic:
+- `p00 = 1/(tan(fov/2)*aspect)`
+- `p11 = 1/tan(fov/2)`
+- `p22 = -(zf+zn)/(zf-zn)`
+- `p23 = -1`
+- `p32 = -(2*zf*zn)/(zf-zn)`
+
+In code, everything is in fixed-point.
+
+### 6A.5. Clip-space and near clipping
+
+After `vMatrix` and `pMatrix`, each vertex has `(x,y,z,w)` in clip-space.
+
+Near-plane inside condition:
+- point is "inside" when `z > 0`.
+
+For an edge crossing near-plane, intersection point is computed:
+- `t = (znear - za)/(zb - za)` where `znear = 1` (in fixed),
+- linear interpolation:
+  `P = A + t*(B-A)`.
+
+Interpolated at the same time:
+- `x,y,z,w`,
+- `uvx,uvy`,
+- `light`.
+
+Clipping algorithm works like Sutherland-Hodgman for one triangle:
+- input: 3 vertices,
+- output: 0..4 vertices,
+- if 4 vertices, it is split into 2 triangles (triangle fan).
+
+### 6A.6. Perspective divide and screen transform
+
+For each vertex after clipping:
+- `xs = x / w`
+- `ys = y / w`
+
+Then shift to render-target center:
+- `screen_x = xs + render_width_half`
+- `screen_y = ys + render_height_half`
+
+### 6A.7. Back-face culling
+
+In 2D, sign of "double area" is computed:
+
+`area2 = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax)`
+
+In code, triangle is drawn when `area2 >= 0`.
+
+### 6A.8. Triangle sorting (instead of z-buffer)
+
+Each triangle gets depth key:
+
+`depth = (za + zb + zc)/3`
+
+Then `qsort` orders triangles from far to near (painter's algorithm).
+
+### 6A.9. Barycentrics in rasterization
+
+In `calc_bar_coords(...)`:
+- `Ba`, `Bb` are computed from determinant-ratio formulas,
+- `Bc = 1 - Ba - Bb`.
+
+For point `(x,y)`:
+- `Ba = ((by-cy)*(x-cx) + (cx-bx)*(y-cy)) / divider`
+- `Bb = ((cy-ay)*(x-cx) + (ax-cx)*(y-cy)) / divider`
+- `divider = (by-cy)*(ax-cx) + (cx-bx)*(ay-cy)`
+
+In a scanline, `stepBa`, `stepBb` are used to avoid full re-division from scratch for each pixel.
+
+### 6A.10. UV interpolation and texture sampling
+
+UV at a pixel:
+- `u = Ba*uA + Bb*uB + Bc*uC`
+- `v = Ba*vA + Bb*vB + Bc*vC`
+
+Then:
+- multiply by texture size,
+- add half-pixel (`+0.5` in fixed),
+- clamp to `[1, size-2]`.
+
+Sampling:
+- 4 texels are fetched (`c00,c10,c01,c11`),
+- result is 2x2 channel average (simple box filter).
+
+This is not full bilinear with fractional UV-dependent weights; it is equal averaging of 4 samples.
+
+### 6A.11. Lighting
+
+First (geometry stage), per vertex:
+- `N = normalize(normal)`
+- `Ldir = normalize(lightPos - vertexPos)`
+- `Li = clamp(dot(N, Ldir), 0, 1)`
+
+Then (pixel stage):
+- `L = Ba*L0 + Bb*L1 + Bc*L2`
+- clamp to `[AMBIENT_MIN, 1]`
+
+Then:
+- multiply material color by light color (RGB565 per channel),
+- multiply by light intensity,
+- extra safety clamps (`INTENSITY_MAX`, `MAX_LIGHT_FACTOR`),
+- final clamp to RGB565 ranges (`R:0..31`, `G:0..63`, `B:0..31`).
+
+### 6A.12. Output scaling
+
+Renderer can work at lower internal resolution (`render_scale > 1`).
+
+Each computed pixel is then written as a block:
+- block size: `output_scale x output_scale`
+- this gives cheap upscale to LCD.
+
+### 6A.13. Important mathematical consequences of current approach
+
+- UVs are interpolated affinely (without full perspective-correct interpolation), so under strong perspective texture can slightly "swim".
+- Triangle sorting by average `z` does not perfectly solve mutually intersecting geometry cases.
+- Clipping is currently near-plane only, not all 6 frustum planes.
+- Code is intentionally optimized for compromise: quality vs CPU/RAM cost on Pico 2.
 
 ---
 
 ## 7. Why no z-buffer?
 
 In this project z-buffer was tested, but:
-- it produced visible artifacts (noisy/unstable output),
-- memory cost was too high for current constraints.
+- there were artifacts (image looked noisy/unstable),
+- memory cost was too high for project constraints.
 
-So the project currently uses triangle sorting.
+So currently triangle sorting is used.
 
-Trade-off: intersecting objects can still show draw-order artifacts.
+Downside: with intersecting objects, draw-order artifacts can appear.
 
 ---
 
-## 8. What was improved recently?
+## 8. What has already been improved recently?
 
 1. Per-frame allocations were reduced:
    - scratch buffers are reused.
 2. Near-plane clipping was improved:
-   - triangles crossing near plane are no longer dropped as a whole,
+   - triangles crossing near plane do not disappear as a whole,
    - they are clipped and triangulated.
 
 This improves rendering stability and reduces memory churn.
 
 ---
 
-## 9. What is intentionally still simple / incomplete?
+## 9. What is intentionally "simple" / still incomplete?
 
-This is not an AAA engine, it is a deliberate Pico + demoscene compromise.
+This is not an AAA engine, but a conscious Pico + demoscene compromise.
 
 Current limitations:
 - no z-buffer,
 - no full clipping on all frustum planes,
-- scene triangle limit (memory reasons),
+- scene triangle limit (for memory reasons),
 - small test asset set,
-- not all modules are used in current `main` (intentional: focus is 3D renderer quality).
+- not all modules are used in `main` (intentional, because focus is on 3D renderer quality).
 
 ---
 
-## 10. Best reading order for a new person
+## 10. Easiest way to read this code as a new person
 
-Recommended order:
+Best order:
 
 1. `Euzebia3D.c`
-   Understand frame loop first.
+   See frame loop.
 2. `libs/renderer/IRenderer.h`
    See renderer API.
 3. `libs/renderer/renderer.c`
-   Read in this order: `add_model_to_scene` -> `render_scene` -> `tri` -> `rasterize`.
+   Read in order: `add_model_to_scene` -> `render_scene` -> `tri` -> `rasterize`.
 4. `libs/cameraFactory/camera.c`
    Understand where matrices come from.
 5. `libs/painter/painter.c`
-   See how pixels reach LCD.
+   See how pixel reaches LCD.
 
 ---
 
-## 11. One-frame pseudocode (very simple)
+## 11. One-frame pseudocode (super simple)
 
 ```text
 while (true):
-    update object and camera animation
+    update object and camera animations
     update_camera()
 
     clean_scene()
 
     for each mesh:
         transform vertices
-        compute clip-space coordinates
-        clip triangles against near plane
-        reject back-faces
-        append triangles to scene[]
+        compute clip-space
+        clip triangles to near plane
+        reject back-face
+        add triangles to scene[]
 
     sort scene[] by depth
 
     for each triangle in scene[]:
         rasterize
         for each pixel:
-            fetch base color (texture/flat)
-            compute lighting
-            write pixel to framebuffer
+            fetch color (texture/flat)
+            compute light
+            write to framebuffer
 
     send framebuffer to LCD via DMA
     clear framebuffer
@@ -276,20 +447,20 @@ while (true):
 
 ---
 
-## 12. Glossary (plain language)
+## 12. Glossary (non-academic wording)
 
-- **Vertex**: a point in 3D.
-- **Triangle**: 3 vertices, smallest renderable part of model.
-- **UV**: coordinates that select color from texture.
-- **Normal**: vector telling which direction a surface faces.
+- **Vertex**: point in 3D.
+- **Triangle**: 3 vertices, smallest part of a model.
+- **UV**: coordinates that tell where to fetch color from texture.
+- **Normal**: vector that tells "which way the surface faces".
 - **Clipping**: cutting geometry to visible area.
-- **Culling**: skipping triangles that should not be visible.
-- **Rasterization**: converting triangle into pixels.
+- **Culling**: rejecting triangles that would not be visible anyway.
+- **Rasterization**: converting a triangle into pixels.
 - **Framebuffer**: image buffer in RAM.
-- **DMA**: hardware data transfer without CPU copying every byte manually.
+- **DMA**: hardware transfer without CPU handling each copy operation.
 
 ---
 
 ## 13. One-sentence summary
 
-This project is a lightweight software 3D renderer for Pico 2: model -> transforms -> clipping -> triangle sorting -> rasterization -> framebuffer -> DMA to LCD.
+This project is a lightweight software 3D renderer for Pico 2: model -> transformations -> clipping -> triangle sorting -> rasterization -> buffer -> DMA to LCD.
