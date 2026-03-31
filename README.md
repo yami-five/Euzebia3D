@@ -1,41 +1,76 @@
 # Euzebia3D
 
-Renderer and toolchain for a Raspberry Pi Pico 2–based 3D demo. Fixed-point math, software rasterizer, DMA-driven LCD output.
+Software 3D renderer and demo framework for Raspberry Pi Pico 2, built for demoscene productions.
 
-## Project layout
-- `Euzebia3D.c`: main loop, sets up hardware/display/painter/renderer, builds scene (meshes, light, camera) and draws each frame.
-- `libs/renderer`: fixed-point triangle rasterizer, z-buffer, shading, texturing (optionally bilinear), viewport scaling.
-- `libs/painter`: LCD back-buffer management, DMA upload, pixel/ sprite/ gradient utilities, post-process effects.
-- `libs/meshFactory`, `libs/cameraFactory`, `libs/lightFactory`, `libs/puppetFactory`: creation helpers for scene objects and animation bones.
-- `libs/arithmetics`: fixed-point utilities, vectors/quaternions, lookup tables.
-- `libs/hardware`, `libs/display`, `libs/file_reader`: hardware I/O, LCD wiring, SD/FAT access, audio setup.
-- `assets`: sample models/textures.
-- `tools`: python helpers for textures/geometry export.
+Core characteristics:
+- fixed-point math (`SHIFT_FACTOR = 12`)
+- CPU triangle rasterization
+- DMA-driven LCD framebuffer upload (`320x240`, RGB565)
+- triangle sorting (painter's algorithm) instead of z-buffer
+
+## Rendering Docs
+
+- PL: [RENDERING_GUIDE_PL.md](./RENDERING_GUIDE_PL.md)
+- EN: [RENDERING_GUIDE_EN.md](./RENDERING_GUIDE_EN.md)
+
+## Current Rendering Approach
+
+The renderer used to rely on z-buffering.
+Currently, z-buffer was replaced with triangle sorting due to rendering correctness issues in the previous approach.
+
+What is implemented now in `libs/renderer/renderer.c`:
+- back-face culling in screen space
+- scene triangle collection with cap `MAX_TRIANGLES_IN_SCENE = 1500`
+- depth sort by average triangle depth (far-to-near draw order)
+- affine UV interpolation with clamped sampling
+- simple 2x2 texture averaging (box-filter-like, always enabled)
+- per-vertex diffuse lighting with interpolation and intensity clamps
+
+## Project Layout
+
+- `Euzebia3D.c`: main app loop, hardware/display/painter/renderer setup, scene creation (camera/light/meshes), frame rendering.
+- `libs/renderer`: transform + projection + triangle setup/rasterization + triangle sorting.
+- `libs/painter`: full framebuffer operations, DMA transfer to LCD, sprites/text/gradient/fade/post-process helpers.
+- `libs/meshFactory`, `libs/cameraFactory`, `libs/lightFactory`, `libs/puppetFactory`: object/factory modules for scene and animation elements.
+- `libs/arithmetics`: fixed-point arithmetic, vectors/quaternions, trig lookup helpers.
+- `libs/hardware`, `libs/display`: low-level board and LCD control.
+- `libs/file_reader`: SD/FAT + WAV playback support (present in codebase; not used in current `main` loop).
+- `libs/storage`: embedded assets (models/textures/fonts/sprites/post-processing data).
+- `assets`: source assets (e.g. OBJ) used for conversion.
+- `tools`: Python converters/exporters used to generate embedded asset data.
+
+## Asset Pipeline
+
+Runtime meshes/textures are loaded from embedded arrays in `libs/storage/gfx.c` (`get_model`, `get_image`).
+
+Typical workflow:
+1. edit source assets in `assets/`
+2. convert/export with scripts from `tools/`
+3. update generated data in `libs/storage/*`
 
 ## Build
-1. Install Raspberry Pi Pico SDK 2.2 and toolchain (RP2040/2350). Ensure `PICO_SDK_PATH` is set.
-2. Configure and build:
-   ```bash
-   cmake -B build -G Ninja
-   cmake --build build
-   ```
-3. The firmware target is `Euzebia3D.elf` (and UF2 via Pico SDK extra outputs).
 
-## Renderer specifics
-- Fixed-point (SHIFT_FACTOR=12). Rasterizer works on a downscaled render buffer (`render_scale`, default 2 → 160x120) and upsamples to LCD (`output_scale` in painter).
-- Z-buffer: 32-bit depth per pixel (affine z → inverse) sized to render resolution; cleared each frame.
-- Texturing: affine UV with half-texel bias and clamp; optional simple bilinear (averages 4 texels).
-- Shading: per-vertex diffuse, interpolated light dot, ambient floor; light intensity clamped to avoid overflow.
-- Rasterization: barycentric interpolation per scanline, per-pixel depth/UV/shading, then upscaled writes to painter buffer.
+Requirements:
+- Raspberry Pi Pico SDK `2.2.0`
+- Pico toolchain for RP2350
+- CMake + Ninja
 
-## Tips and gotchas
-- Avoid huge models: render buffers/z-buffer are allocated per scale; keep `render_scale` at 2 on Pico unless memory allows.
-- Textures: add gutter/padding around UV islands to minimize bleeding; current sampler clamps UV inside `[1, texSize-2]`.
-- Near/far: current pipeline uses affine inverse z; no explicit clipping. Keep meshes in front of camera.
-- Normals and light vectors must be normalized; `norm_vector_safe` skips zero-length vectors.
-- Effects/post-process in painter allocate temporary buffers; watch stack sizes if adding VLAs.
+Configure and build:
 
-## Extending
-- To change resolution: call `renderer_set_scale(scale)` before `init_renderer`.
-- To tweak lighting: adjust `AMBIENT_MIN` and `INTENSITY_MAX` in `renderer.c`.
-- To disable bilinear: revert `texturing` to nearest-only sampling.
+```bash
+cmake -B build -G Ninja
+cmake --build build
+```
+
+Output target: `Euzebia3D.elf` (plus additional Pico outputs, including UF2).
+
+Notes:
+- `PICO_BOARD` is set to `pico2` in `CMakeLists.txt`.
+- `pico_vscode.cmake` is auto-included when present at `~/.pico-sdk/cmake/pico-vscode.cmake`.
+
+## Practical Notes
+
+- `renderer->set_scale(...)` controls internal render resolution scaling. Current `main` sets scale to `1` (full `320x240` internal rendering).
+- The painter uses a full framebuffer (`BUFFER_SIZE = 153600` bytes) and streams it via DMA in chunks.
+- No explicit near-plane clipping is implemented; geometry behind the camera is rejected per-vertex.
+- With triangle sorting, intersecting geometry can still produce painter-order artifacts in edge cases.

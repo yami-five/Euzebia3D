@@ -20,6 +20,7 @@
 #include "painter.h"
 #include "renderer.h"
 #include "mesh.h"
+#include "camera.h"
 #include "puppetFactory.h"
 #include "puppet.h"
 
@@ -53,21 +54,21 @@ int main()
     renderer->set_scale(1);
 
     meshFactory = get_meshFactory();
-    Mesh *triangle1 = meshFactory->create_colored_mesh(0x1234, 0);
-    triangle1->transformations = add_transformation(triangle1->transformations, &triangle1->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
-
-    Mesh *triangle2 = meshFactory->create_colored_mesh(0x9999, 0);
-    triangle2->transformations = add_transformation(triangle2->transformations, &triangle2->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
-    triangle2->transformations = add_transformation(triangle2->transformations, &triangle2->transformationsNum, 0, 0.0f, 0.0f, 0.2f, 1);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
     mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, -0.05f, 0.0f, -0.3f, 1);
+    
+    Mesh *mug2 = meshFactory->create_textured_mesh(0, 1);
+    mug2->transformations = add_transformation(mug2->transformations, &mug2->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
+    mug2->transformations = add_transformation(mug2->transformations, &mug2->transformationsNum, 0, 0.05f, 0.0f, 0.3f, 1);
 
     lightFactory = get_lightFactory();
-    PointLight *pointLight = lightFactory->create_point_light(-1.0f, 0.0f, 1.0f, 5.0f, 0xffff);
+    PointLight *pointLight = lightFactory->create_point_light(-1.0f, 0.0f, 1.0f, 15.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, 0);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
@@ -76,12 +77,17 @@ int main()
     while (1)
     {
         float qt = t * 0.02f;
-        modify_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
-        renderer->draw_model(mug, pointLight, camera);
+        modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
+        modify_mesh_transformation(mug2->transformations, -qt, 10.0f, 10.0f, 10.0f, 0);
+        // modify_camera_transformation(camera->transformations, 0.0f, 0.0f, 0.01f, 0.0f, 0);
+        update_camera(camera);
+        renderer->clean_scene();
+        renderer->add_model_to_scene(mug2, camera, pointLight);
+        // renderer->add_model_to_scene(mug2, camera, pointLight);
+        renderer->render_scene(pointLight);
         // painter->apply_post_process_effect(0);
         painter->draw_buffer();
         t++;
-        renderer->clear_zbuffer();
         painter->clear_buffer(10);
         // sleep_ms(2000);
         // painter->clear_buffer(0x11);

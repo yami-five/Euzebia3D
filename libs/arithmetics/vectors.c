@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-void mul_quaternion_inline(const Quaternion *q1, const Quaternion *q2, Quaternion *out)
+void mul_quaternion(Quaternion *out, const Quaternion *q1, const Quaternion *q2)
 {
     if (!q1 || !q2 || !out || !q1->vec || !q2->vec || !out->vec)
         return;
@@ -13,49 +13,28 @@ void mul_quaternion_inline(const Quaternion *q1, const Quaternion *q2, Quaternio
     out->vec->z = fixed_mul(q1->w, q2->vec->z) - fixed_mul(q1->vec->x, q2->vec->y) + fixed_mul(q1->vec->y, q2->vec->x) + fixed_mul(q1->vec->z, q2->w);
 }
 
-Quaternion *mul_quaternion(const Quaternion *q1, const Quaternion *q2)
+void add_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB)
 {
-    Quaternion *result = (Quaternion *)malloc(sizeof(Quaternion));
-    if (result == NULL)
-        return NULL;
-    result->vec = (Vector3 *)malloc(sizeof(Vector3));
-    if (result->vec == NULL)
-    {
-        free(result);
-        return NULL;
-    }
-    mul_quaternion_inline(q1, q2, result);
-    return result;
+    out->x = vecA->x + vecB->x;
+    out->y = vecA->y + vecB->y;
+    out->z = vecA->z + vecB->z;
 }
 
-Vector3 *add_vectors(Vector3 *vecA, Vector3 *vecB)
+void sub_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB)
 {
-    Vector3 *result = (Vector3 *)malloc(sizeof(Vector3));
-    result->x = vecA->x + vecB->x;
-    result->y = vecA->y + vecB->y;
-    result->z = vecA->z + vecB->z;
-    return result;
+    out->x = vecA->x - vecB->x;
+    out->y = vecA->y - vecB->y;
+    out->z = vecA->z - vecB->z;
 }
 
-Vector3 *sub_vectors(Vector3 *vecA, Vector3 *vecB)
+void mul_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB)
 {
-    Vector3 *result = (Vector3 *)malloc(sizeof(Vector3));
-    result->x = vecA->x - vecB->x;
-    result->y = vecA->y - vecB->y;
-    result->z = vecA->z - vecB->z;
-    return result;
+    out->x = fixed_mul(vecA->y, vecB->z) - fixed_mul(vecA->z, vecB->y);
+    out->y = fixed_mul(vecA->z, vecB->x) - fixed_mul(vecA->x, vecB->z);
+    out->z = fixed_mul(vecA->x, vecB->y) - fixed_mul(vecA->y, vecB->x);
 }
 
-Vector3 *mul_vectors(Vector3 *vecA, Vector3 *vecB)
-{
-    Vector3 *result = (Vector3 *)malloc(sizeof(Vector3));
-    result->x = fixed_mul(vecA->y, vecB->z) - fixed_mul(vecA->z, vecB->y);
-    result->y = fixed_mul(vecA->z, vecB->x) - fixed_mul(vecA->x, vecB->z);
-    result->z = fixed_mul(vecA->x, vecB->y) - fixed_mul(vecA->y, vecB->x);
-    return result;
-}
-
-int32_t dot_product(Vector3 *vecA, Vector3 *vecB)
+int32_t dot_product(const Vector3 *vecA, const Vector3 *vecB)
 {
     return fixed_mul(vecA->x, vecB->x) + fixed_mul(vecA->y, vecB->y) + fixed_mul(vecA->z, vecB->z);
 }
@@ -73,14 +52,14 @@ void sub_vec_scalar(Vector3 *vec, int32_t scal)
     vec->z = vec->z - scal;
 }
 
-void mul_vec_scalar(Vector3 *vec, int32_t scal)
+void mul_vec_scalar(Vector3 *vec, const int32_t scal)
 {
     vec->x = fixed_mul(vec->x, scal);
     vec->y = fixed_mul(vec->y, scal);
     vec->z = fixed_mul(vec->z, scal);
 }
 
-int32_t len_vector(Vector3 *vec)
+int32_t len_vector(const Vector3 *vec)
 {
     return fast_sqrt(fixed_pow(vec->x) + fixed_pow(vec->y) + fixed_pow(vec->z));
 }
