@@ -35,41 +35,44 @@ project(Euzebia3D C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
-
-add_executable(Euzebia3D Euzebia3D.c )
-
-pico_set_program_name(Euzebia3D "Euzebia3D")
-pico_set_program_version(Euzebia3D "0.1")
-
-# Generate PIO header
-pico_generate_pio_header(Euzebia3D ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
-
-# Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(Euzebia3D 1)
-pico_enable_stdio_usb(Euzebia3D 1)
+option(EUZEBIA3D_BUILD_APP "Build the Euzebia3D demo executable" ON)
 
 # Add mine libraries
 add_subdirectory(libs)
 
-# Add the standard library to the build
-target_link_libraries(Euzebia3D
-        pico_stdlib)
+if(EUZEBIA3D_BUILD_APP)
+    # Add executable. Default name is the project name, version 0.1
+    add_executable(Euzebia3D Euzebia3D.c )
 
-# Add the standard include files to the build
-target_include_directories(Euzebia3D PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
-)
+    pico_set_program_name(Euzebia3D "Euzebia3D")
+    pico_set_program_version(Euzebia3D "0.1")
 
-# Add any user requested libraries
-target_link_libraries(Euzebia3D 
-        hardware_spi
-        hardware_i2c
-        hardware_dma
-        hardware_pio
-        hardware_interp
-        Euzebia3D_libs
-        )
+    # Generate PIO header
+    pico_generate_pio_header(Euzebia3D ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 
-pico_add_extra_outputs(Euzebia3D)
+    # Modify the below lines to enable/disable output over UART/USB
+    pico_enable_stdio_uart(Euzebia3D 1)
+    pico_enable_stdio_usb(Euzebia3D 1)
+
+    # Add the standard library to the build
+    target_link_libraries(Euzebia3D
+            pico_stdlib)
+
+    # Add the standard include files to the build
+    target_include_directories(Euzebia3D PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}
+    )
+
+    # Add any user requested libraries
+    target_link_libraries(Euzebia3D 
+            hardware_spi
+            hardware_i2c
+            hardware_dma
+            hardware_pio
+            hardware_interp
+            Euzebia3D_libs
+            )
+
+    pico_add_extra_outputs(Euzebia3D)
+endif()
 

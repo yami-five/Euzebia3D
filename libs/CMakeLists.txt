@@ -1,40 +1,7 @@
-add_library(
-    Euzebia3D_libs
-    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/fpa.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/vectors.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/lookup_tables.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory/camera.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory/cameraFactory.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/display/display.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/hardware/hardware.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory/light.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory/lightFactory.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/mesh.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/meshFactory.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/painter/painter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/painter/gradient.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/animation.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppet.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppetFactory.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/renderer/renderer.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/fonts.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/gfx.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/post_processing.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/scrollers.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/sprites.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/rawPuppets.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/transformations/transformations.c
-)
-
+add_library(Euzebia3D_PicoDeps INTERFACE)
 target_link_libraries(
-    Euzebia3D_libs
-    PUBLIC 
+    Euzebia3D_PicoDeps
+    INTERFACE
     pico_stdlib
     hardware_adc
     hardware_clocks
@@ -46,24 +13,199 @@ target_link_libraries(
     pico_audio
     pico_audio_i2s
 )
-pico_generate_pio_header(Euzebia3D_libs ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
 
-target_include_directories(Euzebia3D_libs
+add_library(
+    Euzebia3D_Arithmetics
+    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/fpa.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/vectors.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics/lookup_tables.c
+)
+target_include_directories(
+    Euzebia3D_Arithmetics
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/arithmetics
+)
+target_link_libraries(Euzebia3D_Arithmetics PUBLIC Euzebia3D_PicoDeps)
+
+add_library(
+    Euzebia3D_CameraFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory/camera.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory/cameraFactory.c
+)
+target_include_directories(
+    Euzebia3D_CameraFactory
+    PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory
+)
+target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
+
+add_library(
+    Euzebia3D_Display
+    ${CMAKE_CURRENT_SOURCE_DIR}/display/display.c
+)
+target_include_directories(
+    Euzebia3D_Display
+    PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/display
+)
+target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps)
+
+add_library(
+    Euzebia3D_FileReader
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
+)
+target_include_directories(
+    Euzebia3D_FileReader
+    PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader
-    ${CMAKE_CURRENT_SOURCE_DIR}/hardware
-    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory
-    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
-    ${CMAKE_CURRENT_SOURCE_DIR}/painter
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory
-    ${CMAKE_CURRENT_SOURCE_DIR}/renderer
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
+)
+target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps)
+
+add_library(
+    Euzebia3D_Hardware
+    ${CMAKE_CURRENT_SOURCE_DIR}/hardware/hardware.c
+)
+target_include_directories(
+    Euzebia3D_Hardware
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/hardware
+)
+target_link_libraries(Euzebia3D_Hardware PUBLIC Euzebia3D_PicoDeps)
+pico_generate_pio_header(Euzebia3D_Hardware ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
+
+add_library(
+    Euzebia3D_Storage
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/fonts.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/gfx.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/post_processing.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/scrollers.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/sprites.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage/rawPuppets.c
+)
+target_include_directories(
+    Euzebia3D_Storage
+    PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
+)
+target_link_libraries(Euzebia3D_Storage PUBLIC Euzebia3D_PicoDeps)
+
+add_library(
+    Euzebia3D_LightFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory/light.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory/lightFactory.c
+)
+target_include_directories(
+    Euzebia3D_LightFactory
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory
+)
+target_link_libraries(Euzebia3D_LightFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
+
+add_library(
+    Euzebia3D_MeshFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/mesh.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/meshFactory.c
+)
+target_include_directories(
+    Euzebia3D_MeshFactory
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
+)
+target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage)
+
+add_library(
+    Euzebia3D_Painter
+    ${CMAKE_CURRENT_SOURCE_DIR}/painter/painter.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/painter/gradient.c
+)
+target_include_directories(
+    Euzebia3D_Painter
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/painter
+)
+target_link_libraries(
+    Euzebia3D_Painter
+    PUBLIC
+    Euzebia3D_PicoDeps
+    Euzebia3D_Display
+    Euzebia3D_Hardware
+    Euzebia3D_Arithmetics
+    Euzebia3D_Storage
+)
+
+add_library(
+    Euzebia3D_PuppetFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/animation.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppet.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppetFactory.c
+)
+target_include_directories(
+    Euzebia3D_PuppetFactory
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory
+)
+target_link_libraries(
+    Euzebia3D_PuppetFactory
+    PUBLIC
+    Euzebia3D_PicoDeps
+    Euzebia3D_Arithmetics
+    Euzebia3D_MeshFactory
+    Euzebia3D_Storage
+)
+
+add_library(
+    Euzebia3D_Transformations
+    ${CMAKE_CURRENT_SOURCE_DIR}/transformations/transformations.c
+)
+target_include_directories(
+    Euzebia3D_Transformations
+    PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/transformations
+)
+target_link_libraries(Euzebia3D_Transformations PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
+
+add_library(
+    Euzebia3D_Renderer
+    ${CMAKE_CURRENT_SOURCE_DIR}/renderer/renderer.c
+)
+target_include_directories(
+    Euzebia3D_Renderer
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/renderer
+)
+target_link_libraries(
+    Euzebia3D_Renderer
+    PUBLIC
+    Euzebia3D_PicoDeps
+    Euzebia3D_Arithmetics
+    Euzebia3D_Transformations
+    Euzebia3D_MeshFactory
+    Euzebia3D_LightFactory
+)
+
+add_library(Euzebia3D_libs INTERFACE)
+target_link_libraries(
+    Euzebia3D_libs
+    INTERFACE
+    Euzebia3D_Arithmetics
+    Euzebia3D_CameraFactory
+    Euzebia3D_Display
+    Euzebia3D_FileReader
+    Euzebia3D_Hardware
+    Euzebia3D_LightFactory
+    Euzebia3D_MeshFactory
+    Euzebia3D_Painter
+    Euzebia3D_PuppetFactory
+    Euzebia3D_Renderer
+    Euzebia3D_Storage
+    Euzebia3D_Transformations
 )
 
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)
@@ -75,64 +217,13 @@ add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
 add_library(Euzebia3D_PuppetFactoryInterface INTERFACE)
 add_library(Euzebia3D_RendererInterface INTERFACE)
-add_library(Euzebia3D_Transformations INTERFACE)
 
-target_include_directories(
-    Euzebia3D_CameraFactoryInterface 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory  
-)
-
-target_include_directories(
-    Euzebia3D_DisplayInterface 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/display  
-)
-
-target_include_directories(
-    Euzebia3D_FileReaderInterface
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader  
-)
-
-target_include_directories(
-    Euzebia3D_HardwareInterface
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/hardware  
-)
-
-target_include_directories(
-    Euzebia3D_LightFactoryInterface
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/lightFactory
-)
-
-target_include_directories(
-    Euzebia3D_MeshFactoryInterface
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
-)
-
-target_include_directories(
-    Euzebia3D_PainterInterface 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/painter  
-)
-
-target_include_directories(
-    Euzebia3D_PuppetFactoryInterface 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory  
-)
-
-target_include_directories(
-    Euzebia3D_RendererInterface 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/renderer  
-)
-
-target_include_directories(
-    Euzebia3D_Transformations 
-    INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/transformations  
-)
+target_link_libraries(Euzebia3D_CameraFactoryInterface INTERFACE Euzebia3D_CameraFactory)
+target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
+target_link_libraries(Euzebia3D_FileReaderInterface INTERFACE Euzebia3D_FileReader)
+target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)
+target_link_libraries(Euzebia3D_LightFactoryInterface INTERFACE Euzebia3D_LightFactory)
+target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFactory)
+target_link_libraries(Euzebia3D_PainterInterface INTERFACE Euzebia3D_Painter)
+target_link_libraries(Euzebia3D_PuppetFactoryInterface INTERFACE Euzebia3D_PuppetFactory)
+target_link_libraries(Euzebia3D_RendererInterface INTERFACE Euzebia3D_Renderer)
