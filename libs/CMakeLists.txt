@@ -37,7 +37,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory
 )
-target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
+target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Transformations)
 
 add_library(
     Euzebia3D_Display
@@ -48,7 +48,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/display
 )
-target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps)
+target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps Euzebia3D_Hardware)
 
 add_library(
     Euzebia3D_FileReader
@@ -67,6 +67,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
 )
 target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps)
+target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_Painter Euzebia3D_Hardware)
 
 add_library(
     Euzebia3D_Hardware
@@ -94,7 +95,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
 )
-target_link_libraries(Euzebia3D_Storage PUBLIC Euzebia3D_PicoDeps)
+target_link_libraries(Euzebia3D_Storage PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
 add_library(
     Euzebia3D_LightFactory
@@ -118,7 +119,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
 )
-target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage)
+target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations)
 
 add_library(
     Euzebia3D_Painter
@@ -138,6 +139,7 @@ target_link_libraries(
     Euzebia3D_Hardware
     Euzebia3D_Arithmetics
     Euzebia3D_Storage
+    Euzebia3D_PuppetFactory
 )
 
 add_library(
@@ -188,6 +190,8 @@ target_link_libraries(
     Euzebia3D_Transformations
     Euzebia3D_MeshFactory
     Euzebia3D_LightFactory
+    Euzebia3D_Painter
+    Euzebia3D_CameraFactory
 )
 
 add_library(Euzebia3D_libs INTERFACE)
