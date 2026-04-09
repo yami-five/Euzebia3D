@@ -35,18 +35,74 @@ What is implemented now in `libs/renderer/renderer.c`:
 - `libs/arithmetics`: fixed-point arithmetic, vectors/quaternions, trig lookup helpers.
 - `libs/hardware`, `libs/display`: low-level board and LCD control.
 - `libs/file_reader`: SD/FAT + WAV playback support (present in codebase; not used in current `main` loop).
-- `libs/storage`: embedded assets (models/textures/fonts/sprites/post-processing data).
+- `storage`: embedded assets and storage API (models/textures/fonts/sprites/post-processing data, `get_storage()` access).
 - `assets`: source assets (e.g. OBJ) used for conversion.
 - `tools`: Python converters/exporters used to generate embedded asset data.
 
 ## Asset Pipeline
 
-Runtime meshes/textures are loaded from embedded arrays in `libs/storage/gfx.c` (`get_model`, `get_image`).
+Runtime assets are loaded through `IStorage` (`get_model`, `get_image`, etc.), with data defined in `storage/*.c`.
 
 Typical workflow:
 1. edit source assets in `assets/`
 2. convert/export with scripts from `tools/`
-3. update generated data in `libs/storage/*`
+3. update generated data in `storage/*`
+
+## Using Storage
+
+Main entry point:
+- include `storage.h`
+- call `get_storage()` once during init
+- pass the returned `IStorage*` to modules that need assets
+
+Example (as in current app init flow):
+
+```c
+#include "storage.h"
+
+static const IStorage *storage;
+
+storage = get_storage();
+painter->init_painter(display, hardware_core, storage);
+meshFactory->init_mesh_factory(storage);
+```
+
+`IStorage` API includes:
+- `get_font_by_index(uint8_t index)`
+- `get_image(uint8_t image_index)`
+- `get_model(uint8_t model_index)`
+- `get_effect_table(uint8_t effect_index)`
+- `get_effect_table_element(uint8_t effect_index, uint32_t e_index)`
+- `get_raw_puppet(uint8_t puppetIndex)`
+- `get_scroller_by_index(uint8_t index)`
+- `get_sprite(uint8_t sprite_index)`
+
+Implementation note:
+- accessor implementation is centralized in `storage/storage.c`
+- `storage/storage.c` is built as a single translation unit for storage and includes data sources from the other `storage/*.c` files
+
+## Tools
+
+`tools/` contains helper scripts for asset conversion/generation.
+
+Run from repository root:
+
+```bash
+python tools/<script>.py
+```
+
+Requirements:
+- Python 3
+- Pillow (`pip install pillow`) for image scripts (`bmp_converter.py`, `texture_converter.py`, `font_exporter.py`)
+
+Scripts:
+- `tools/obj_exporter.py`: reads `assets/<fileName>.obj` and prints C arrays for vertices/faces/uv/normals to stdout. Input file name is set in script (`fileName = "..."`).
+- `tools/texture_converter.py`: converts `assets/models/<file_name>.bmp` to RGB565 C array and writes `tools/img_converted.txt`. Input name is set in script (`file_name = "..."`).
+- `tools/bmp_converter.py`: converts `assets/<sprite_name>.bmp` to RGB565 C array and writes `tools/img_converted.txt`. Input name is set in script (`sprite_name = "..."`).
+- `tools/font_exporter.py`: converts `assets/letters.bmp` into packed font data and writes `assets/font_converted.txt`.
+- `tools/barrel_distortion.py`: generates barrel distortion lookup table and writes `assets/barrel_dist.txt`.
+- `tools/init_sin_cos.py`: generates trig lookup tables and writes `tools/sin_cos_atan.txt`.
+- `tools/calc_margin.py`: prints centered `painter->print(...)` calls for prepared text lines (helper for scroller/text layout).
 
 ## Build
 

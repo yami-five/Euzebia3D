@@ -1,16 +1,17 @@
 #include "IPainter.h"
 #include "painter.h"
-#include "../storage/fonts.h"
-#include "../storage/gfx.h"
-#include "../storage/post_processing.h"
-#include "../storage/sprites.h"
+// #include "../storage/fonts.h"
+// #include "../storage/gfx.h"
+// #include "../storage/post_processing.h"
+// #include "../storage/sprites.h"
 #include "hardware/sync/spin_lock.h"
-#include "../arithmetics/fpa.h"
+#include "fpa.h"
 #include <string.h>
 #include <stdlib.h>
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
+static const IStorage *_storage = NULL;
 static uint8_t buffer[BUFFER_SIZE];
 static uint8_t temp_buffer[BUFFER_SIZE];
 static const uint32_t chunk_size = 15360;
@@ -67,10 +68,11 @@ void init_dma()
     channel_config_set_write_increment(&config, false);
 }
 
-void init_painter(const IDisplay *display, const IHardware *hardware)
+void init_painter(const IDisplay *display, const IHardware *hardware, const IStorage *storage)
 {
     _hardware = hardware;
     _display = display;
+    _storage = storage;
     init_dma();
     _hardware->write(SD_CS_PIN, 1);
     _hardware->write(LCD_CS_PIN, 0);
@@ -131,7 +133,7 @@ void draw_image(uint8_t image_index)
         dma_channel_flash,
         &config,
         buffer,
-        get_image(image_index)->image,
+        _storage->get_image(image_index)->image,
         BUFFER_SIZE,
         false);
     dma_channel_start(dma_channel_flash);
@@ -448,7 +450,7 @@ void print(const char *text, int16_t x, int16_t y, uint8_t scale)
             offset += DEFAULT_FONT_SIZE << (scale);
             continue;
         }
-        const Font *font = get_font_by_index(text[i] - 33);
+        const Font *font = _storage->get_font_by_index(text[i] - 33);
         draw_sprite(font->sprite, x + offset - (((font->sprite->size - font->width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
         offset += (font->width << (scale - 1));
     }

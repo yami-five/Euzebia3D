@@ -4,13 +4,3 @@ const uint32_t barrel_distortion[76800]={0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 
 static const uint32_t* effects[] = {
     barrel_distortion};
-
-const uint32_t *get_effect_table(uint8_t effect_index)
-{
-    return effects[effect_index];
-}
-
-const uint32_t get_effect_table_element(uint8_t effect_index, uint32_t e_index)
-{
-    return effects[effect_index][e_index];
-}

@@ -470,7 +470,7 @@ static const Sprite spritesFonts[93] = {
     },
 };
 
-static const Font fonts[93] = {
+const Font fonts[93] = {
     {
         .width = 8,
         .sprite = &spritesFonts[0],//!
@@ -845,7 +845,3 @@ static const Font fonts[93] = {
     },
 };
 
-const Font *get_font_by_index(uint8_t index)
-{
-    return &fonts[index];
-}

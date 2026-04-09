@@ -4,6 +4,13 @@
 #include "string.h"
 #include "../storage/rawPuppets.h"
 
+static volatile const IStorage *_storage = NULL;
+
+void init_puppet_factory(volatile const IStorage * storage)
+{
+    _storage = storage;
+}
+
 Bone *create_bones(const RawBone *rawBones, const uint8_t bonesNum, int *parentWorldMatrix)
 {
     Bone *newBones = (Bone *)malloc(sizeof(Bone) * bonesNum);
@@ -13,7 +20,7 @@ Bone *create_bones(const RawBone *rawBones, const uint8_t bonesNum, int *parentW
         newBones[i].x = rawBones[i].x;
         newBones[i].y = rawBones[i].y;
         newBones[i].angle = rawBones[i].angle;
-        newBones[i].sprite = get_sprite(rawBones[i].spriteIndex);
+        newBones[i].sprite = _storage->get_sprite(rawBones[i].spriteIndex);
         newBones[i].baseSpriteAngle = float_to_fixed(rawBones[i].baseSpriteAngle);
         make_local_matrix(&newBones[i]);
         make_world_matrix(&newBones[i], parentWorldMatrix);
@@ -30,7 +37,7 @@ Bone *create_bones(const RawBone *rawBones, const uint8_t bonesNum, int *parentW
 Puppet *create_puppet(uint8_t puppetIndex)
 {
     Puppet *newPuppet = (Puppet *)malloc(sizeof(Puppet));
-    const RawPuppet *rawPuppet = get_raw_puppet(puppetIndex);
+    const RawPuppet *rawPuppet = _storage->get_raw_puppet(puppetIndex);
     newPuppet->label = rawPuppet->label;
     newPuppet->x = rawPuppet->x;
     newPuppet->y = rawPuppet->y;
@@ -54,6 +61,7 @@ Puppet *create_puppet(uint8_t puppetIndex)
 }
 
 static IPuppetFactory puppet = {
+    .init_puppet_factory = init_puppet_factory,
     .create_puppet = create_puppet,
 };
 
