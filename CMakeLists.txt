@@ -61,6 +61,7 @@ if(EUZEBIA3D_BUILD_APP)
     # Add the standard include files to the build
     target_include_directories(Euzebia3D PRIVATE
             ${CMAKE_CURRENT_LIST_DIR}
+            ${CMAKE_CURRENT_LIST_DIR}/storage
     )
 
     # Add any user requested libraries

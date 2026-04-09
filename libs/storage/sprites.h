@@ -12,6 +12,4 @@ typedef struct
     const bool canRotate;
 } Sprite;
 
-const Sprite *get_sprite(uint8_t sprite_index);
-
 #endif

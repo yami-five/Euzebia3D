@@ -83,12 +83,7 @@ pico_generate_pio_header(Euzebia3D_Hardware ${CMAKE_CURRENT_LIST_DIR}/hardware/a
 
 add_library(
     Euzebia3D_Storage
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/fonts.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/gfx.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/post_processing.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/scrollers.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/sprites.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/storage/rawPuppets.c
+    ${CMAKE_SOURCE_DIR}/storage/storage.c
 )
 target_include_directories(
     Euzebia3D_Storage
@@ -221,6 +216,7 @@ add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
 add_library(Euzebia3D_PuppetFactoryInterface INTERFACE)
 add_library(Euzebia3D_RendererInterface INTERFACE)
+add_library(Euzebia3D_StorageInterface INTERFACE)
 
 target_link_libraries(Euzebia3D_CameraFactoryInterface INTERFACE Euzebia3D_CameraFactory)
 target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
@@ -231,3 +227,4 @@ target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFac
 target_link_libraries(Euzebia3D_PainterInterface INTERFACE Euzebia3D_Painter)
 target_link_libraries(Euzebia3D_PuppetFactoryInterface INTERFACE Euzebia3D_PuppetFactory)
 target_link_libraries(Euzebia3D_RendererInterface INTERFACE Euzebia3D_Renderer)
+target_link_libraries(Euzebia3D_StorageInterface INTERFACE Euzebia3D_Storage)

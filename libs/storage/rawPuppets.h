@@ -34,6 +34,4 @@ typedef struct
     const uint8_t bonesNum;
 } RawPuppet;
 
-const RawPuppet* get_raw_puppet(uint8_t puppetIndex);
-
 #endif

@@ -1,3 +1,6 @@
+#ifndef SCROLLERS_H
+#define SCROLLERS_H
+
 #include "stdint.h"
 
 typedef struct {
@@ -6,4 +9,4 @@ typedef struct {
     const uint8_t height;
 } Scroller;
 
-const Scroller *get_scroller_by_index(uint8_t index);
+#endif

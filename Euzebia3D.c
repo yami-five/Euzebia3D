@@ -10,6 +10,7 @@
 #include "IPainter.h"
 #include "IRenderer.h"
 #include "IPuppetFactory.h"
+#include "IStorage.h"
 
 #include "cameraFactory.h"
 #include "display.h"
@@ -23,6 +24,7 @@
 #include "camera.h"
 #include "puppetFactory.h"
 #include "puppet.h"
+#include "storage.h"
 
 static const IHardware *hardware_core;
 static const IDisplay *display;
@@ -33,6 +35,7 @@ static const IMeshFactory *meshFactory;
 static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
 static const IPuppetFactory *puppetFactory;
+static const IStorage *storage;
 
 void core1_main();
 
@@ -46,14 +49,17 @@ int main()
     display = get_display();
     display->init_display(hardware_core);
 
+    storage = get_storage();
+
     painter = get_painter();
-    painter->init_painter(display, hardware_core);
+    painter->init_painter(display, hardware_core, storage);
 
     renderer = get_renderer();
     renderer->init_renderer(hardware_core, painter);
     renderer->set_scale(1);
 
     meshFactory = get_meshFactory();
+    meshFactory->init_mesh_factory(storage);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
     mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);

@@ -1,13 +1,21 @@
 #include "IMeshFactory.h"
+#include "IStorage.h"
 #include "meshFactory.h"
 #include "mesh.h"
 #include "fpa.h"
-#include "../storage/gfx.h"
 #include <stdlib.h>
+
+static volatile const IStorage *_storage = NULL;
+
+void init_mesh_factory(volatile const IStorage *storage)
+{
+    _storage=storage;
+}
+
 
 Mesh *createMesh(Material *mat, uint8_t meshIndex)
 {
-    const Model *obj = get_model(meshIndex);
+    const Model *obj = _storage->get_model(meshIndex);
     Mesh *mesh = (Mesh *)malloc(sizeof(Mesh));
     mesh->verticesCounter = obj->verticesCounter;
     mesh->facesCounter = obj->facesCounter;
@@ -62,8 +70,8 @@ Mesh *create_textured_mesh(uint8_t imageIndex, uint8_t meshIndex)
 {
     Material *material = (Material *)malloc(sizeof(Material));
     material->diffuse = 0;
-    material->texture = get_image(imageIndex)->image;
-    material->textureSize = get_image(imageIndex)->heigth;
+    material->texture = _storage->get_image(imageIndex)->image;
+    material->textureSize = _storage->get_image(imageIndex)->heigth;
     material->isSkyBox = 0;
     return createMesh(material, meshIndex);
 }
@@ -82,17 +90,19 @@ Mesh *create_textured_skybox(uint8_t imageIndex)
 {
     Material *material = (Material *)malloc(sizeof(Material));
     material->diffuse = 0;
-    material->texture = get_image(imageIndex)->image;
-    material->textureSize = get_image(imageIndex)->heigth;
+    material->texture = _storage->get_image(imageIndex)->image;
+    material->textureSize = _storage->get_image(imageIndex)->heigth;
     material->isSkyBox = 1;
     return createMesh(material, 0);
 }
 
 static IMeshFactory renderer = {
+    .init_mesh_factory = init_mesh_factory,
     .create_colored_mesh = create_colored_mesh,
     .create_textured_mesh = create_textured_mesh,
     .create_colored_skybox = create_colored_skybox,
-    .create_textured_skybox = create_textured_skybox};
+    .create_textured_skybox = create_textured_skybox,
+};
 
 const IMeshFactory *get_meshFactory(void)
 {

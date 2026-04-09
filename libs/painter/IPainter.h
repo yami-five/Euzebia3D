@@ -4,14 +4,13 @@
 #include <stdint.h>
 #include "IDisplay.h"
 #include "IHardware.h"
+#include "IStorage.h"
 #include "puppet.h"
-#include "../storage/sprites.h"
 #include "gradient.h"
-#include "../storage/scrollers.h"
 
 typedef struct
 {
-    void (*init_painter)(const IDisplay *display, const IHardware *hardware);
+    void (*init_painter)(const IDisplay *display, const IHardware *hardware, const IStorage *storage);
     void (*draw_buffer)(void);
     void (*clear_buffer)(uint16_t color);
     void (*draw_pixel)(uint16_t x, uint16_t y, uint16_t color);

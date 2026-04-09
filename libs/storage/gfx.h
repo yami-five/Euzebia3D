@@ -26,7 +26,4 @@ typedef struct
     const uint16_t nn;
 } Model;
 
-const Image *get_image(uint8_t image_index);
-const Model *get_model(uint8_t model_index);
-
 #endif
