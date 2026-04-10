@@ -287,11 +287,6 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
 
 void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
 {
-    // if (lightDistance <= 0)
-    // {
-    //     *color = 0;
-    //     return;
-    // }
     // Clamp minimum light to keep pixels from going fully dark on edges
     const int32_t AMBIENT_MIN = SCALE_FACTOR >> 5;
     if (lightDistance < AMBIENT_MIN)
@@ -348,14 +343,12 @@ void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
     *color = (r << 11) | (g << 5) | b;
 }
 
-uint16_t texturing(TriangleToRender *triangle, Material *mat, int Ba, int Bb, int Bc)
+uint16_t texturing(Material *mat, int U, int V, int W)
 {
-    int uv_x = (fixed_mul(Ba, triangle->uvA.x) + fixed_mul(Bb, triangle->uvB.x) + fixed_mul(Bc, triangle->uvC.x)) * mat->textureSize;
-    int uv_y = (fixed_mul(Ba, triangle->uvA.y) + fixed_mul(Bb, triangle->uvB.y) + fixed_mul(Bc, triangle->uvC.y)) * mat->textureSize;
-    uv_x += (SCALE_FACTOR >> 1);
-    uv_y += (SCALE_FACTOR >> 1);
-    uv_x = uv_x >> SHIFT_FACTOR;
-    uv_y = uv_y >> SHIFT_FACTOR;
+    int uv_x = fixed_div(U, W);
+    int uv_y = fixed_div(V, W);
+    uv_x = uv_x * mat->textureSize >> SHIFT_FACTOR;
+    uv_y = uv_y * mat->textureSize >> SHIFT_FACTOR;
     if (uv_x < 1)
         uv_x = 1;
     if (uv_y < 1)
@@ -420,7 +413,7 @@ void calc_bar_coords(TriangleToRender *triangle, int *Ba, int *Bb, int *Bc, int3
     *Bc = tempBc;
 }
 
-void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t divider, PointLight *light, int32_t L0, int32_t L1)
+void rasterize(int y, int x0, int x1, Material *mat, PointLight *light, int32_t L0, int32_t L1, int U0, int U1, int V0, int V1, int W0, int W1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
@@ -434,9 +427,18 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         q = x0;
         x0 = x1;
         x1 = q;
-        int32_t lq = L0;
+        q = L0;
         L0 = L1;
-        L1 = lq;
+        L1 = q;
+        q = U0;
+        U0 = U1;
+        U1 = q;
+        q = V0;
+        V0 = V1;
+        V1 = q;
+        q = W0;
+        W0 = W1;
+        W1 = q;
     }
     x1 += 1;
     int xStart = x0;
@@ -445,6 +447,9 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         return;
     int span = xEnd - xStart;
     int32_t dLdx = span ? (L1 - L0) / span : 0;
+    int32_t dUdx = span ? (U1 - U0) / span : 0;
+    int32_t dVdx = span ? (V1 - V0) / span : 0;
+    int32_t dWdx = span ? (W1 - W0) / span : 0;
     if (x0 < 0)
         x0 = 0;
     if (x1 > render_width)
@@ -453,20 +458,21 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         return;
     if (mat->isSkyBox == 0)
     {
-        int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
-        int dTempBbDx = (triangle->c.y - triangle->a.y) << SHIFT_FACTOR;
-        int Ba, Bb, Bc;
-        calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x0, y);
-        int stepBa = fixed_div(dTempBaDx, divider);
-        int stepBb = fixed_div(dTempBbDx, divider);
-        int32_t Lcur = L0 + (int32_t)(x0 - xStart) * dLdx;
+        int xOffset = x0 - xStart;
+        int32_t Lcur = L0 + xOffset * dLdx;
+        int Ucur = U0 + xOffset * dUdx;
+        int Vcur = V0 + xOffset * dVdx;
+        int Wcur = W0 + xOffset * dWdx;
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
             if (mat->textureSize == 0)
                 color = mat->diffuse;
             else
-                color = texturing(triangle, mat, Ba, Bb, Bc);
+                color = texturing(mat, Ucur, Vcur, Wcur);
+                Ucur += dUdx;
+                Vcur += dVdx;
+                Wcur += dWdx;
             if (SHADING_ENABLED)
             {
                 shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
@@ -476,34 +482,27 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
             for (uint8_t dy = 0; dy < output_scale; dy++)
                 for (uint8_t dx = 0; dx < output_scale; dx++)
                     _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
-            // draw_pixel(x, y, color);
-            Ba += stepBa;
-            Bb += stepBb;
-            Bc = SCALE_FACTOR - Ba - Bb;
         }
     }
     else
     {
-        int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
-        int dTempBbDx = (triangle->c.y - triangle->a.y) << SHIFT_FACTOR;
-        int Ba, Bb, Bc;
-        calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x0, y);
-        int stepBa = fixed_div(dTempBaDx, divider);
-        int stepBb = fixed_div(dTempBbDx, divider);
+        int xOffset = x0 - xStart;
+        int Ucur = U0 + xOffset * dUdx;
+        int Vcur = V0 + xOffset * dVdx;
+        int Wcur = W0 + xOffset * dWdx;
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
             if (mat->textureSize == 0)
                 color = mat->diffuse;
             else
-                color = texturing(triangle, mat, Ba, Bb, Bc);
+                color = texturing(mat, Ucur, Vcur, Wcur);
+                Ucur += dUdx;
+                Vcur += dVdx;
+                Wcur += dWdx;
             for (uint8_t dy = 0; dy < output_scale; dy++)
                 for (uint8_t dx = 0; dx < output_scale; dx++)
                     _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
-            // draw_pixel(x, y, color);
-            Ba += stepBa;
-            Bb += stepBb;
-            Bc = SCALE_FACTOR - Ba - Bb;
         }
     }
 }
@@ -517,7 +516,7 @@ inline void swap_int32(int32_t *x, int32_t *y)
 
 void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
-    int32_t x, y, z, uv, l, Lx;
+    int32_t x, y, z, uv, l, Lx, Ux, Vx, Wx;
     if (triangle->a.y > triangle->b.y)
     {
         swap_int32(&triangle->a.w, &triangle->b.w);
@@ -559,6 +558,9 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     y = triangle->a.y;
     int xx = x = triangle->a.x;
     int32_t Lxx = Lx = ((int32_t)lightDistances[0]) << LIGHT_LERP_SHIFT;
+    int Uxx = Ux = triangle->uvA.x;
+    int Vxx = Vx = triangle->uvA.y;
+    int Wxx = Wx = triangle->a.w;
 
     int dx01 = triangle->b.x - triangle->a.x;
     int dy01 = triangle->b.y - triangle->a.y;
@@ -573,12 +575,20 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int32_t dL02 = dy02 ? (((int32_t)(lightDistances[2] - lightDistances[0])) << LIGHT_LERP_SHIFT) / dy02 : 0;
     int32_t dL12 = dy12 ? (((int32_t)(lightDistances[2] - lightDistances[1])) << LIGHT_LERP_SHIFT) / dy12 : 0;
 
+    int32_t dU01 = dy01 ? ((int32_t)(triangle->uvB.x - triangle->uvA.x)) / dy01 : 0;
+    int32_t dV01 = dy01 ? ((int32_t)(triangle->uvB.y - triangle->uvA.y)) / dy01 : 0;
+    int32_t dU02 = dy02 ? ((int32_t)(triangle->uvC.x - triangle->uvA.x)) / dy02 : 0;
+    int32_t dV02 = dy02 ? ((int32_t)(triangle->uvC.y - triangle->uvA.y)) / dy02 : 0;
+    int32_t dU12 = dy12 ? ((int32_t)(triangle->uvC.x - triangle->uvB.x)) / dy12 : 0;
+    int32_t dV12 = dy12 ? ((int32_t)(triangle->uvC.y - triangle->uvB.y)) / dy12 : 0;
+
+    int32_t dW01 = dy01 ? ((int32_t)(triangle->b.w - triangle->a.w)) / dy01 : 0;
+    int32_t dW02 = dy02 ? ((int32_t)(triangle->c.w - triangle->a.w)) / dy02 : 0;
+    int32_t dW12 = dy12 ? ((int32_t)(triangle->c.w - triangle->b.w)) / dy12 : 0;
+
     int q2 = 0;
 
     int xxd = 1 - ((dx02 < 0) << 1);
-
-    int32_t divider = (triangle->b.y - triangle->c.y) * (triangle->a.x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (triangle->a.y - triangle->c.y);
-    divider <<= SHIFT_FACTOR;
 
     if (triangle->a.y < triangle->b.y)
     {
@@ -586,12 +596,18 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         int xd = 1 - ((dx01 < 0) << 1);
         while (y <= triangle->b.y)
         {
-            rasterize(y, x, xx, triangle, mat, divider, light, Lx, Lxx);
+            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Wx, Wxx);
             y += 1;
             q += dx01;
             q2 += dx02;
             Lx += dL01;
             Lxx += dL02;
+            Ux += dU01;
+            Uxx += dU02;
+            Vx += dV01;
+            Vxx += dV02;
+            Wx += dW01;
+            Wxx += dW02;
             while (xd * q >= dy01)
             {
                 q -= xd * dy01;
@@ -610,16 +626,25 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         int q = 0;
         x = triangle->b.x;
         Lx = ((int32_t)lightDistances[1]) << LIGHT_LERP_SHIFT;
+        Ux = triangle->uvB.x;
+        Vx = triangle->uvB.y;
+        Wx = triangle->b.w;
         int xd = 1 - ((dx12 < 0) << 1);
 
         while (y <= triangle->c.y && y < render_height)
         {
-            rasterize(y, x, xx, triangle, mat, divider, light, Lx, Lxx);
+            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Wx, Wxx);
             y += 1;
             q += dx12;
             q2 += dx02;
             Lx += dL12;
             Lxx += dL02;
+            Ux += dU12;
+            Uxx += dU02;
+            Vx += dV12;
+            Vxx += dV02;
+            Wx += dW12;
+            Wxx += dW02;
             while (xd * q > dy12)
             {
                 q -= xd * dy12;
@@ -670,37 +695,40 @@ void render_scene(PointLight *pLight)
     for (uint16_t i = 0; i < sceneCounter; i++)
     {
         const TriangleInScene *triScene = &scene[drawItems[i].index];
+        int aW = inverse(triScene->TriangleOnScreen.a.z);
+        int bW = inverse(triScene->TriangleOnScreen.b.z);
+        int cW = inverse(triScene->TriangleOnScreen.c.z);
         TriangleToRender triangle =
             {
                 {
                     triScene->TriangleOnScreen.a.x,
                     triScene->TriangleOnScreen.a.y,
                     triScene->TriangleOnScreen.a.z,
-                    inverse(triScene->TriangleOnScreen.a.z),
+                    aW,
                 },
                 {
                     triScene->TriangleOnScreen.b.x,
                     triScene->TriangleOnScreen.b.y,
                     triScene->TriangleOnScreen.b.z,
-                    inverse(triScene->TriangleOnScreen.b.z),
+                    bW,
                 },
                 {
                     triScene->TriangleOnScreen.c.x,
                     triScene->TriangleOnScreen.c.y,
                     triScene->TriangleOnScreen.c.z,
-                    inverse(triScene->TriangleOnScreen.c.z),
+                    cW,
                 },
                 {
-                    triScene->UV.a.x,
-                    triScene->UV.a.y,
+                    fixed_mul(triScene->UV.a.x, aW),
+                    fixed_mul(triScene->UV.a.y, aW),
                 },
                 {
-                    triScene->UV.b.x,
-                    triScene->UV.b.y,
+                    fixed_mul(triScene->UV.b.x, bW),
+                    fixed_mul(triScene->UV.b.y, bW),
                 },
                 {
-                    triScene->UV.c.x,
-                    triScene->UV.c.y,
+                    fixed_mul(triScene->UV.c.x, cW),
+                    fixed_mul(triScene->UV.c.y, cW),
                 },
             };
 
