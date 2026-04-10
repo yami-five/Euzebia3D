@@ -196,7 +196,7 @@ void inf(float *x, float *y, float qt)
     *y += 2.0f * fast_cos(qt_rad) * fast_sin(qt_rad);
 }
 
-int check_if_triangle_visible(TriangleToRender *triangle)
+int check_if_triangle_visible(Triangle2D *triangle)
 {
     int e1x = triangle->b.x - triangle->a.x;
     int e1y = triangle->b.y - triangle->a.y;
@@ -844,13 +844,11 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
             int32_t cx = fixed_div(vc.x, vc.w) + render_width_half;
             int32_t cy = fixed_div(vc.y, vc.w) + render_height_half;
 
-            TriangleToRender triangle = {
-                {ax, ay, inverse(va.z)},
-                {bx, by, inverse(vb.z)},
-                {cx, cy, inverse(vc.z)},
-                {va.uvx, va.uvy},
-                {vb.uvx, vb.uvy},
-                {vc.uvx, vc.uvy}};
+            Triangle2D triangle = {
+                {ax, ay},
+                {bx, by},
+                {cx, cy},
+            };
 
             if (!check_if_triangle_visible(&triangle))
                 continue;
