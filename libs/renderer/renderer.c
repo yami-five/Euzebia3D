@@ -557,10 +557,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int dy12 = triangle->c.y - triangle->b.y;
 
     int q2 = 0;
-    int xxd = 1;
 
-    if (triangle->c.x < triangle->a.x)
-        xxd = -1;
+    int xxd = 1 - ((dx02 < 0) << 1);
 
     int32_t divider = (triangle->b.y - triangle->c.y) * (triangle->a.x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (triangle->a.y - triangle->c.y);
     divider <<= SHIFT_FACTOR;
@@ -568,9 +566,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     if (triangle->a.y < triangle->b.y)
     {
         int q = 0;
-        int xd = 1;
-        if (triangle->b.x < triangle->a.x)
-            xd = -1;
+        int xd = 1 - ((dx01 < 0) << 1);
         while (y <= triangle->b.y)
         {
             rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
