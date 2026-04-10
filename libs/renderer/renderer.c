@@ -508,6 +508,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int32_t x, y, z, uv, l;
     if (triangle->a.y > triangle->b.y)
     {
+        swap_int32(&triangle->a.w, &triangle->b.w);
         swap_int32(&triangle->a.z, &triangle->b.z);
         swap_int32(&triangle->a.y, &triangle->b.y);
         swap_int32(&triangle->a.x, &triangle->b.x);
@@ -519,6 +520,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     }
     if (triangle->a.y > triangle->c.y)
     {
+        swap_int32(&triangle->a.w, &triangle->c.w);
         swap_int32(&triangle->a.z, &triangle->c.z);
         swap_int32(&triangle->a.y, &triangle->c.y);
         swap_int32(&triangle->a.x, &triangle->c.x);
@@ -530,6 +532,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     }
     if (triangle->b.y > triangle->c.y)
     {
+        swap_int32(&triangle->b.w, &triangle->c.w);
         swap_int32(&triangle->b.z, &triangle->c.z);
         swap_int32(&triangle->b.y, &triangle->c.y);
         swap_int32(&triangle->b.x, &triangle->c.x);
@@ -653,21 +656,37 @@ void render_scene(PointLight *pLight)
         const TriangleInScene *triScene = &scene[drawItems[i].index];
         TriangleToRender triangle =
             {
-                {triScene->TriangleOnScreen.a.x,
-                 triScene->TriangleOnScreen.a.y,
-                 inverse(triScene->TriangleOnScreen.a.z)},
-                {triScene->TriangleOnScreen.b.x,
-                 triScene->TriangleOnScreen.b.y,
-                 inverse(triScene->TriangleOnScreen.b.z)},
-                {triScene->TriangleOnScreen.c.x,
-                 triScene->TriangleOnScreen.c.y,
-                 inverse(triScene->TriangleOnScreen.c.z)},
-                {triScene->UV.a.x,
-                 triScene->UV.a.y},
-                {triScene->UV.b.x,
-                 triScene->UV.b.y},
-                {triScene->UV.c.x,
-                 triScene->UV.c.y}};
+                {
+                    triScene->TriangleOnScreen.a.x,
+                    triScene->TriangleOnScreen.a.y,
+                    triScene->TriangleOnScreen.a.z,
+                    inverse(triScene->TriangleOnScreen.a.z),
+                },
+                {
+                    triScene->TriangleOnScreen.b.x,
+                    triScene->TriangleOnScreen.b.y,
+                    triScene->TriangleOnScreen.b.z,
+                    inverse(triScene->TriangleOnScreen.b.z),
+                },
+                {
+                    triScene->TriangleOnScreen.c.x,
+                    triScene->TriangleOnScreen.c.y,
+                    triScene->TriangleOnScreen.c.z,
+                    inverse(triScene->TriangleOnScreen.c.z),
+                },
+                {
+                    triScene->UV.a.x,
+                    triScene->UV.a.y,
+                },
+                {
+                    triScene->UV.b.x,
+                    triScene->UV.b.y,
+                },
+                {
+                    triScene->UV.c.x,
+                    triScene->UV.c.y,
+                },
+            };
 
         int32_t lightDistances[3] = {0, 0, 0};
 #ifdef SHADING_ENABLED

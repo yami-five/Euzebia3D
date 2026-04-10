@@ -10,9 +10,9 @@
 
 typedef struct
 {
-    Vector3 a;
-    Vector3 b;
-    Vector3 c;
+    Vector4 a;
+    Vector4 b;
+    Vector4 c;
     Vector2 uvA;
     Vector2 uvB;
     Vector2 uvC;
