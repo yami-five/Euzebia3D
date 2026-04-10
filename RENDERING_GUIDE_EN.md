@@ -172,7 +172,8 @@ Each triangle is drawn scanline-style:
 - line by line,
 - pixel by pixel.
 
-Inside, barycentric coordinates are calculated (`Ba/Bb/Bc`).
+There are no per-pixel barycentrics anymore.
+`tri(...)` drives two scanline edges, and `rasterize(...)` interpolates along `x`.
 
 ### Stage J: pixel color
 
@@ -298,28 +299,37 @@ Each triangle gets depth key:
 
 Then `qsort` orders triangles from far to near (painter's algorithm).
 
-### 6A.9. Barycentrics in rasterization
+### 6A.9. Scanline lerp in rasterization (no barycentrics)
 
-In `calc_bar_coords(...)`:
-- `Ba`, `Bb` are computed from determinant-ratio formulas,
-- `Bc = 1 - Ba - Bb`.
+Rasterization now works as:
+- `tri(...)` sorts vertices by `y` and splits triangle into upper/lower part,
+- both active edges are advanced incrementally in `x` (accumulators `q`, `q2`),
+- together with `x`, edge attributes are advanced: `L`, `U`, `V`, `W`,
+- `rasterize(...)` gets both scanline endpoints and computes x-steps: `dLdx`, `dUdx`, `dVdx`, `dWdx`.
 
-For point `(x,y)`:
-- `Ba = ((by-cy)*(x-cx) + (cx-bx)*(y-cy)) / divider`
-- `Bb = ((cy-ay)*(x-cx) + (ax-cx)*(y-cy)) / divider`
-- `divider = (by-cy)*(ax-cx) + (cx-bx)*(ay-cy)`
+This removes per-pixel barycentric evaluation.
 
-In a scanline, `stepBa`, `stepBb` are used to avoid full re-division from scratch for each pixel.
+Interpolation precision is boosted with:
+- `LIGHT_LERP_SHIFT` for light,
+- `UV_LERP_SHIFT` for `U` and `V`.
 
-### 6A.10. UV interpolation and texture sampling
+### 6A.10. Perspective-correct UV and texture sampling
 
-UV at a pixel:
-- `u = Ba*uA + Bb*uB + Bc*uC`
-- `v = Ba*vA + Bb*vB + Bc*vC`
+In `render_scene(...)`, prepared values are:
+- `W = 1/z`,
+- `U = u * W`,
+- `V = v * W`.
+
+Rasterization interpolates `U`, `V`, `W`.
+At pixel stage, proper UV is reconstructed:
+- `u = U / W`
+- `v = V / W`
+
+Because `U` and `V` run with extra precision (`UV_LERP_SHIFT`),
+they are shifted back before `texturing(...)` (`U >> UV_LERP_SHIFT`, `V >> UV_LERP_SHIFT`).
 
 Then:
 - multiply by texture size,
-- add half-pixel (`+0.5` in fixed),
 - clamp to `[1, size-2]`.
 
 Sampling:
@@ -336,8 +346,9 @@ First (geometry stage), per vertex:
 - `Li = clamp(dot(N, Ldir), 0, 1)`
 
 Then (pixel stage):
-- `L = Ba*L0 + Bb*L1 + Bc*L2`
-- clamp to `[AMBIENT_MIN, 1]`
+- `L` is interpolated scanline-wise (`dL01`, `dL02`, `dL12`, then `dLdx`),
+- internally with extra precision via `LIGHT_LERP_SHIFT`,
+- `shading(...)` receives `L >> LIGHT_LERP_SHIFT`.
 
 Then:
 - multiply material color by light color (RGB565 per channel),
@@ -355,7 +366,8 @@ Each computed pixel is then written as a block:
 
 ### 6A.13. Important mathematical consequences of current approach
 
-- UVs are interpolated affinely (without full perspective-correct interpolation), so under strong perspective texture can slightly "swim".
+- UVs are perspective-correct (`u/z`, `v/z`, `1/z`), so texture "swimming" is much lower than with affine interpolation.
+- Fixed-point quantization is still present (`UV_LERP_SHIFT`, `LIGHT_LERP_SHIFT`), so very sharp gradients can still show subtle bands/seams.
 - Triangle sorting by average `z` does not perfectly solve mutually intersecting geometry cases.
 - Clipping is currently near-plane only, not all 6 frustum planes.
 - Code is intentionally optimized for compromise: quality vs CPU/RAM cost on Pico 2.
@@ -381,6 +393,10 @@ Downside: with intersecting objects, draw-order artifacts can appear.
 2. Near-plane clipping was improved:
    - triangles crossing near plane do not disappear as a whole,
    - they are clipped and triangulated.
+3. Rasterization moved to full scanline lerp:
+   - no per-pixel barycentrics,
+   - UV is carried as `U/V/W` (perspective-correct),
+   - light and UV use dedicated precision shifts.
 
 This improves rendering stability and reduces memory churn.
 
