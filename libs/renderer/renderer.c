@@ -281,20 +281,18 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
         prev = curr;
         prevInside = currInside;
     }
-
     return outCount;
 }
 
-void shading(uint16_t *color, int32_t lightDistances[], PointLight *light, int Ba, int Bb, int Bc)
+void shading(uint16_t *color, PointLight *light, int lightDistance)
 {
-    int32_t lightDistance = (fixed_mul(Ba, lightDistances[0]) + fixed_mul(Bb, lightDistances[1]) + fixed_mul(Bc, lightDistances[2]));
     // if (lightDistance <= 0)
     // {
     //     *color = 0;
     //     return;
     // }
     // Clamp minimum light to keep pixels from going fully dark on edges
-    const int32_t AMBIENT_MIN = SCALE_FACTOR / 20;
+    const int32_t AMBIENT_MIN = SCALE_FACTOR >> 5;
     if (lightDistance < AMBIENT_MIN)
         lightDistance = AMBIENT_MIN;
     if (lightDistance > SCALE_FACTOR)
@@ -421,7 +419,7 @@ void calc_bar_coords(TriangleToRender *triangle, int *Ba, int *Bb, int *Bc, int3
     *Bc = tempBc;
 }
 
-void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t lightDistances[], int32_t divider, PointLight *light)
+void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t divider, PointLight *light, int L0, int L1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
@@ -435,14 +433,19 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         q = x0;
         x0 = x1;
         x1 = q;
+        q = L0;
+        L0 = L1;
+        L1 = q;
     }
     x1 += 1;
-    if (x1 < 0 || x0 >= render_width)
+    int xStart = x0;
+    if (x1 < 0 || x0 >= render_width || x0 == x1)
         return;
     if (x0 < 0)
         x0 = 0;
     if (x1 > render_width)
         x1 = render_width;
+    int dLdx = (L1 - L0) / (x1 - x0);
     if (mat->isSkyBox == 0)
     {
         int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
@@ -459,7 +462,7 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
             else
                 color = texturing(triangle, mat, Ba, Bb, Bc);
             if (SHADING_ENABLED)
-                shading(&color, lightDistances, light, Ba, Bb, Bc);
+                shading(&color, light, L0 + (x0 - xStart) * dLdx);
             // Upscale to output buffer (output_scale handles LCD scaling)
             for (uint8_t dy = 0; dy < output_scale; dy++)
                 for (uint8_t dx = 0; dx < output_scale; dx++)
@@ -505,7 +508,7 @@ inline void swap_int32(int32_t *x, int32_t *y)
 
 void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
-    int32_t x, y, z, uv, l;
+    int32_t x, y, z, uv, l, Lx;
     if (triangle->a.y > triangle->b.y)
     {
         swap_int32(&triangle->a.w, &triangle->b.w);
@@ -546,6 +549,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         return;
     y = triangle->a.y;
     int xx = x = triangle->a.x;
+    int Lxx = Lx = lightDistances[0];
 
     int dx01 = triangle->b.x - triangle->a.x;
     int dy01 = triangle->b.y - triangle->a.y;
@@ -555,6 +559,10 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
     int dx12 = triangle->c.x - triangle->b.x;
     int dy12 = triangle->c.y - triangle->b.y;
+
+    int dL01 = dy01 ? (lightDistances[1] - lightDistances[0]) / dy01 : 0;
+    int dL02 = dy02 ? (lightDistances[2] - lightDistances[0]) / dy02 : 0;
+    int dL12 = dy12 ? (lightDistances[2] - lightDistances[1]) / dy12 : 0;
 
     int q2 = 0;
 
@@ -569,10 +577,12 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         int xd = 1 - ((dx01 < 0) << 1);
         while (y <= triangle->b.y)
         {
-            rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
+            rasterize(y, x, xx, triangle, mat, divider, light, Lx, Lxx);
             y += 1;
             q += dx01;
             q2 += dx02;
+            Lx += dL01;
+            Lxx += dL02;
             while (xd * q >= dy01)
             {
                 q -= xd * dy01;
@@ -589,17 +599,18 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     if (triangle->b.y < triangle->c.y)
     {
         int q = 0;
-        int x = triangle->b.x;
-        int xd = 1;
-        if (triangle->c.x < triangle->b.x)
-            xd = -1;
+        x = triangle->b.x;
+        Lx = lightDistances[1];
+        int xd = 1 - ((dx12 < 0) << 1);
 
         while (y <= triangle->c.y && y < render_height)
         {
-            rasterize(y, x, xx, triangle, mat, lightDistances, divider, light);
+            rasterize(y, x, xx, triangle, mat, divider, light, Lx, Lxx);
             y += 1;
             q += dx12;
             q2 += dx02;
+            Lx += dL12;
+            Lxx += dL02;
             while (xd * q > dy12)
             {
                 q -= xd * dy12;
