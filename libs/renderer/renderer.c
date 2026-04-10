@@ -21,6 +21,7 @@ static uint16_t render_height_half = 60;
 
 #define MAX_TRIANGLES_IN_SCENE 1500
 #define SHADING_ENABLED 1
+#define LIGHT_LERP_SHIFT 8
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
@@ -284,7 +285,7 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
     return outCount;
 }
 
-void shading(uint16_t *color, PointLight *light, int lightDistance)
+void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
 {
     // if (lightDistance <= 0)
     // {
@@ -419,7 +420,7 @@ void calc_bar_coords(TriangleToRender *triangle, int *Ba, int *Bb, int *Bc, int3
     *Bc = tempBc;
 }
 
-void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t divider, PointLight *light, int L0, int L1)
+void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat, int32_t divider, PointLight *light, int32_t L0, int32_t L1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
@@ -433,19 +434,23 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         q = x0;
         x0 = x1;
         x1 = q;
-        q = L0;
+        int32_t lq = L0;
         L0 = L1;
-        L1 = q;
+        L1 = lq;
     }
     x1 += 1;
     int xStart = x0;
-    if (x1 < 0 || x0 >= render_width || x0 == x1)
+    int xEnd = x1;
+    if (xEnd < 0 || xStart >= render_width || xStart == xEnd)
         return;
+    int span = xEnd - xStart;
+    int32_t dLdx = span ? (L1 - L0) / span : 0;
     if (x0 < 0)
         x0 = 0;
     if (x1 > render_width)
         x1 = render_width;
-    int dLdx = (L1 - L0) / (x1 - x0);
+    if (x1 <= x0)
+        return;
     if (mat->isSkyBox == 0)
     {
         int dTempBaDx = (triangle->b.y - triangle->c.y) << SHIFT_FACTOR;
@@ -454,6 +459,7 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
         calc_bar_coords(triangle, &Ba, &Bb, &Bc, divider, x0, y);
         int stepBa = fixed_div(dTempBaDx, divider);
         int stepBb = fixed_div(dTempBbDx, divider);
+        int32_t Lcur = L0 + (int32_t)(x0 - xStart) * dLdx;
         for (int x = x0; x < x1; x++)
         {
             uint16_t color = 0;
@@ -462,7 +468,10 @@ void rasterize(int y, int x0, int x1, TriangleToRender *triangle, Material *mat,
             else
                 color = texturing(triangle, mat, Ba, Bb, Bc);
             if (SHADING_ENABLED)
-                shading(&color, light, L0 + (x0 - xStart) * dLdx);
+            {
+                shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
+                Lcur += dLdx;
+            }
             // Upscale to output buffer (output_scale handles LCD scaling)
             for (uint8_t dy = 0; dy < output_scale; dy++)
                 for (uint8_t dx = 0; dx < output_scale; dx++)
@@ -549,7 +558,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         return;
     y = triangle->a.y;
     int xx = x = triangle->a.x;
-    int Lxx = Lx = lightDistances[0];
+    int32_t Lxx = Lx = ((int32_t)lightDistances[0]) << LIGHT_LERP_SHIFT;
 
     int dx01 = triangle->b.x - triangle->a.x;
     int dy01 = triangle->b.y - triangle->a.y;
@@ -560,9 +569,9 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int dx12 = triangle->c.x - triangle->b.x;
     int dy12 = triangle->c.y - triangle->b.y;
 
-    int dL01 = dy01 ? (lightDistances[1] - lightDistances[0]) / dy01 : 0;
-    int dL02 = dy02 ? (lightDistances[2] - lightDistances[0]) / dy02 : 0;
-    int dL12 = dy12 ? (lightDistances[2] - lightDistances[1]) / dy12 : 0;
+    int32_t dL01 = dy01 ? (((int32_t)(lightDistances[1] - lightDistances[0])) << LIGHT_LERP_SHIFT) / dy01 : 0;
+    int32_t dL02 = dy02 ? (((int32_t)(lightDistances[2] - lightDistances[0])) << LIGHT_LERP_SHIFT) / dy02 : 0;
+    int32_t dL12 = dy12 ? (((int32_t)(lightDistances[2] - lightDistances[1])) << LIGHT_LERP_SHIFT) / dy12 : 0;
 
     int q2 = 0;
 
@@ -600,7 +609,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     {
         int q = 0;
         x = triangle->b.x;
-        Lx = lightDistances[1];
+        Lx = ((int32_t)lightDistances[1]) << LIGHT_LERP_SHIFT;
         int xd = 1 - ((dx12 < 0) << 1);
 
         while (y <= triangle->c.y && y < render_height)
