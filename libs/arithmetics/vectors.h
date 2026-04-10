@@ -12,6 +12,14 @@ typedef struct
 
 typedef struct
 {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+    int32_t w;
+} Vector4;
+
+typedef struct
+{
     int32_t w;
     Vector3 *vec;
 } Quaternion;

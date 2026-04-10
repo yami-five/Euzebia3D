@@ -22,9 +22,10 @@ What is implemented now in `libs/renderer/renderer.c`:
 - back-face culling in screen space
 - scene triangle collection with cap `MAX_TRIANGLES_IN_SCENE = 1500`
 - depth sort by average triangle depth (far-to-near draw order)
-- affine UV interpolation with clamped sampling
+- scanline rasterization with edge stepping and per-pixel lerp
+- perspective-correct UV interpolation (`U=u*(1/z)`, `V=v*(1/z)`, `W=1/z`) with clamped sampling
 - simple 2x2 texture averaging (box-filter-like, always enabled)
-- per-vertex diffuse lighting with interpolation and intensity clamps
+- per-vertex diffuse lighting with scanline interpolation and intensity clamps
 
 ## Project Layout
 

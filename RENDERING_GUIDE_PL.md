@@ -172,7 +172,8 @@ Każdy trójkąt jest rysowany scanline'owo:
 - linia po linii,
 - piksel po pikselu.
 
-W środku liczone są współrzędne barycentryczne (`Ba/Bb/Bc`).
+W środku nie ma już barycentryków na piksel.
+`tri(...)` prowadzi dwie krawędzie skanlinii, a `rasterize(...)` interpoluje po osi `x`.
 
 ### Etap J: kolor piksela
 
@@ -298,28 +299,37 @@ Każdy trójkąt dostaje klucz głębokości:
 
 Następnie `qsort` układa trójkąty od dalszych do bliższych (painter's algorithm).
 
-### 6A.9. Barycentryki w rasteryzacji
+### 6A.9. Scanline lerp w rasteryzacji (bez barycentryków)
 
-W `calc_bar_coords(...)`:
-- `Ba`, `Bb` liczone ze wzorów ilorazu wyznaczników,
-- `Bc = 1 - Ba - Bb`.
+Rasteryzacja jest zrobiona jako:
+- `tri(...)` sortuje wierzchołki po `y` i dzieli trójkąt na górną/dolną część,
+- dla obu aktywnych krawędzi prowadzi `x` inkrementalnie (akumulatory `q`, `q2`),
+- razem z `x` prowadzi atrybuty na krawędziach: `L`, `U`, `V`, `W`,
+- `rasterize(...)` bierze dwa końce skanlinii i liczy kroki po osi `x`: `dLdx`, `dUdx`, `dVdx`, `dWdx`.
 
-Dla punktu `(x,y)`:
-- `Ba = ((by-cy)*(x-cx) + (cx-bx)*(y-cy)) / divider`
-- `Bb = ((cy-ay)*(x-cx) + (ax-cx)*(y-cy)) / divider`
-- `divider = (by-cy)*(ax-cx) + (cx-bx)*(ay-cy)`
+To eliminuje barycentryki liczone per piksel.
 
-W skanlinii używane są kroki `stepBa`, `stepBb`, żeby nie liczyć pełnego dzielenia dla każdego piksela od zera.
+Precyzja interpolacji jest podbita przez stałe:
+- `LIGHT_LERP_SHIFT` dla światła,
+- `UV_LERP_SHIFT` dla `U` i `V`.
 
-### 6A.10. Interpolacja UV i sampling tekstury
+### 6A.10. Perspective-correct UV i sampling tekstury
 
-UV na piksel:
-- `u = Ba*uA + Bb*uB + Bc*uC`
-- `v = Ba*vA + Bb*vB + Bc*vC`
+W `render_scene(...)` przygotowywane są wartości:
+- `W = 1/z`,
+- `U = u * W`,
+- `V = v * W`.
+
+W rasteryzacji interpolowane są `U`, `V`, `W`.
+Na piksel odzyskiwane jest właściwe UV:
+- `u = U / W`
+- `v = V / W`
+
+Ponieważ `U` i `V` są prowadzone z dodatkową precyzją (`UV_LERP_SHIFT`),
+przed `texturing(...)` są cofane shiftem (`U >> UV_LERP_SHIFT`, `V >> UV_LERP_SHIFT`).
 
 Potem:
 - mnożenie przez rozmiar tekstury,
-- dodanie pół piksela (`+0.5` w fixed),
 - clamp do zakresu `[1, size-2]`.
 
 Sampling:
@@ -336,8 +346,9 @@ Najpierw (na etapie geometrii) dla wierzchołków:
 - `Li = clamp(dot(N, Ldir), 0, 1)`
 
 Potem (na pikselu):
-- `L = Ba*L0 + Bb*L1 + Bc*L2`
-- clamp do `[AMBIENT_MIN, 1]`
+- `L` jest interpolowane scanline'owo (`dL01`, `dL02`, `dL12`, potem `dLdx`),
+- wewnętrznie z dodatkową precyzją `LIGHT_LERP_SHIFT`,
+- do `shading(...)` trafia `L >> LIGHT_LERP_SHIFT`.
 
 Dalej:
 - mnożenie koloru materiału przez kolor światła (RGB565 kanałami),
@@ -355,7 +366,8 @@ Każdy policzony piksel jest wtedy zapisywany jako blok:
 
 ### 6A.13. Ważne konsekwencje matematyczne obecnego podejścia
 
-- UV są interpolowane afinicznie (bez pełnej perspective-correct interpolation), więc przy mocnej perspektywie tekstura może lekko \"pływać\".
+- UV są interpolowane perspective-correct (`u/z`, `v/z`, `1/z`), więc efekt \"pływania\" tekstury jest dużo mniejszy niż przy interpolacji afinicznej.
+- Nadal jest fixed-point i kwantyzacja kroków (`UV_LERP_SHIFT`, `LIGHT_LERP_SHIFT`), więc na bardzo ostrych gradientach mogą być subtelne pasy/szwy.
 - Sortowanie trójkątów po średnim `z` nie rozwiązuje idealnie przypadków wzajemnego przecinania geometrii.
 - Clipping jest obecnie na near-plane, nie na wszystkich 6 płaszczyznach frustum.
 - Kod jest celowo zoptymalizowany pod kompromis: jakość vs koszt CPU/RAM na Pico 2.
@@ -381,6 +393,10 @@ Minus: przy przecinających się obiektach mogą pojawić się artefakty kolejno
 2. Poprawiono clipping near-plane:
    - trójkąty przecinające near plane nie znikają całe,
    - są przycinane i triangulowane.
+3. Rasteryzacja przeszła na pełny scanline lerp:
+   - bez barycentryków per piksel,
+   - UV są prowadzone jako `U/V/W` (perspective-correct),
+   - światło i UV mają osobne shifty precyzji.
 
 To poprawia stabilność renderingu i zmniejsza "szarpanie" pamięci.
 
