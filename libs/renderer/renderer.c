@@ -400,19 +400,6 @@ inline int calc_pixel_depth(int Ba, int Bb, int Bc, int z1, int z2, int z3)
     return inverse(z);
 }
 
-void calc_bar_coords(TriangleToRender *triangle, int *Ba, int *Bb, int *Bc, int32_t divider, int x, int y)
-{
-    int tempBa, tempBb, tempBc;
-    tempBa = ((triangle->b.y - triangle->c.y) * (x - triangle->c.x) + (triangle->c.x - triangle->b.x) * (y - triangle->c.y)) << SHIFT_FACTOR;
-    tempBb = ((triangle->c.y - triangle->a.y) * (x - triangle->c.x) + (triangle->a.x - triangle->c.x) * (y - triangle->c.y)) << SHIFT_FACTOR;
-    tempBa = fixed_div(tempBa, divider);
-    tempBb = fixed_div(tempBb, divider);
-    tempBc = SCALE_FACTOR - tempBa - tempBb;
-    *Ba = tempBa;
-    *Bb = tempBb;
-    *Bc = tempBc;
-}
-
 void rasterize(int y, int x0, int x1, Material *mat, PointLight *light, int32_t L0, int32_t L1, int U0, int U1, int V0, int V1, int W0, int W1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
