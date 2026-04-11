@@ -19,6 +19,11 @@ static spin_lock_t *lcd_spinlock;
 static uint8_t scanline_offset = 0;
 static const uint8_t DEFAULT_FONT_SIZE = 8;
 
+static inline uint32_t pixel_index(uint16_t x, uint16_t y)
+{
+    return ((uint32_t)y * DISPLAY_WIDTH) + x;
+}
+
 static const uint8_t fadeInPatterns[9][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
@@ -117,9 +122,9 @@ void clear_buffer(uint16_t color)
 
 void draw_pixel(uint16_t x, uint16_t y, uint16_t color)
 {
-    uint32_t line_adr = ((uint32_t)x * DISPLAY_HEIGHT) + y;
-    if (line_adr >= BUFFER_SIZE_HALF)
+    if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT)
         return;
+    uint32_t line_adr = pixel_index(x, y);
     buffer[line_adr] = color;
 }
 
@@ -130,12 +135,12 @@ void draw_span(uint16_t y, uint16_t x0, uint16_t x1, uint16_t color)
     if (x1 > DISPLAY_WIDTH)
         x1 = DISPLAY_WIDTH;
 
-    uint32_t line_adr = ((uint32_t)x0 * DISPLAY_HEIGHT) + y;
+    uint32_t line_adr = pixel_index(x0, y);
 
     for (uint16_t x = x0; x < x1; x++)
     {
         buffer[line_adr] = color;
-        line_adr += DISPLAY_HEIGHT;
+        line_adr += 1;
     }
 }
 
@@ -181,18 +186,18 @@ void crt_disp_effect()
     // }
     // memcpy(buffer, framebuffer, BUFFER_SIZE);
     // chromatic aberration
-    for (uint16_t y = 0; y < DISPLAY_WIDTH; y++)
+    for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
     {
-        uint ydh = y * DISPLAY_HEIGHT;
-        for (uint16_t x = 0; x < DISPLAY_HEIGHT; x++)
+        uint32_t ydw = (uint32_t)y * DISPLAY_WIDTH;
+        for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
         {
-            uint i = ydh + x;
+            uint32_t i = ydw + x;
 
             uint xr = (x > 1) ? x - 2 : x;
-            uint xg = (x + 2 < DISPLAY_HEIGHT) ? x + 2 : x;
+            uint xg = (x + 2 < DISPLAY_WIDTH) ? x + 2 : x;
 
-            uint ir = ydh + xr;
-            uint ig = ydh + xg;
+            uint32_t ir = ydw + xr;
+            uint32_t ig = ydw + xg;
 
             uint16_t c_r = buffer[ir];
             uint16_t c_g = buffer[ig];
@@ -242,7 +247,7 @@ void fake_glow_effect(uint16_t *params)
             uint16_t dist = dx * dx + dy * dy;
             if (dist <= r2)
             {
-                offsets[offsetsNum] = dy * DISPLAY_HEIGHT + dx;
+                offsets[offsetsNum] = dy * DISPLAY_WIDTH + dx;
                 offsetsNum++;
                 offsets[offsetsNum] = dist;
                 offsetsNum++;
@@ -511,12 +516,12 @@ void draw_gradient(Gradient *gradient)
 
 void override_buffer(uint8_t mode, uint16_t lines)
 {
-    if (lines > 320)
-        lines = 320;
+    if (lines > DISPLAY_HEIGHT)
+        lines = DISPLAY_HEIGHT;
     if (mode == 0)
-        memcpy(buffer, temp_buffer, lines * DISPLAY_HEIGHT * sizeof(uint16_t));
+        memcpy(buffer, temp_buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
     else if (mode == 1)
-        memcpy(temp_buffer, buffer, lines * DISPLAY_HEIGHT * sizeof(uint16_t));
+        memcpy(temp_buffer, buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
 }
 
 void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
@@ -541,14 +546,14 @@ void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
         memcpy(pattern, fadeInPatterns[patternIndex], 16);
     }
 
-    for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
+    for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
     {
-        uint32_t lineAddr = x * DISPLAY_HEIGHT;
-        uint8_t patternAddr = (x & 3) << 2;
-        for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
+        uint8_t yMod4 = y & 3;
+        uint32_t lineAddr = (uint32_t)y * DISPLAY_WIDTH;
+        for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
         {
-            uint32_t currentLineAddr = lineAddr + y;
-            uint8_t yMod4 = y & 3;
+            uint32_t currentLineAddr = lineAddr + x;
+            uint8_t patternAddr = (x & 3) << 2;
             if (pattern[patternAddr + yMod4] == 1)
                 buffer[currentLineAddr] = 0;
         }
@@ -574,8 +579,8 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t st
             lineBuffer[j * 2] = square[i * squareWidth + j];
             lineBuffer[j * 2 + 1] = square[i * squareWidth + j];
         }
-        uint32_t lineAddr1 = (y + i * 2) * DISPLAY_HEIGHT + x;
-        uint32_t lineAddr2 = (y + i * 2 + 1) * DISPLAY_HEIGHT + x;
+        uint32_t lineAddr1 = (uint32_t)(y + i * 2) * DISPLAY_WIDTH + x;
+        uint32_t lineAddr2 = (uint32_t)(y + i * 2 + 1) * DISPLAY_WIDTH + x;
         memcpy(buffer + lineAddr1, lineBuffer, sizeof(lineBuffer));
         memcpy(buffer + lineAddr2, lineBuffer, sizeof(lineBuffer));
     }
@@ -608,7 +613,7 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
 
     for (uint8_t i = 0; i < height; i += 1)
     {
-        uint32_t lineAddr = (i + x) * DISPLAY_HEIGHT;
+        uint32_t lineAddr = (uint32_t)(i + x) * DISPLAY_WIDTH;
         uint8_t patternAddr = (i & 3) << 2;
         for (uint8_t j = 0; j < width; j += 1)
         {

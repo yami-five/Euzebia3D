@@ -42,9 +42,10 @@ static void set_attributes(uint8_t scan_dir)
 {
     uint8_t memory_access_reg = 0x00;
     if(scan_dir == HORIZONTAL) {
-        memory_access_reg = 0X70;
+        // Landscape without mirror: axis swap only.
+        memory_access_reg = 0x20;
     } else {
-        memory_access_reg = 0X00;
+        memory_access_reg = 0x00;
     }
 
     // Set the read / write scan direction of the frame memory
@@ -86,9 +87,7 @@ static void init_display(volatile const IHardware* hardware)
 	_hardware=hardware;
     _hardware->set_pwm(100);
     lcd_reset();
-    set_attributes(0);
-    send_command(0x36);
-	send_data_8bit(0x00); 
+    set_attributes(HORIZONTAL);
 
 	send_command(0x3A); 
 	send_data_8bit(0x05);
@@ -178,7 +177,7 @@ static void init_display(volatile const IHardware* hardware)
 
 	send_command(0x35);
     
-    set_windows(0, 0, DISPLAY_HEIGHT, DISPLAY_WIDTH);
+    set_windows(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
 
 static IDisplay display = {
