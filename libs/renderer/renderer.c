@@ -20,6 +20,7 @@ static uint16_t render_width_half = 80;
 static uint16_t render_height_half = 60;
 
 #define MAX_TRIANGLES_IN_SCENE 1500
+#define SPAN_BUFFER_MAX 320
 #define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 2
@@ -27,6 +28,9 @@ static uint16_t render_height_half = 60;
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
 static uint16_t sceneCounter = 0;
+static uint16_t span_buffer[SPAN_BUFFER_MAX];
+static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
+static uint16_t span_length = 0;
 
 // Scratch buffers reused between frames/models to avoid frequent heap churn.
 static int32_t *modelScratchVerticesModified = NULL;
@@ -444,58 +448,62 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
         x1 = render_width;
     if (x1 <= x0)
         return;
-    if (mat->isSkyBox == 0)
+    int32_t xOffset = x0 - xStart;
+    int32_t Lcur = L0 + xOffset * dLdx;
+    int32_t Ucur = U0 + xOffset * dUdx;
+    int32_t Vcur = V0 + xOffset * dVdx;
+    int32_t Wcur = W0 + xOffset * dWdx;
+    uint8_t applyShading = (mat->isSkyBox == 0) && SHADING_ENABLED;
+    uint16_t spanX0 = x0 * output_scale;
+    uint16_t spanY = y * output_scale;
+
+    span_length = 0;
+    for (int32_t x = x0; x < x1; x++)
     {
-        int32_t xOffset = x0 - xStart;
-        int32_t Lcur = L0 + xOffset * dLdx;
-        int32_t Ucur = U0 + xOffset * dUdx;
-        int32_t Vcur = V0 + xOffset * dVdx;
-        int32_t Wcur = W0 + xOffset * dWdx;
-        for (int32_t x = x0; x < x1; x++)
-        {
-            uint16_t color = 0;
-            if (mat->textureSize == 0)
-                color = mat->diffuse;
-            else
-                color = texturing(mat, Ucur >> UV_LERP_SHIFT, Vcur >> UV_LERP_SHIFT, Wcur);
-            Ucur += dUdx;
-            Vcur += dVdx;
-            Wcur += dWdx;
-            if (SHADING_ENABLED)
-            {
-                shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
-                Lcur += dLdx;
-            }
-            // Upscale to output buffer using horizontal spans.
-            uint16_t spanX0 = x * output_scale;
-            uint16_t spanX1 = spanX0 + output_scale;
-            uint16_t spanY = y * output_scale;
-            for (uint8_t dy = 0; dy < output_scale; dy++)
-                _painter->draw_span(spanY + dy, spanX0, spanX1, color);
-        }
+        uint16_t color = 0;
+        if (mat->textureSize == 0)
+            color = mat->diffuse;
+        else
+            color = texturing(mat, Ucur >> UV_LERP_SHIFT, Vcur >> UV_LERP_SHIFT, Wcur);
+
+        if (applyShading)
+            shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
+
+        if (span_length < SPAN_BUFFER_MAX)
+            span_buffer[span_length++] = color;
+
+        Ucur += dUdx;
+        Vcur += dVdx;
+        Wcur += dWdx;
+        if (applyShading)
+            Lcur += dLdx;
     }
-    else
+
+    if (span_length > 0)
     {
-        int32_t xOffset = x0 - xStart;
-        int32_t Ucur = U0 + xOffset * dUdx;
-        int32_t Vcur = V0 + xOffset * dVdx;
-        int32_t Wcur = W0 + xOffset * dWdx;
-        for (int32_t x = x0; x < x1; x++)
+        const uint16_t *span_to_draw = span_buffer;
+        uint16_t span_to_draw_length = span_length;
+
+        if (output_scale > 1)
         {
-            uint16_t color = 0;
-            if (mat->textureSize == 0)
-                color = mat->diffuse;
-            else
-                color = texturing(mat, Ucur >> UV_LERP_SHIFT, Vcur >> UV_LERP_SHIFT, Wcur);
-            Ucur += dUdx;
-            Vcur += dVdx;
-            Wcur += dWdx;
-            uint16_t spanX0 = x * output_scale;
-            uint16_t spanX1 = spanX0 + output_scale;
-            uint16_t spanY = y * output_scale;
-            for (uint8_t dy = 0; dy < output_scale; dy++)
-                _painter->draw_span(spanY + dy, spanX0, spanX1, color);
+            uint16_t scaled_length = 0;
+            for (uint16_t i = 0; i < span_length; i++)
+            {
+                for (uint8_t sx = 0; sx < output_scale; sx++)
+                {
+                    if (scaled_length >= SPAN_BUFFER_MAX)
+                        break;
+                    span_scaled_buffer[scaled_length++] = span_buffer[i];
+                }
+                if (scaled_length >= SPAN_BUFFER_MAX)
+                    break;
+            }
+            span_to_draw = span_scaled_buffer;
+            span_to_draw_length = scaled_length;
         }
+
+        for (uint8_t dy = 0; dy < output_scale; dy++)
+            _painter->draw_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
     }
 }
 

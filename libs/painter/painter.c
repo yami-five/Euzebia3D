@@ -128,20 +128,14 @@ void draw_pixel(uint16_t x, uint16_t y, uint16_t color)
     buffer[line_adr] = color;
 }
 
-void draw_span(uint16_t y, uint16_t x0, uint16_t x1, uint16_t color)
+void draw_span(uint16_t x, uint16_t y, const uint16_t *span, uint16_t span_length)
 {
-    if (y >= DISPLAY_HEIGHT || x0 >= DISPLAY_WIDTH || x0 >= x1)
+    if (span == NULL || span_length == 0 || y >= DISPLAY_HEIGHT || x >= DISPLAY_WIDTH)
         return;
-    if (x1 > DISPLAY_WIDTH)
-        x1 = DISPLAY_WIDTH;
+    if ((uint32_t)x + span_length > DISPLAY_WIDTH)
+        span_length = DISPLAY_WIDTH - x;
 
-    uint32_t line_adr = pixel_index(x0, y);
-
-    for (uint16_t x = x0; x < x1; x++)
-    {
-        buffer[line_adr] = color;
-        line_adr += 1;
-    }
+    memcpy(&buffer[pixel_index(x, y)], span, span_length * sizeof(uint16_t));
 }
 
 void draw_image(uint8_t image_index)
