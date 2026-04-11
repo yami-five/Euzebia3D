@@ -466,10 +466,12 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
                 shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
                 Lcur += dLdx;
             }
-            // Upscale to output buffer (output_scale handles LCD scaling)
+            // Upscale to output buffer using horizontal spans.
+            uint16_t spanX0 = x * output_scale;
+            uint16_t spanX1 = spanX0 + output_scale;
+            uint16_t spanY = y * output_scale;
             for (uint8_t dy = 0; dy < output_scale; dy++)
-                for (uint8_t dx = 0; dx < output_scale; dx++)
-                    _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
+                _painter->draw_span(spanY + dy, spanX0, spanX1, color);
         }
     }
     else
@@ -488,9 +490,11 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
             Ucur += dUdx;
             Vcur += dVdx;
             Wcur += dWdx;
+            uint16_t spanX0 = x * output_scale;
+            uint16_t spanX1 = spanX0 + output_scale;
+            uint16_t spanY = y * output_scale;
             for (uint8_t dy = 0; dy < output_scale; dy++)
-                for (uint8_t dx = 0; dx < output_scale; dx++)
-                    _painter->draw_pixel(x * output_scale + dx, y * output_scale + dy, color);
+                _painter->draw_span(spanY + dy, spanX0, spanX1, color);
         }
     }
 }
