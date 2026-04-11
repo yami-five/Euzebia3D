@@ -12,12 +12,17 @@
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
-static uint8_t buffer[BUFFER_SIZE];
-static uint8_t temp_buffer[BUFFER_SIZE];
+static uint16_t buffer[BUFFER_SIZE_HALF];
+static uint16_t temp_buffer[BUFFER_SIZE_HALF];
 static const uint32_t chunk_size = 15360;
 static spin_lock_t *lcd_spinlock;
 static uint8_t scanline_offset = 0;
 static const uint8_t DEFAULT_FONT_SIZE = 8;
+
+static inline uint32_t pixel_index(uint16_t x, uint16_t y)
+{
+    return ((uint32_t)y * DISPLAY_WIDTH) + x;
+}
 
 static const uint8_t fadeInPatterns[9][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -52,7 +57,7 @@ void init_dma()
 {
     dma_channel = dma_claim_unused_channel(true);
     dma_channel_config config = dma_channel_get_default_config(dma_channel);
-    channel_config_set_transfer_data_size(&config, DMA_SIZE_8);
+    channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
     channel_config_set_dreq(&config, spi_get_dreq(_hardware->get_spi_port(), true));
     dma_channel_configure(
         dma_channel,
@@ -82,15 +87,18 @@ void init_painter(const IDisplay *display, const IHardware *hardware, const ISto
 void draw_buffer()
 {
     uint32_t current_offset = 0;
+    spi_inst_t *spi_port = _hardware->get_spi_port();
     spin_lock_t *spi_spinlock = _hardware->get_spinlock();
     // uint32_t flags = spin_lock_blocking(spi_spinlock);
     // _hardware->write(SD_CS_PIN, 1);
     // _hardware->write(LCD_CS_PIN, 0);
+    spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     _hardware->write(LCD_DC_PIN, 0);
     _hardware->spi_write_byte(0x2C);
     _hardware->write(LCD_DC_PIN, 1);
+    spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     // spin_unlock(spi_spinlock, flags);
-    while (current_offset < BUFFER_SIZE)
+    while (current_offset < BUFFER_SIZE_HALF)
     {
         // flags = spin_lock_blocking(spi_spinlock);
         // _hardware->write(SD_CS_PIN, 1);
@@ -100,33 +108,41 @@ void draw_buffer()
         current_offset += chunk_size;
         // spin_unlock(spi_spinlock, flags);
     }
+    while (spi_is_busy(spi_port))
+    {
+    }
+    spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 }
 
 void clear_buffer(uint16_t color)
 {
-    uint8_t hi = (color >> 8) & 0xff;
-    uint8_t lo = color & 0xff;
-    for (uint32_t i = 0; i < BUFFER_SIZE; i += 2)
-    {
-        buffer[i] = hi;
-        buffer[i + 1] = lo;
-    }
+    for (uint32_t i = 0; i < BUFFER_SIZE_HALF; i++)
+        buffer[i] = color;
 }
 
 void draw_pixel(uint16_t x, uint16_t y, uint16_t color)
 {
-    uint32_t line_adr = (x * HEIGHT_DOUBLED) + (y * 2);
-    if (line_adr >= BUFFER_SIZE || line_adr < 0)
+    if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT)
         return;
-    buffer[line_adr] = (color >> 8) & 0xff;
-    buffer[line_adr + 1] = color & 0xff;
+    uint32_t line_adr = pixel_index(x, y);
+    buffer[line_adr] = color;
+}
+
+void draw_span(uint16_t x, uint16_t y, const uint16_t *span, uint16_t span_length)
+{
+    if (span == NULL || span_length == 0 || y >= DISPLAY_HEIGHT || x >= DISPLAY_WIDTH)
+        return;
+    if ((uint32_t)x + span_length > DISPLAY_WIDTH)
+        span_length = DISPLAY_WIDTH - x;
+
+    memcpy(&buffer[pixel_index(x, y)], span, span_length * sizeof(uint16_t));
 }
 
 void draw_image(uint8_t image_index)
 {
     int dma_channel_flash = dma_claim_unused_channel(true);
     dma_channel_config config = dma_channel_get_default_config(dma_channel_flash);
-    channel_config_set_transfer_data_size(&config, DMA_SIZE_8);
+    channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
     channel_config_set_read_increment(&config, true);
     channel_config_set_write_increment(&config, true);
     dma_channel_configure(
@@ -134,7 +150,7 @@ void draw_image(uint8_t image_index)
         &config,
         buffer,
         _storage->get_image(image_index)->image,
-        BUFFER_SIZE,
+        BUFFER_SIZE_HALF,
         false);
     dma_channel_start(dma_channel_flash);
     dma_channel_wait_for_finish_blocking(dma_channel_flash);
@@ -153,7 +169,9 @@ static inline uint16_t make_rgb565(uint8_t r, uint8_t g, uint8_t b)
 void crt_disp_effect()
 {
     // barrel distortion
-    uint8_t *framebuffer = (uint8_t *)malloc(sizeof(uint8_t) * BUFFER_SIZE);
+    uint16_t *framebuffer = (uint16_t *)malloc(sizeof(uint16_t) * BUFFER_SIZE_HALF);
+    if (framebuffer == NULL)
+        return;
     // for (uint32_t i = 0; i < BUFFER_SIZE_HALF; i++)
     // {
     //     uint32_t index = get_effect_table_element(0, i);
@@ -162,30 +180,29 @@ void crt_disp_effect()
     // }
     // memcpy(buffer, framebuffer, BUFFER_SIZE);
     // chromatic aberration
-    for (uint16_t y = 0; y < DISPLAY_WIDTH; y++)
+    for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
     {
-        uint ydh = y * DISPLAY_HEIGHT;
-        for (uint16_t x = 0; x < DISPLAY_HEIGHT; x++)
+        uint32_t ydw = (uint32_t)y * DISPLAY_WIDTH;
+        for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
         {
-            uint i = ydh + x;
+            uint32_t i = ydw + x;
 
             uint xr = (x > 1) ? x - 2 : x;
-            uint xg = (x < DISPLAY_HEIGHT) ? x + 2 : x;
+            uint xg = (x + 2 < DISPLAY_WIDTH) ? x + 2 : x;
 
-            uint ir = ydh + xr;
-            uint ig = ydh + xg;
+            uint32_t ir = ydw + xr;
+            uint32_t ig = ydw + xg;
 
-            uint16_t c_r = buffer[ir * 2] | (buffer[ir * 2 + 1] << 8);
-            uint16_t c_g = buffer[ig * 2] | (buffer[ig * 2 + 1] << 8);
-            uint16_t c_b = buffer[i * 2] | (buffer[i * 2 + 1] << 8);
+            uint16_t c_r = buffer[ir];
+            uint16_t c_g = buffer[ig];
+            uint16_t c_b = buffer[i];
 
             uint8_t r = get_r(c_r);
             uint8_t g = get_g(c_g);
             uint8_t b = get_b(c_b);
             uint16_t result = make_rgb565(r, g, b);
 
-            framebuffer[i * 2] = result & 0xFF;
-            framebuffer[i * 2 + 1] = result >> 8;
+            framebuffer[i] = result;
         }
     }
     memcpy(buffer, framebuffer, BUFFER_SIZE);
@@ -224,16 +241,16 @@ void fake_glow_effect(uint16_t *params)
             uint16_t dist = dx * dx + dy * dy;
             if (dist <= r2)
             {
-                offsets[offsetsNum] = dy * HEIGHT_DOUBLED + dx * 2;
+                offsets[offsetsNum] = dy * DISPLAY_WIDTH + dx;
                 offsetsNum++;
                 offsets[offsetsNum] = dist;
                 offsetsNum++;
             }
         }
     }
-    for (int i = 0; i < BUFFER_SIZE; i += 2)
+    for (uint32_t i = 0; i < BUFFER_SIZE_HALF; i++)
     {
-        uint16_t color = ((uint16_t)buffer[i] << 8) | buffer[i + 1];
+        uint16_t color = buffer[i];
         if (color != mainColor)
             continue;
         else
@@ -241,18 +258,15 @@ void fake_glow_effect(uint16_t *params)
             for (uint16_t j = 0; j < offsetsNum; j += 2)
             {
                 int addr = i + offsets[j];
-                if (addr < 0 || addr >= BUFFER_SIZE)
+                if (addr < 0 || addr >= BUFFER_SIZE_HALF)
                     continue;
                 uint16_t r5 = ((r2 - offsets[j + 1]) * 31 + (r2 >> 1)) / r2;
                 uint16_t g6 = ((r2 - offsets[j + 1]) * 63 + (r2 >> 1)) / r2;
                 r5 = (r5 * 200 + 127) / 255;
                 g6 = (g6 * 200 + 127) / 255;
                 uint16_t new_color = (r5 << 11) | (g6 << 5) | r5;
-                if (new_color > (((uint16_t)buffer[addr] << 8) | buffer[addr + 1]))
-                {
-                    buffer[addr] = (new_color >> 8) & 0xff;
-                    buffer[addr + 1] = new_color & 0xff;
-                }
+                if (new_color > buffer[addr])
+                    buffer[addr] = new_color;
             }
         }
     }
@@ -261,15 +275,14 @@ void fake_glow_effect(uint16_t *params)
 
 void blue_only()
 {
-    for (uint32_t i = 0; i < BUFFER_SIZE; i += 2)
+    for (uint32_t i = 0; i < BUFFER_SIZE_HALF; i++)
     {
-        uint16_t color = ((uint16_t)buffer[i] << 8) | buffer[i + 1];
+        uint16_t color = buffer[i];
         if (color == 0)
             continue;
         uint8_t b = get_b(color);
         color = make_rgb565(3, 5, b);
-        buffer[i] = (color >> 8) & 0xff;
-        buffer[i + 1] = color & 0xff;
+        buffer[i] = color;
     }
 }
 
@@ -289,17 +302,16 @@ void broken_chromatic_abberration()
             uint16_t ir = yr * DISPLAY_WIDTH + xr;
             uint16_t ig = yg * DISPLAY_WIDTH + xg;
 
-            uint16_t c_r = buffer[ir * 2] | (buffer[ir * 2 + 1] << 8);
-            uint16_t c_g = buffer[ig * 2] | (buffer[ig * 2 + 1] << 8);
-            uint16_t c_b = buffer[i * 2] | (buffer[i * 2 + 1] << 8);
+            uint16_t c_r = buffer[ir];
+            uint16_t c_g = buffer[ig];
+            uint16_t c_b = buffer[i];
 
             uint8_t r = get_r(c_r);
             uint8_t g = get_g(c_g);
             uint8_t b = get_b(c_b);
             uint16_t result = make_rgb565(r, g, b);
 
-            temp_buffer[i * 2] = result & 0xFF;
-            temp_buffer[i * 2 + 1] = result >> 8;
+            temp_buffer[i] = result;
         }
     }
     memcpy(buffer, temp_buffer, BUFFER_SIZE);
@@ -498,12 +510,12 @@ void draw_gradient(Gradient *gradient)
 
 void override_buffer(uint8_t mode, uint16_t lines)
 {
-    if (lines > 320)
-        lines = 320;
+    if (lines > DISPLAY_HEIGHT)
+        lines = DISPLAY_HEIGHT;
     if (mode == 0)
-        memcpy(buffer, temp_buffer, lines * 480);
+        memcpy(buffer, temp_buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
     else if (mode == 1)
-        memcpy(temp_buffer, buffer, lines * 480);
+        memcpy(temp_buffer, buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
 }
 
 void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
@@ -528,19 +540,16 @@ void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
         memcpy(pattern, fadeInPatterns[patternIndex], 16);
     }
 
-    for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
+    for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
     {
-        uint32_t lineAddr = x * HEIGHT_DOUBLED;
-        uint8_t patternAddr = (x & 3) << 2;
-        for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
+        uint8_t yMod4 = y & 3;
+        uint32_t lineAddr = (uint32_t)y * DISPLAY_WIDTH;
+        for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
         {
-            uint32_t currentLineAddr = lineAddr + (y << 1);
-            uint8_t yMod4 = y & 3;
+            uint32_t currentLineAddr = lineAddr + x;
+            uint8_t patternAddr = (x & 3) << 2;
             if (pattern[patternAddr + yMod4] == 1)
-            {
                 buffer[currentLineAddr] = 0;
-                buffer[currentLineAddr + 1] = 0;
-            }
         }
     }
 }
@@ -561,11 +570,11 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t st
     {
         for (uint8_t j = 0; j < squareWidth; j++)
         {
-            lineBuffer[j * 2] = __builtin_bswap16(square[i * squareWidth + j]);
-            lineBuffer[j * 2 + 1] = __builtin_bswap16(square[i * squareWidth + j]);
+            lineBuffer[j * 2] = square[i * squareWidth + j];
+            lineBuffer[j * 2 + 1] = square[i * squareWidth + j];
         }
-        uint32_t lineAddr1 = (y + i * 2) * HEIGHT_DOUBLED + x * 2;
-        uint32_t lineAddr2 = (y + i * 2 + 1) * HEIGHT_DOUBLED + x * 2;
+        uint32_t lineAddr1 = (uint32_t)(y + i * 2) * DISPLAY_WIDTH + x;
+        uint32_t lineAddr2 = (uint32_t)(y + i * 2 + 1) * DISPLAY_WIDTH + x;
         memcpy(buffer + lineAddr1, lineBuffer, sizeof(lineBuffer));
         memcpy(buffer + lineAddr2, lineBuffer, sizeof(lineBuffer));
     }
@@ -591,31 +600,25 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
         memcpy(pattern, fadeInPatterns[patternIndex], 16);
     }
 
-    uint16_t lineBufferSize = width << 1;
-    uint8_t *lineBuffer = (uint8_t *)malloc(lineBufferSize);
+    uint16_t lineBufferSize = width * sizeof(uint16_t);
+    uint16_t *lineBuffer = (uint16_t *)malloc(lineBufferSize);
     if (lineBuffer == NULL)
         return;
 
     for (uint8_t i = 0; i < height; i += 1)
     {
-        uint32_t lineAddr = (i + x) * HEIGHT_DOUBLED;
+        uint32_t lineAddr = (uint32_t)(i + x) * DISPLAY_WIDTH;
         uint8_t patternAddr = (i & 3) << 2;
         for (uint8_t j = 0; j < width; j += 1)
         {
-            uint32_t currentLineAddr = lineAddr + ((y + j) << 1);
+            uint32_t currentLineAddr = lineAddr + (y + j);
             uint8_t yMod4 = j & 3;
             if (pattern[patternAddr + yMod4] == 1)
-            {
-                lineBuffer[(j<<1)] = buffer[currentLineAddr];
-                lineBuffer[(j<<1) + 1] = buffer[currentLineAddr + 1];
-            }
+                lineBuffer[j] = buffer[currentLineAddr];
             else
-            {
-                lineBuffer[(j<<1)] = temp_buffer[currentLineAddr];
-                lineBuffer[(j<<1) + 1] = temp_buffer[currentLineAddr + 1];
-            }
+                lineBuffer[j] = temp_buffer[currentLineAddr];
         }
-        lineAddr += (y << 1);
+        lineAddr += y;
         memcpy(buffer + lineAddr, lineBuffer, lineBufferSize);
     }
     free(lineBuffer);
@@ -626,6 +629,7 @@ static IPainter painter = {
     .draw_buffer = draw_buffer,
     .clear_buffer = clear_buffer,
     .draw_pixel = draw_pixel,
+    .draw_span = draw_span,
     .draw_image = draw_image,
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
