@@ -399,6 +399,89 @@ uint16_t texturing(Material *mat, int32_t U, int32_t V, int32_t W)
     return (r << 11) | (g << 5) | b;
 }
 
+static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
+{
+    for (uint16_t i = 0; i < length; i++)
+        dst[i] = color;
+}
+
+static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t W, int32_t dWdx)
+{
+    for (uint16_t i = 0; i < length; i++)
+    {
+        dst[i] = texturing(mat, U >> UV_LERP_SHIFT, V >> UV_LERP_SHIFT, W);
+        U += dUdx;
+        V += dVdx;
+        W += dWdx;
+    }
+}
+
+static void shade_span(uint16_t *dst, uint16_t length, PointLight *light, int32_t L, int32_t dLdx)
+{
+    for (uint16_t i = 0; i < length; i++)
+    {
+        shading(&dst[i], light, L >> LIGHT_LERP_SHIFT);
+        L += dLdx;
+    }
+}
+
+typedef struct
+{
+    int32_t L0;
+    int32_t L1;
+    int32_t U0;
+    int32_t U1;
+    int32_t V0;
+    int32_t V1;
+    int32_t W0;
+    int32_t W1;
+} SpanEndpoints;
+
+typedef struct
+{
+    int32_t L;
+    int32_t dLdx;
+    int32_t U;
+    int32_t dUdx;
+    int32_t V;
+    int32_t dVdx;
+    int32_t W;
+    int32_t dWdx;
+} SpanLerpState;
+
+static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start, int32_t x_end, const SpanEndpoints *endpoints)
+{
+    SpanLerpState state = {0};
+    int32_t span = x_end - x_start;
+    int32_t x_offset = x0 - x_start;
+
+    state.dLdx = span ? (endpoints->L1 - endpoints->L0) / span : 0;
+    state.dUdx = span ? (endpoints->U1 - endpoints->U0) / span : 0;
+    state.dVdx = span ? (endpoints->V1 - endpoints->V0) / span : 0;
+    state.dWdx = span ? (endpoints->W1 - endpoints->W0) / span : 0;
+
+    state.L = endpoints->L0 + x_offset * state.dLdx;
+    state.U = endpoints->U0 + x_offset * state.dUdx;
+    state.V = endpoints->V0 + x_offset * state.dVdx;
+    state.W = endpoints->W0 + x_offset * state.dWdx;
+
+    return state;
+}
+
+static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, PointLight *light, uint8_t apply_shading, const SpanLerpState *lerp)
+{
+    if (length == 0)
+        return;
+
+    if (mat->textureSize == 0)
+        fill_span(dst, length, mat->diffuse);
+    else
+        texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->W, lerp->dWdx);
+
+    if (apply_shading)
+        shade_span(dst, length, light, lerp->L, lerp->dLdx);
+}
+
 inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1, int32_t z2, int32_t z3)
 {
     int32_t z = fixed_mul(Ba, z1) + fixed_mul(Bb, z2) + fixed_mul(Bc, z3);
@@ -437,47 +520,33 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
     int32_t xEnd = x1;
     if (xEnd < 0 || xStart >= render_width || xStart == xEnd)
         return;
-    int32_t span = xEnd - xStart;
-    int32_t dLdx = span ? (L1 - L0) / span : 0;
-    int32_t dUdx = span ? (U1 - U0) / span : 0;
-    int32_t dVdx = span ? (V1 - V0) / span : 0;
-    int32_t dWdx = span ? (W1 - W0) / span : 0;
     if (x0 < 0)
         x0 = 0;
     if (x1 > render_width)
         x1 = render_width;
     if (x1 <= x0)
         return;
-    int32_t xOffset = x0 - xStart;
-    int32_t Lcur = L0 + xOffset * dLdx;
-    int32_t Ucur = U0 + xOffset * dUdx;
-    int32_t Vcur = V0 + xOffset * dVdx;
-    int32_t Wcur = W0 + xOffset * dWdx;
     uint8_t applyShading = (mat->isSkyBox == 0) && SHADING_ENABLED;
     uint16_t spanX0 = x0 * output_scale;
     uint16_t spanY = y * output_scale;
 
-    span_length = 0;
-    for (int32_t x = x0; x < x1; x++)
-    {
-        uint16_t color = 0;
-        if (mat->textureSize == 0)
-            color = mat->diffuse;
-        else
-            color = texturing(mat, Ucur >> UV_LERP_SHIFT, Vcur >> UV_LERP_SHIFT, Wcur);
+    span_length = (uint16_t)(x1 - x0);
+    if (span_length > SPAN_BUFFER_MAX)
+        span_length = SPAN_BUFFER_MAX;
 
-        if (applyShading)
-            shading(&color, light, Lcur >> LIGHT_LERP_SHIFT);
+    SpanEndpoints endpoints = {
+        .L0 = L0,
+        .L1 = L1,
+        .U0 = U0,
+        .U1 = U1,
+        .V0 = V0,
+        .V1 = V1,
+        .W0 = W0,
+        .W1 = W1,
+    };
+    SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
 
-        if (span_length < SPAN_BUFFER_MAX)
-            span_buffer[span_length++] = color;
-
-        Ucur += dUdx;
-        Vcur += dVdx;
-        Wcur += dWdx;
-        if (applyShading)
-            Lcur += dLdx;
-    }
+    build_material_span(span_buffer, span_length, mat, light, applyShading, &lerp);
 
     if (span_length > 0)
     {
