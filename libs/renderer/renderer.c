@@ -1,5 +1,6 @@
 #include "IRenderer.h"
 #include "renderer.h"
+#include "hardware/interp.h"
 #include <stdlib.h>
 
 static volatile const IHardware *_hardware = NULL;
@@ -31,6 +32,30 @@ static uint16_t sceneCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
+
+static void init_span_interpolators(void)
+{
+    interp_config uv_cfg = interp_default_config();
+    interp_config_set_signed(&uv_cfg, true);
+    interp_set_config(interp0, 0, &uv_cfg);
+    interp_set_config(interp0, 1, &uv_cfg);
+
+    interp_config w_cfg = interp_default_config();
+    interp_config_set_signed(&w_cfg, true);
+    interp_set_config(interp1, 0, &w_cfg);
+
+    interp_config l_cfg = interp_default_config();
+    interp_config_set_signed(&l_cfg, true);
+    interp_set_config(interp1, 1, &l_cfg);
+
+    // Keep lane BASE registers neutral - span code uses raw lane values only.
+    interp_set_base(interp0, 0, 0);
+    interp_set_base(interp0, 1, 0);
+    interp_set_base(interp0, 2, 0);
+    interp_set_base(interp1, 0, 0);
+    interp_set_base(interp1, 1, 0);
+    interp_set_base(interp1, 2, 0);
+}
 
 // Scratch buffers reused between frames/models to avoid frequent heap churn.
 static int32_t *modelScratchVerticesModified = NULL;
@@ -108,6 +133,7 @@ void init_renderer(volatile const IHardware *hardware, volatile const IPainter *
     _hardware = hardware;
     _painter = painter;
     configure_render_dimensions();
+    init_span_interpolators();
     // init_sin_cos();
 }
 
@@ -407,21 +433,31 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
 
 static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t W, int32_t dWdx)
 {
+    interp_set_accumulator(interp0, 0, (uint32_t)U);
+    interp_set_accumulator(interp0, 1, (uint32_t)V);
+    interp_set_accumulator(interp1, 0, (uint32_t)W);
+
     for (uint16_t i = 0; i < length; i++)
     {
-        dst[i] = texturing(mat, U >> UV_LERP_SHIFT, V >> UV_LERP_SHIFT, W);
-        U += dUdx;
-        V += dVdx;
-        W += dWdx;
+        int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
+        int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
+        int32_t Wcur = (int32_t)interp_get_accumulator(interp1, 0);
+        dst[i] = texturing(mat, Ucur, Vcur, Wcur);
+        interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
+        interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
+        interp_add_accumulator(interp1, 0, (uint32_t)dWdx);
     }
 }
 
 static void shade_span(uint16_t *dst, uint16_t length, PointLight *light, int32_t L, int32_t dLdx)
 {
+    interp_set_accumulator(interp1, 1, (uint32_t)L);
+
     for (uint16_t i = 0; i < length; i++)
     {
-        shading(&dst[i], light, L >> LIGHT_LERP_SHIFT);
-        L += dLdx;
+        int32_t Lcur = ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
+        shading(&dst[i], light, Lcur);
+        interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
     }
 }
 

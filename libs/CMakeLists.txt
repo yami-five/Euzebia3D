@@ -185,6 +185,7 @@ target_link_libraries(
     Euzebia3D_Transformations
     Euzebia3D_MeshFactory
     Euzebia3D_LightFactory
+    hardware_interp
     Euzebia3D_Painter
     Euzebia3D_CameraFactory
 )
