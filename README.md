@@ -8,11 +8,6 @@ Core characteristics:
 - DMA-driven LCD framebuffer upload (`320x240`, RGB565)
 - triangle sorting (painter's algorithm) instead of z-buffer
 
-## Rendering Docs
-
-- PL: [RENDERING_GUIDE_PL.md](./RENDERING_GUIDE_PL.md)
-- EN: [RENDERING_GUIDE_EN.md](./RENDERING_GUIDE_EN.md)
-
 ## Current Rendering Approach
 
 The renderer used to rely on z-buffering.
@@ -20,6 +15,7 @@ Currently, z-buffer was replaced with triangle sorting due to rendering correctn
 
 What is implemented now in `libs/renderer/renderer.c`:
 - back-face culling in screen space
+- near-plane clipping in clip space (`z > 0`) with triangle fan reconstruction after clipping
 - scene triangle collection with cap `MAX_TRIANGLES_IN_SCENE = 1500`
 - depth sort by average triangle depth (far-to-near draw order)
 - scanline rasterization with edge stepping and per-pixel lerp
@@ -129,5 +125,5 @@ Notes:
 
 - `renderer->set_scale(...)` controls internal render resolution scaling. Current `main` sets scale to `1` (full `320x240` internal rendering).
 - The painter uses a full framebuffer (`BUFFER_SIZE = 153600` bytes) and streams it via DMA in chunks.
-- No explicit near-plane clipping is implemented; geometry behind the camera is rejected per-vertex.
+- Triangles crossing the near plane are clipped before perspective divide; geometry fully behind camera is rejected.
 - With triangle sorting, intersecting geometry can still produce painter-order artifacts in edge cases.
