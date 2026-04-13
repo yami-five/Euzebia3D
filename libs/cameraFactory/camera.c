@@ -66,7 +66,7 @@ void calculatePerspectiveMatrix(Camera *camera)
 
 TransformInfo *add_camera_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType)
 {
-    if (transformationType > 3)
+    if (transformationType > CAMERA_TRANSFORM_ROTATE_TARGET)
         return currentTransformations;
 
     *currentTransformationsNum += 1;
@@ -112,19 +112,25 @@ static void rotate_vector(Vector3 *resultVec, TransformVector *transVec)
     Quaternion qInv = {
         .w = c,
         .vec = &qVecInv};
+
     Quaternion q_vertex = {
         .w = 0,
         .vec = resultVec};
+
     Vector3 resultVec1;
     Quaternion result = {
         .w = 0,
         .vec = &resultVec1};
+
     mul_quaternion(&result, &q, &q_vertex);
+
     Vector3 resultVec2;
     Quaternion result2 = {
         .w = 0,
         .vec = &resultVec2};
+
     mul_quaternion(&result2, &result, &qInv);
+
     resultVec->x = result2.vec->x;
     resultVec->y = result2.vec->y;
     resultVec->z = result2.vec->z;
@@ -145,16 +151,24 @@ void camera_apply_transformations(Camera *camera)
     for (uint32_t i = 0; i < camera->transformationsNum; i++)
     {
         TransformInfo *info = &camera->transformations[i];
-        if (info->transformType == 0) /* translate */
+        if (info->transformType == CAMERA_TRANSFORM_TRANSLATE)
             translate_vector(camera->pos, info->transformVector);
-        if (info->transformType == 1) /* rotate */
+        if (info->transformType == CAMERA_TRANSFORM_ROTATE)
         {
-            rotate_vector(camera->pos, info->transformVector);
-            rotate_vector(camera->up, info->transformVector);
+            Vector3 offset = {
+                .x = camera->pos->x - camera->target->x,
+                .y = camera->pos->y - camera->target->y,
+                .z = camera->pos->z - camera->target->z,
+            };
+            rotate_vector(&offset, info->transformVector);
+            camera->pos->x = camera->target->x + offset.x;
+            camera->pos->y = camera->target->y + offset.y;
+            camera->pos->z = camera->target->z + offset.z;
+            // rotate_vector(camera->up, info->transformVector);
         }
-        if (info->transformType == 2) /* translateTarget */
+        if (info->transformType == CAMERA_TRANSFORM_TRANSLATE_TARGET)
             translate_vector(camera->target, info->transformVector);
-        if (info->transformType == 3) /* rotateTarget */
+        if (info->transformType == CAMERA_TRANSFORM_ROTATE_TARGET)
         {
             Vector3 offset = {
                 .x = camera->target->x - camera->pos->x,
