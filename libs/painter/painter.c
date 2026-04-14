@@ -345,8 +345,15 @@ void middle_point(int16_t *x, int16_t *y, int16_t x1, int16_t y1, int16_t x2, in
     *y = y1 + ((y2 - y1) >> 1);
 }
 
-void draw_sprite(const Sprite *sprite, int16_t pos_y, int16_t pos_x, int32_t angle, uint8_t scale)
+void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t angle, uint8_t scale)
 {
+    if (scale == 0)
+        return;
+
+    // Align sprite Y axis with the rest of renderer output.
+    int16_t sprite_size_scaled = sprite->size << (scale - 1);
+    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_size_scaled) - pos_y;
+
     if (angle != 0 && sprite->canRotate)
     {
         int16_t cos = fast_cos(angle);
@@ -354,7 +361,7 @@ void draw_sprite(const Sprite *sprite, int16_t pos_y, int16_t pos_x, int32_t ang
         int8_t middle = sprite->size >> 1;
         for (uint16_t y = 0; y < sprite->size; y++)
         {
-            int16_t new_y = y + (pos_y >> (scale - 1));
+            int16_t new_y = y + (pos_y_aligned >> (scale - 1));
             if (new_y >= 0 && new_y < DISPLAY_HEIGHT)
             {
                 for (uint16_t x = 0; x < sprite->size; x++)
@@ -381,7 +388,7 @@ void draw_sprite(const Sprite *sprite, int16_t pos_y, int16_t pos_x, int32_t ang
     {
         for (uint16_t y = 0; y < sprite->size; y++)
         {
-            int16_t new_y = y + (pos_y >> (scale - 1));
+            int16_t new_y = y + (pos_y_aligned >> (scale - 1));
             if (new_y >= 0 && new_y < DISPLAY_HEIGHT)
             {
                 uint32_t ydh = y * sprite->size;
