@@ -15,6 +15,13 @@ typedef struct TransformVector
     int32_t z;
 } TransformVector;
 
+typedef enum
+{
+    MODEL_TRANSFORM_ROTATE = 0,
+    MODEL_TRANSFORM_TRANSLATE = 1,
+    MODEL_TRANSFORM_SCALE = 2
+} ModelTransformType;
+
 typedef struct TransformInfo
 {
     uint8_t transformType;

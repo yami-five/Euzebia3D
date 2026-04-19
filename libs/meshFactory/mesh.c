@@ -1,8 +1,8 @@
 #include "mesh.h"
 
-TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType)
+TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, ModelTransformType transformationType)
 {
-    if (transformationType > 2)
+    if (transformationType > MODEL_TRANSFORM_SCALE)
         return currentTransformations;
 
     *currentTransformationsNum += 1;

@@ -62,30 +62,48 @@ int main()
     meshFactory->init_mesh_factory(storage);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
-    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 10.0f, 10.0f, 10.0f, 0);
-    // mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, 1);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
+
+    Mesh *room = meshFactory->create_textured_mesh(1, 2);
+    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
     lightFactory = get_lightFactory();
-    PointLight *pointLight = lightFactory->create_point_light(-1.0f, 0.0f, 5.0f, 15.0f, 0xffff);
+    PointLight *pointLight = lightFactory->create_point_light(10.0f, 10.0f, 0.0f, 15.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 50.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_ROTATE);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
     uint32_t t = 0;
 
+    const uint8_t sprite_size = 16;
+    const Sprite *left_edge = storage->get_sprite(0);
+    const Sprite *right_edge = storage->get_sprite(1);
+    const Sprite *top_edge = storage->get_sprite(2);
+    const Sprite *bottom_edge = storage->get_sprite(3);
+
     while (1)
     {
         float qt = t * 0.02f;
-        // modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
-        modify_camera_transformation(camera->transformations, 0.02f, 0.0f, 1.0f, 0.0f, 0);
+        modify_mesh_transformation(room->transformations, qt, 0.0f, 10.0f, 0.0f, 0);
+        modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
         update_camera(camera);
+        modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
         renderer->clean_scene();
+        renderer->add_model_to_scene(room, camera, pointLight);
         renderer->add_model_to_scene(mug, camera, pointLight);
         renderer->render_scene(pointLight);
         // painter->apply_post_process_effect(0);
+
+        // painter->draw_sprite(left_edge,0,120-(sprite_size>>1),0,1);
+        // painter->draw_sprite(right_edge,320-sprite_size,120-(sprite_size>>1),0,1);
+        // painter->draw_sprite(top_edge,160-(sprite_size>>1),0,0,1);
+        // painter->draw_sprite(bottom_edge,160-(sprite_size>>1),240-sprite_size,0,1);
+
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
