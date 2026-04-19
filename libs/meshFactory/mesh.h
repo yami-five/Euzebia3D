@@ -33,7 +33,7 @@ typedef struct
     uint32_t transformationsNum;
 } Mesh;
 
-TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType);
+TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, ModelTransformType transformationType);
 void modify_mesh_transformation(TransformInfo *currentTransformations, float w, float x, float y, float z, uint32_t transformationIndex);
 void free_model(Mesh *mesh);
 

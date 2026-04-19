@@ -25,6 +25,7 @@ static uint16_t render_height_half = 60;
 #define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 8
+#define MAX_SHADING_SPAN_LEN 240
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
@@ -213,11 +214,11 @@ void scale(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 
 void transform(int32_t *vertices, uint16_t verticesCounter, TransformInfo *transformInfo)
 {
-    if (transformInfo->transformType == 0)
+    if (transformInfo->transformType == MODEL_TRANSFORM_ROTATE)
         rotate(vertices, verticesCounter, transformInfo->transformVector);
-    if (transformInfo->transformType == 1)
+    if (transformInfo->transformType == MODEL_TRANSFORM_TRANSLATE)
         translate(vertices, verticesCounter, transformInfo->transformVector);
-    if (transformInfo->transformType == 2)
+    if (transformInfo->transformType == MODEL_TRANSFORM_SCALE)
         scale(vertices, verticesCounter, transformInfo->transformVector);
 }
 
@@ -374,10 +375,10 @@ void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
     *color = (r << 11) | (g << 5) | b;
 }
 
-uint16_t texturing(Material *mat, int32_t U, int32_t V, int32_t W)
+uint16_t texturing(Material *mat, int32_t U, int32_t V, int32_t Z)
 {
-    int32_t uv_x = fixed_div(U, W);
-    int32_t uv_y = fixed_div(V, W);
+    int32_t uv_x = (int32_t)fixed_mul(U, Z);
+    int32_t uv_y = (int32_t)fixed_mul(V, Z);
     uv_x = uv_x * mat->textureSize >> SHIFT_FACTOR;
     uv_y = uv_y * mat->textureSize >> SHIFT_FACTOR;
     if (uv_x < 1)
@@ -431,33 +432,41 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
         dst[i] = color;
 }
 
-static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t W, int32_t dWdx)
+static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t Z, int32_t dZdx)
 {
     interp_set_accumulator(interp0, 0, (uint32_t)U);
     interp_set_accumulator(interp0, 1, (uint32_t)V);
-    interp_set_accumulator(interp1, 0, (uint32_t)W);
+    interp_set_accumulator(interp1, 0, (uint32_t)Z);
 
     for (uint16_t i = 0; i < length; i++)
     {
         int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
         int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
-        int32_t Wcur = (int32_t)interp_get_accumulator(interp1, 0);
-        dst[i] = texturing(mat, Ucur, Vcur, Wcur);
+        int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
+        dst[i] = texturing(mat, Ucur, Vcur, Zcur);
         interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
         interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
-        interp_add_accumulator(interp1, 0, (uint32_t)dWdx);
+        interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
     }
 }
 
 static void shade_span(uint16_t *dst, uint16_t length, PointLight *light, int32_t L, int32_t dLdx)
 {
-    interp_set_accumulator(interp1, 1, (uint32_t)L);
-
-    for (uint16_t i = 0; i < length; i++)
+    if(length<=MAX_SHADING_SPAN_LEN)
     {
-        int32_t Lcur = ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
-        shading(&dst[i], light, Lcur);
-        interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
+        interp_set_accumulator(interp1, 1, (uint32_t)L);
+        
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Lcur = ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
+            shading(&dst[i], light, Lcur);
+            interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
+        }
+    }
+    else
+    {
+        int32_t firstPixelLight = L >> LIGHT_LERP_SHIFT;
+        shading(&dst[0], light, firstPixelLight);
     }
 }
 
@@ -469,8 +478,8 @@ typedef struct
     int32_t U1;
     int32_t V0;
     int32_t V1;
-    int32_t W0;
-    int32_t W1;
+    int32_t Z0;
+    int32_t Z1;
 } SpanEndpoints;
 
 typedef struct
@@ -481,8 +490,8 @@ typedef struct
     int32_t dUdx;
     int32_t V;
     int32_t dVdx;
-    int32_t W;
-    int32_t dWdx;
+    int32_t Z;
+    int32_t dZdx;
 } SpanLerpState;
 
 static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start, int32_t x_end, const SpanEndpoints *endpoints)
@@ -494,12 +503,12 @@ static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start, int32_t x
     state.dLdx = span ? (endpoints->L1 - endpoints->L0) / span : 0;
     state.dUdx = span ? (endpoints->U1 - endpoints->U0) / span : 0;
     state.dVdx = span ? (endpoints->V1 - endpoints->V0) / span : 0;
-    state.dWdx = span ? (endpoints->W1 - endpoints->W0) / span : 0;
+    state.dZdx = span ? (endpoints->Z1 - endpoints->Z0) / span : 0;
 
     state.L = endpoints->L0 + x_offset * state.dLdx;
     state.U = endpoints->U0 + x_offset * state.dUdx;
     state.V = endpoints->V0 + x_offset * state.dVdx;
-    state.W = endpoints->W0 + x_offset * state.dWdx;
+    state.Z = endpoints->Z0 + x_offset * state.dZdx;
 
     return state;
 }
@@ -512,7 +521,7 @@ static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, P
     if (mat->textureSize == 0)
         fill_span(dst, length, mat->diffuse);
     else
-        texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->W, lerp->dWdx);
+        texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->Z, lerp->dZdx);
 
     if (apply_shading)
         shade_span(dst, length, light, lerp->L, lerp->dLdx);
@@ -524,7 +533,7 @@ inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1, 
     return inverse(z);
 }
 
-void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *light, int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0, int32_t V1, int32_t W0, int32_t W1)
+void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *light, int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0, int32_t V1, int32_t Z0, int32_t Z1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
@@ -547,9 +556,9 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
         q = V0;
         V0 = V1;
         V1 = q;
-        q = W0;
-        W0 = W1;
-        W1 = q;
+        q = Z0;
+        Z0 = Z1;
+        Z1 = q;
     }
     x1 += 1;
     int32_t xStart = x0;
@@ -577,8 +586,8 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
         .U1 = U1,
         .V0 = V0,
         .V1 = V1,
-        .W0 = W0,
-        .W1 = W1,
+        .Z0 = Z0,
+        .Z1 = Z1,
     };
     SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
 
@@ -621,10 +630,9 @@ inline void swap_int32(int32_t *x, int32_t *y)
 
 void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
-    int32_t x, y, Lx, Ux, Vx, Wx;
+    int32_t x, y, Lx, Ux, Vx, Zx;
     if (triangle->a.y > triangle->b.y)
     {
-        swap_int32(&triangle->a.w, &triangle->b.w);
         swap_int32(&triangle->a.z, &triangle->b.z);
         swap_int32(&triangle->a.y, &triangle->b.y);
         swap_int32(&triangle->a.x, &triangle->b.x);
@@ -636,7 +644,6 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     }
     if (triangle->a.y > triangle->c.y)
     {
-        swap_int32(&triangle->a.w, &triangle->c.w);
         swap_int32(&triangle->a.z, &triangle->c.z);
         swap_int32(&triangle->a.y, &triangle->c.y);
         swap_int32(&triangle->a.x, &triangle->c.x);
@@ -648,7 +655,6 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     }
     if (triangle->b.y > triangle->c.y)
     {
-        swap_int32(&triangle->b.w, &triangle->c.w);
         swap_int32(&triangle->b.z, &triangle->c.z);
         swap_int32(&triangle->b.y, &triangle->c.y);
         swap_int32(&triangle->b.x, &triangle->c.x);
@@ -665,7 +671,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int32_t Lxx = Lx = ((int32_t)lightDistances[0]) << LIGHT_LERP_SHIFT;
     int32_t Uxx = Ux = triangle->uvA.x << UV_LERP_SHIFT;
     int32_t Vxx = Vx = triangle->uvA.y << UV_LERP_SHIFT;
-    int32_t Wxx = Wx = triangle->a.w;
+    int32_t Zxx = Zx = triangle->a.z;
 
     int32_t dx01 = triangle->b.x - triangle->a.x;
     int32_t dy01 = triangle->b.y - triangle->a.y;
@@ -687,9 +693,9 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int32_t dU12 = dy12 ? ((triangle->uvC.x - triangle->uvB.x) << UV_LERP_SHIFT) / dy12 : 0;
     int32_t dV12 = dy12 ? ((triangle->uvC.y - triangle->uvB.y) << UV_LERP_SHIFT) / dy12 : 0;
 
-    int32_t dW01 = dy01 ? (triangle->b.w - triangle->a.w) / dy01 : 0;
-    int32_t dW02 = dy02 ? (triangle->c.w - triangle->a.w) / dy02 : 0;
-    int32_t dW12 = dy12 ? (triangle->c.w - triangle->b.w) / dy12 : 0;
+    int32_t dZ01 = dy01 ? (triangle->b.z - triangle->a.z) / dy01 : 0;
+    int32_t dZ02 = dy02 ? (triangle->c.z - triangle->a.z) / dy02 : 0;
+    int32_t dZ12 = dy12 ? (triangle->c.z - triangle->b.z) / dy12 : 0;
 
     int32_t q2 = 0;
 
@@ -701,7 +707,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         int32_t xd = 1 - ((dx01 < 0) << 1);
         while (y <= triangle->b.y)
         {
-            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Wx, Wxx);
+            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
             y += 1;
             q += dx01;
             q2 += dx02;
@@ -711,8 +717,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Uxx += dU02;
             Vx += dV01;
             Vxx += dV02;
-            Wx += dW01;
-            Wxx += dW02;
+            Zx += dZ01;
+            Zxx += dZ02;
             while (xd * q >= dy01)
             {
                 q -= xd * dy01;
@@ -733,12 +739,12 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         Lx = ((int32_t)lightDistances[1]) << LIGHT_LERP_SHIFT;
         Ux = triangle->uvB.x << UV_LERP_SHIFT;
         Vx = triangle->uvB.y << UV_LERP_SHIFT;
-        Wx = triangle->b.w;
+        Zx = triangle->b.z;
         int32_t xd = 1 - ((dx12 < 0) << 1);
 
         while (y <= triangle->c.y && y < render_height)
         {
-            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Wx, Wxx);
+            rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
             y += 1;
             q += dx12;
             q2 += dx02;
@@ -748,8 +754,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Uxx += dU02;
             Vx += dV12;
             Vxx += dV02;
-            Wx += dW12;
-            Wxx += dW02;
+            Zx += dZ12;
+            Zxx += dZ02;
             while (xd * q > dy12)
             {
                 q -= xd * dy12;

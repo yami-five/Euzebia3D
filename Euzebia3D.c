@@ -62,12 +62,12 @@ int main()
     meshFactory->init_mesh_factory(storage);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
-    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, 0);
-    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, 1);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
 
     Mesh *room = meshFactory->create_textured_mesh(1, 2);
-    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, 0);
-    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, 2);
+    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
     lightFactory = get_lightFactory();
     PointLight *pointLight = lightFactory->create_point_light(10.0f, 10.0f, 0.0f, 15.0f, 0xffff);
@@ -89,12 +89,12 @@ int main()
     while (1)
     {
         float qt = t * 0.02f;
-        // modify_mesh_transformation(room->transformations, qt, 0.0f, 10.0f, 0.0f, 0);
+        modify_mesh_transformation(room->transformations, qt, 0.0f, 10.0f, 0.0f, 0);
         modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
         update_camera(camera);
         modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
         renderer->clean_scene();
-        // renderer->add_model_to_scene(room, camera, pointLight);
+        renderer->add_model_to_scene(room, camera, pointLight);
         renderer->add_model_to_scene(mug, camera, pointLight);
         renderer->render_scene(pointLight);
         // painter->apply_post_process_effect(0);
