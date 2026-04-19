@@ -98,31 +98,128 @@ void transform_bone(Bone *bone, int16_t x, int16_t y, float angle)
     bone->angle += angle;
 }
 
-const Animation *get_animation_by_label(char *label)
+static Bone *get_puppet_bone_by_name(Puppet *puppet, const char *boneLabel)
 {
-    for (uint8_t i = 0; i < 5; i++)
+    if (puppet == NULL || boneLabel == NULL || boneLabel[0] == '\0')
+        return NULL;
+
+    for (uint8_t i = 0; i < puppet->bonesNum; i++)
     {
-        const Animation *animation = get_animation_by_index(i);
-        if (strcmp(animation->label, label) == 0)
-            return animation;
+        Bone *result = get_bone_by_name(&puppet->bones[i], boneLabel);
+        if (result != NULL)
+            return result;
     }
     return NULL;
 }
 
-void animate_bones(BoneAnimation *boneAnimations, uint8_t animationsNum, uint32_t frameNum, bool invert)
+static int16_t round_to_int16(float value)
 {
-    for (uint8_t i = 0; i < animationsNum; i++)
+    if (value >= 0.0f)
+        return (int16_t)(value + 0.5f);
+    return (int16_t)(value - 0.5f);
+}
+
+static void set_bone_transform(Bone *bone, const BoneTransform *transform)
+{
+    if (bone == NULL || transform == NULL)
+        return;
+    bone->x = round_to_int16(transform->x);
+    bone->y = round_to_int16(transform->y);
+    bone->angle = transform->angle;
+}
+
+static void set_puppet_transform(Puppet *puppet, const BoneTransform *transform)
+{
+    if (puppet == NULL || transform == NULL)
+        return;
+    puppet->x = round_to_int16(transform->x);
+    puppet->y = round_to_int16(transform->y);
+    puppet->angle = transform->angle;
+}
+
+static BoneTransform sample_track_transform(const AnimationTrack *track, uint16_t frameNum)
+{
+    BoneTransform sampled = {0.0f, 0.0f, 0.0f};
+    if (track == NULL || track->keyframes == NULL || track->keyframesNum == 0)
+        return sampled;
+
+    const AnimationKeyframe *keyframes = track->keyframes;
+    if (track->keyframesNum == 1 || frameNum <= keyframes[0].timelineFrame)
     {
-        uint16_t animationFramesNum = boneAnimations[i].animation->framesNum;
-        while (frameNum >= animationFramesNum)
-            frameNum -= animationFramesNum;
+        sampled.x = keyframes[0].x;
+        sampled.y = keyframes[0].y;
+        sampled.angle = keyframes[0].angle;
+        return sampled;
+    }
+
+    for (uint16_t i = 0; i + 1 < track->keyframesNum; i++)
+    {
+        const AnimationKeyframe *from = &keyframes[i];
+        const AnimationKeyframe *to = &keyframes[i + 1];
+        if (frameNum > to->timelineFrame)
+            continue;
+
+        uint16_t span = (uint16_t)(to->timelineFrame - from->timelineFrame);
+        if (span == 0)
+        {
+            sampled.x = to->x;
+            sampled.y = to->y;
+            sampled.angle = to->angle;
+            return sampled;
+        }
+
+        float alpha = (float)(frameNum - from->timelineFrame) / (float)span;
+        sampled.x = from->x + (to->x - from->x) * alpha;
+        sampled.y = from->y + (to->y - from->y) * alpha;
+        sampled.angle = from->angle + (to->angle - from->angle) * alpha;
+        return sampled;
+    }
+
+    const AnimationKeyframe *last = &keyframes[track->keyframesNum - 1];
+    sampled.x = last->x;
+    sampled.y = last->y;
+    sampled.angle = last->angle;
+    return sampled;
+}
+
+const AnimationClip *get_animation_clip_by_label(const char *label)
+{
+    uint8_t clipsNum = get_animation_clips_num();
+    for (uint8_t i = 0; i < clipsNum; i++)
+    {
+        const AnimationClip *clip = get_animation_clip_by_index(i);
+        if (clip != NULL && strcmp(clip->label, label) == 0)
+            return clip;
+    }
+    return NULL;
+}
+
+void animate_clip(Puppet *puppet, const AnimationClip *clip, uint32_t frameNum, bool invert)
+{
+    if (puppet == NULL || clip == NULL || clip->tracks == NULL || clip->tracksNum == 0)
+        return;
+
+    uint16_t sampledFrame = 0;
+    if (clip->durationFrames > 0)
+    {
+        sampledFrame = (uint16_t)(frameNum % clip->durationFrames);
         if (invert)
-            frameNum = animationFramesNum - 1 - frameNum;
-        const Frame *frame = &boneAnimations[i].animation->frames[frameNum];
-        if (invert)
-            transform_bone(boneAnimations[i].bone, -frame->x, -frame->y, -frame->angle);
-        else
-            transform_bone(boneAnimations[i].bone, frame->x, frame->y, frame->angle);
+            sampledFrame = (uint16_t)(clip->durationFrames - 1u - sampledFrame);
+    }
+
+    for (uint8_t i = 0; i < clip->tracksNum; i++)
+    {
+        const AnimationTrack *track = &clip->tracks[i];
+        BoneTransform sampledTransform = sample_track_transform(track, sampledFrame);
+
+        if (track->boneLabel == NULL || track->boneLabel[0] == '\0')
+        {
+            set_puppet_transform(puppet, &sampledTransform);
+            continue;
+        }
+
+        Bone *targetBone = get_puppet_bone_by_name(puppet, track->boneLabel);
+        set_bone_transform(targetBone, &sampledTransform);
     }
 }
 

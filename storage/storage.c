@@ -45,10 +45,10 @@ const Scroller *get_scroller_by_index(uint8_t index)
 
 const Sprite *get_sprite(uint8_t sprite_index)
 {
-    if (sprite_index < 255)
+    const size_t spritesNum = sizeof(spriteSheet) / sizeof(spriteSheet[0]);
+    if (sprite_index < spritesNum)
         return &spriteSheet[sprite_index];
-    else
-        return NULL;
+    return NULL;
 }
 
 static IStorage storage = {

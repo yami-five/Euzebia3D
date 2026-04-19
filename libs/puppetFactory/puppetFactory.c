@@ -27,9 +27,9 @@ Bone *create_bones(const RawBone *rawBones, const uint8_t bonesNum, int *parentW
         newBones[i].childBonesNumLayer1 = rawBones[i].childBonesNumLayer1;
         newBones[i].childBonesNumLayer2 = rawBones[i].childBonesNumLayer2;
         if (rawBones[i].childBonesNumLayer1 != 0)
-            newBones[i].childBonesLayer1 = create_bones(rawBones[i].childBonesLayer1, rawBones[i].childBonesNumLayer1, newBones->worldMatrix);
+            newBones[i].childBonesLayer1 = create_bones(rawBones[i].childBonesLayer1, rawBones[i].childBonesNumLayer1, newBones[i].worldMatrix);
         if (rawBones[i].childBonesNumLayer2 != 0)
-            newBones[i].childBonesLayer2 = create_bones(rawBones[i].childBonesLayer2, rawBones[i].childBonesNumLayer2, newBones->worldMatrix);
+            newBones[i].childBonesLayer2 = create_bones(rawBones[i].childBonesLayer2, rawBones[i].childBonesNumLayer2, newBones[i].worldMatrix);
     }
     return newBones;
 }

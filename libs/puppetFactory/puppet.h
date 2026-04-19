@@ -2,6 +2,7 @@
 #define PUPPET_h
 
 #include "stdio.h"
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include "../storage/gfx.h"
@@ -42,9 +43,10 @@ typedef struct
 
 typedef struct
 {
-    Bone *bone;
-    const Animation *animation;
-} BoneAnimation;
+    float x;
+    float y;
+    float angle;
+} BoneTransform;
 
 void make_local_matrix(Bone *bone);
 void make_world_matrix(Bone *bone, int *parentWorldMatrix);
@@ -52,8 +54,8 @@ void update_world_matrices(Puppet *puppet);
 void move_puppet(Puppet *puppet, int16_t newX, int16_t newY);
 Bone *get_bone_by_name(Bone *bone, const char *boneLabel);
 void transform_bone(Bone *bone, int16_t x, int16_t y, float angle);
-const Animation *get_animation_by_label(char *label);
-void animate_bones(BoneAnimation *boneAnimations, uint8_t animationsNum, uint32_t frame, bool invert);
+const AnimationClip *get_animation_clip_by_label(const char *label);
+void animate_clip(Puppet *puppet, const AnimationClip *clip, uint32_t frameNum, bool invert);
 void change_sprite(Bone *bone, const Sprite *newSprite);
 
 #endif
