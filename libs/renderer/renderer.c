@@ -25,7 +25,7 @@ static uint16_t render_height_half = 60;
 #define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 8
-#define MAX_SHADING_SPAN_LEN 240
+#define MAX_SHADING_SPAN_LEN 320
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
