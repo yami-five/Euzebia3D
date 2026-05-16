@@ -1,21 +1,47 @@
 #include "IPainter.h"
-#include "painter.h"
-// #include "../storage/fonts.h"
-// #include "../storage/gfx.h"
-// #include "../storage/post_processing.h"
-// #include "../storage/sprites.h"
-#include "hardware/sync/spin_lock.h"
 #include "fpa.h"
 #include <string.h>
 #include <stdlib.h>
+
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+#include <SDL3/SDL.h>
+#else
+#include "painter.h"
+#include "hardware/sync/spin_lock.h"
+#endif
+
+#ifndef DISPLAY_WIDTH
+#define DISPLAY_WIDTH 320
+#endif
+
+#ifndef DISPLAY_HEIGHT
+#define DISPLAY_HEIGHT 240
+#endif
+
+#ifndef BUFFER_SIZE_HALF
+#define BUFFER_SIZE_HALF ((uint32_t)DISPLAY_WIDTH * (uint32_t)DISPLAY_HEIGHT)
+#endif
+
+#ifndef BUFFER_SIZE
+#define BUFFER_SIZE (BUFFER_SIZE_HALF * sizeof(uint16_t))
+#endif
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 static uint16_t temp_buffer[BUFFER_SIZE_HALF];
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+static uint16_t mirrored_buffer[BUFFER_SIZE_HALF];
+static SDL_Window *sdl_window = NULL;
+static SDL_Renderer *sdl_renderer = NULL;
+static SDL_Texture *sdl_texture = NULL;
+static uint8_t sdl_video_initialized_here = 0;
+static uint8_t sdl_cleanup_registered = 0;
+#else
 static const uint32_t chunk_size = 15360;
 static spin_lock_t *lcd_spinlock;
+#endif
 static uint8_t scanline_offset = 0;
 static const uint8_t DEFAULT_FONT_SIZE = 8;
 
@@ -48,12 +74,102 @@ static const uint8_t fadeOutPatterns[9][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 
-void dma_buffer_irq_handler()
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+static void destroy_sdl_backend(void)
+{
+    if (sdl_texture != NULL)
+    {
+        SDL_DestroyTexture(sdl_texture);
+        sdl_texture = NULL;
+    }
+    if (sdl_renderer != NULL)
+    {
+        SDL_DestroyRenderer(sdl_renderer);
+        sdl_renderer = NULL;
+    }
+    if (sdl_window != NULL)
+    {
+        SDL_DestroyWindow(sdl_window);
+        sdl_window = NULL;
+    }
+    if (sdl_video_initialized_here)
+    {
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        sdl_video_initialized_here = 0;
+    }
+}
+
+static int ensure_sdl_backend(void)
+{
+    if (sdl_texture != NULL && sdl_renderer != NULL && sdl_window != NULL)
+        return 1;
+
+    if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0)
+    {
+        if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
+        {
+            SDL_Log("Painter SDL init failed: %s", SDL_GetError());
+            return 0;
+        }
+        sdl_video_initialized_here = 1;
+    }
+
+    sdl_window = SDL_CreateWindow(
+        "Euzebia3D",
+        DISPLAY_WIDTH * 3,
+        DISPLAY_HEIGHT * 3,
+        SDL_WINDOW_RESIZABLE
+    );
+    if (sdl_window == NULL)
+    {
+        SDL_Log("Painter SDL window creation failed: %s", SDL_GetError());
+        destroy_sdl_backend();
+        return 0;
+    }
+
+    sdl_renderer = SDL_CreateRenderer(sdl_window, NULL);
+    if (sdl_renderer == NULL)
+    {
+        SDL_Log("Painter SDL renderer creation failed: %s", SDL_GetError());
+        destroy_sdl_backend();
+        return 0;
+    }
+
+    sdl_texture = SDL_CreateTexture(
+        sdl_renderer,
+        SDL_PIXELFORMAT_RGB565,
+        SDL_TEXTUREACCESS_STREAMING,
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT
+    );
+    if (sdl_texture == NULL)
+    {
+        SDL_Log("Painter SDL texture creation failed: %s", SDL_GetError());
+        destroy_sdl_backend();
+        return 0;
+    }
+
+    SDL_SetRenderLogicalPresentation(
+        sdl_renderer,
+        DISPLAY_WIDTH,
+        DISPLAY_HEIGHT,
+        SDL_LOGICAL_PRESENTATION_LETTERBOX
+    );
+
+    if (!sdl_cleanup_registered)
+    {
+        atexit(destroy_sdl_backend);
+        sdl_cleanup_registered = 1;
+    }
+    return 1;
+}
+#else
+static void dma_buffer_irq_handler(void)
 {
     dma_hw->ints1 = 1u << dma_channel;
 }
 
-void init_dma()
+static void init_dma(void)
 {
     dma_channel = dma_claim_unused_channel(true);
     dma_channel_config config = dma_channel_get_default_config(dma_channel);
@@ -65,53 +181,89 @@ void init_dma()
         &spi_get_hw(_hardware->get_spi_port())->dr,
         NULL,
         chunk_size,
-        false);
+        false
+    );
     dma_channel_set_irq1_enabled(dma_channel, true);
     irq_set_exclusive_handler(DMA_IRQ_1, dma_buffer_irq_handler);
     irq_set_enabled(DMA_IRQ_1, false);
     channel_config_set_read_increment(&config, true);
     channel_config_set_write_increment(&config, false);
 }
+#endif
 
 void init_painter(const IDisplay *display, const IHardware *hardware, const IStorage *storage)
 {
     _hardware = hardware;
     _display = display;
     _storage = storage;
+
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    (void)_hardware;
+    (void)_display;
+    ensure_sdl_backend();
+#else
     init_dma();
     _hardware->write(SD_CS_PIN, 1);
     _hardware->write(LCD_CS_PIN, 0);
-    // lcd_spinlock=spin_lock_init(spin_lock_claim_unused(true));
+    (void)lcd_spinlock;
+#endif
 }
 
-void draw_buffer()
+void draw_buffer(void)
 {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!ensure_sdl_backend())
+        return;
+
+    for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
+    {
+        uint32_t dst_row_start = (uint32_t)y * DISPLAY_WIDTH;
+        uint32_t src_row_start = (uint32_t)(DISPLAY_HEIGHT - 1 - y) * DISPLAY_WIDTH;
+        for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
+            mirrored_buffer[dst_row_start + x] = buffer[src_row_start + x];
+    }
+
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_EVENT_QUIT)
+            break;
+    }
+
+    SDL_UpdateTexture(
+        sdl_texture,
+        NULL,
+        mirrored_buffer,
+        DISPLAY_WIDTH * (int32_t)sizeof(uint16_t)
+    );
+    SDL_RenderClear(sdl_renderer);
+    SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
+    SDL_RenderPresent(sdl_renderer);
+#else
     uint32_t current_offset = 0;
     spi_inst_t *spi_port = _hardware->get_spi_port();
     spin_lock_t *spi_spinlock = _hardware->get_spinlock();
-    // uint32_t flags = spin_lock_blocking(spi_spinlock);
-    // _hardware->write(SD_CS_PIN, 1);
-    // _hardware->write(LCD_CS_PIN, 0);
+    (void)spi_spinlock;
+
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     _hardware->write(LCD_DC_PIN, 0);
     _hardware->spi_write_byte(0x2C);
     _hardware->write(LCD_DC_PIN, 1);
     spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    // spin_unlock(spi_spinlock, flags);
+
     while (current_offset < BUFFER_SIZE_HALF)
     {
-        // flags = spin_lock_blocking(spi_spinlock);
-        // _hardware->write(SD_CS_PIN, 1);
-        // _hardware->write(LCD_CS_PIN, 0);
         dma_channel_set_read_addr(dma_channel, buffer + current_offset, true);
         dma_channel_wait_for_finish_blocking(dma_channel);
         current_offset += chunk_size;
-        // spin_unlock(spi_spinlock, flags);
     }
+
     while (spi_is_busy(spi_port))
     {
     }
+
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+#endif
 }
 
 void clear_buffer(uint16_t color)
@@ -140,6 +292,16 @@ void draw_span(uint16_t x, uint16_t y, const uint16_t *span, uint16_t span_lengt
 
 void draw_image(uint8_t image_index)
 {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (_storage == NULL)
+        return;
+
+    const Image *image = _storage->get_image(image_index);
+    if (image == NULL || image->image == NULL)
+        return;
+
+    memcpy(buffer, image->image, BUFFER_SIZE);
+#else
     int dma_channel_flash = dma_claim_unused_channel(true);
     dma_channel_config config = dma_channel_get_default_config(dma_channel_flash);
     channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
@@ -151,10 +313,12 @@ void draw_image(uint8_t image_index)
         buffer,
         _storage->get_image(image_index)->image,
         BUFFER_SIZE_HALF,
-        false);
+        false
+    );
     dma_channel_start(dma_channel_flash);
     dma_channel_wait_for_finish_blocking(dma_channel_flash);
     dma_channel_unclaim(dma_channel_flash);
+#endif
 }
 
 static inline uint8_t get_r(uint16_t c) { return (c >> 11) & 0x1F; }
@@ -187,8 +351,8 @@ void crt_disp_effect()
         {
             uint32_t i = ydw + x;
 
-            uint xr = (x > 1) ? x - 2 : x;
-            uint xg = (x + 2 < DISPLAY_WIDTH) ? x + 2 : x;
+            uint16_t xr = (x > 1) ? (uint16_t)(x - 2) : x;
+            uint16_t xg = (x + 2 < DISPLAY_WIDTH) ? (uint16_t)(x + 2) : x;
 
             uint32_t ir = ydw + xr;
             uint32_t ig = ydw + xg;
@@ -447,7 +611,7 @@ void draw_puppet(Puppet *puppet)
     }
 }
 
-void print(const char *text, int16_t x, int16_t y, uint8_t scale)
+static void painter_print(const char *text, int16_t x, int16_t y, uint8_t scale)
 {
     uint16_t offset = 0;
     uint16_t yFactor = 0;
@@ -563,6 +727,9 @@ void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
 
 void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t startFrame, uint32_t currentFrame)
 {
+    if (scroller == NULL || scroller->bitmap == NULL || scroller->width == 0 || scroller->height == 0)
+        return;
+
     uint16_t square[2500];
     uint8_t squareWidth = 50;
     uint8_t squareHeight = 50;
@@ -572,7 +739,10 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t st
     else if (line > squareHeight)
         line = squareHeight;
     memcpy(square, scroller->bitmap + line * scroller->width, sizeof(square));
-    uint16_t lineBuffer[scroller->width << 1];
+    uint16_t lineBufferLen = (uint16_t)scroller->width << 1;
+    uint16_t *lineBuffer = (uint16_t *)malloc((size_t)lineBufferLen * sizeof(uint16_t));
+    if (lineBuffer == NULL)
+        return;
     for (uint8_t i = 0; i < squareHeight; i++)
     {
         for (uint8_t j = 0; j < squareWidth; j++)
@@ -582,9 +752,10 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t st
         }
         uint32_t lineAddr1 = (uint32_t)(y + i * 2) * DISPLAY_WIDTH + x;
         uint32_t lineAddr2 = (uint32_t)(y + i * 2 + 1) * DISPLAY_WIDTH + x;
-        memcpy(buffer + lineAddr1, lineBuffer, sizeof(lineBuffer));
-        memcpy(buffer + lineAddr2, lineBuffer, sizeof(lineBuffer));
+        memcpy(buffer + lineAddr1, lineBuffer, (size_t)lineBufferLen * sizeof(uint16_t));
+        memcpy(buffer + lineAddr2, lineBuffer, (size_t)lineBufferLen * sizeof(uint16_t));
     }
+    free(lineBuffer);
 }
 
 void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, uint16_t x, uint16_t width, uint16_t height)
@@ -641,7 +812,7 @@ static IPainter painter = {
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
     .draw_puppet = draw_puppet,
-    .print = print,
+    .print = painter_print,
     .draw_gradient = draw_gradient,
     .override_buffer = override_buffer,
     .fade_fullscreen = fade_fullscreen,
@@ -653,3 +824,4 @@ const IPainter *get_painter(void)
 {
     return &painter;
 }
+

@@ -92,23 +92,29 @@ if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
 elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     project(Euzebia3D C)
 
-    set(EUZEBIA3D_PC_DIR "${CMAKE_CURRENT_LIST_DIR}/../Euzebia3D_PC")
-    if(NOT EXISTS "${EUZEBIA3D_PC_DIR}/main.c")
-        message(FATAL_ERROR "Missing Windows port in ${EUZEBIA3D_PC_DIR}")
+    set(EUZEBIA3D_WINDOWS_MAIN "${CMAKE_CURRENT_LIST_DIR}/main_windows.c")
+    if(NOT EXISTS "${EUZEBIA3D_WINDOWS_MAIN}")
+        message(FATAL_ERROR "Missing Windows main file in ${EUZEBIA3D_WINDOWS_MAIN}")
     endif()
-    if(NOT EXISTS "${EUZEBIA3D_PC_DIR}/libs/CMakeLists.txt")
-        message(FATAL_ERROR "Missing Windows libraries in ${EUZEBIA3D_PC_DIR}/libs")
+    if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/libs/CMakeLists.txt")
+        message(FATAL_ERROR "Missing libraries in ${CMAKE_CURRENT_LIST_DIR}/libs")
+    endif()
+    if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/storage/storage.c")
+        message(FATAL_ERROR "Missing storage implementation in ${CMAKE_CURRENT_LIST_DIR}/storage/storage.c")
     endif()
 
     find_package(SDL3 CONFIG REQUIRED)
 
-    # Platform-selected libraries
-    set(EUZEBIA3D_LIBS_SOURCE_DIR "${EUZEBIA3D_PC_DIR}/libs")
-    add_subdirectory("${EUZEBIA3D_LIBS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/windows_libs")
+    # Libraries are always built from Euzebia3D/libs.
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/libs" "${CMAKE_CURRENT_BINARY_DIR}/windows_libs")
 
     if(EUZEBIA3D_BUILD_APP)
-        add_executable(Euzebia3D_PC "${EUZEBIA3D_PC_DIR}/main.c")
-        target_include_directories(Euzebia3D_PC PRIVATE "${EUZEBIA3D_PC_DIR}")
+        add_executable(Euzebia3D_PC "${EUZEBIA3D_WINDOWS_MAIN}")
+        target_include_directories(Euzebia3D_PC PRIVATE
+                "${CMAKE_CURRENT_LIST_DIR}"
+                "${CMAKE_CURRENT_LIST_DIR}/storage"
+        )
+        target_compile_definitions(Euzebia3D_PC PRIVATE EUZEBIA3D_PLATFORM_WINDOWS=1)
         target_link_libraries(Euzebia3D_PC PRIVATE Euzebia3D_libs)
     endif()
 endif()
