@@ -21,6 +21,9 @@ if(EUZEBIA3D_IS_WINDOWS)
 else()
     target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_PLATFORM_PICO=1)
 endif()
+if(EUZEBIA3D_USE_PSRAM)
+    target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_USE_PSRAM=1)
+endif()
 
 add_library(Euzebia3D_PicoDeps INTERFACE)
 target_link_libraries(Euzebia3D_PicoDeps INTERFACE Euzebia3D_PlatformDefs)
@@ -39,6 +42,14 @@ if(NOT EUZEBIA3D_IS_WINDOWS)
         pico_audio
         pico_audio_i2s
     )
+    if(EUZEBIA3D_USE_PSRAM)
+        target_link_libraries(
+            Euzebia3D_PicoDeps
+            INTERFACE
+            hardware_flash
+            hardware_xip_cache
+        )
+    endif()
 endif()
 
 set(EUZEBIA3D_STORAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../storage")
