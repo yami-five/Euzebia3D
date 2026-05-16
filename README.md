@@ -104,15 +104,55 @@ Scripts:
 ## Build
 
 Requirements:
-- Raspberry Pi Pico SDK `2.2.0`
-- Pico toolchain for RP2350
-- CMake + Ninja
+- CMake
+- C compiler toolchain for selected platform
+- for `PICO`: Raspberry Pi Pico SDK `2.2.0` + Pico toolchain for RP2350
+- for `WINDOWS`: SDL3 development package (for example via `vcpkg`)
 
-Configure and build:
+### Select Platform
+
+Platform is controlled by CMake cache variable:
+- `EUZEBIA3D_PLATFORM=WINDOWS`
+- `EUZEBIA3D_PLATFORM=PICO`
+
+Current default in `CMakeLists.txt` is `PICO`.
+
+Use separate build directories per platform to avoid cache conflicts.
+
+### Build for Windows
+
+Configure:
 
 ```bash
-cmake -B build -G Ninja
-cmake --build build
+cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS
+```
+
+If SDL3 is installed via `vcpkg`, configure with toolchain:
+
+```bash
+cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+```
+
+Build:
+
+```bash
+cmake --build build-win --config Release
+```
+
+Output target: `Euzebia3D_PC.exe`.
+
+### Build for Raspberry Pi Pico
+
+Configure:
+
+```bash
+cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO
+```
+
+Build:
+
+```bash
+cmake --build build-pico --config Release
 ```
 
 Output target: `Euzebia3D.elf` (plus additional Pico outputs, including UF2).
