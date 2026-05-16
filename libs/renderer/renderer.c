@@ -1,6 +1,8 @@
-#include "IRenderer.h"
+﻿#include "IRenderer.h"
 #include "renderer.h"
+#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include "hardware/interp.h"
+#endif
 #include <stdlib.h>
 
 static volatile const IHardware *_hardware = NULL;
@@ -25,7 +27,7 @@ static uint16_t render_height_half = 60;
 #define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 8
-#define MAX_SHADING_SPAN_LEN 240
+#define MAX_SHADING_SPAN_LEN 320
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
@@ -34,6 +36,8 @@ static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
 
+/* Pico path uses hardware interpolators to speed up span setup. */
+#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
 static void init_span_interpolators(void)
 {
     interp_config uv_cfg = interp_default_config();
@@ -57,6 +61,7 @@ static void init_span_interpolators(void)
     interp_set_base(interp1, 1, 0);
     interp_set_base(interp1, 2, 0);
 }
+#endif
 
 // Scratch buffers reused between frames/models to avoid frequent heap churn.
 static int32_t *modelScratchVerticesModified = NULL;
@@ -134,7 +139,9 @@ void init_renderer(volatile const IHardware *hardware, volatile const IPainter *
     _hardware = hardware;
     _painter = painter;
     configure_render_dimensions();
+#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
     init_span_interpolators();
+#endif
     // init_sin_cos();
 }
 
@@ -434,6 +441,22 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
 
 static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t Z, int32_t dZdx)
 {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    int32_t Uacc = U;
+    int32_t Vacc = V;
+    int32_t Zacc = Z;
+
+    for (uint16_t i = 0; i < length; i++)
+    {
+        int32_t Ucur = Uacc >> UV_LERP_SHIFT;
+        int32_t Vcur = Vacc >> UV_LERP_SHIFT;
+        int32_t Zcur = Zacc;
+        dst[i] = texturing(mat, Ucur, Vcur, Zcur);
+        Uacc += dUdx;
+        Vacc += dVdx;
+        Zacc += dZdx;
+    }
+#else
     interp_set_accumulator(interp0, 0, (uint32_t)U);
     interp_set_accumulator(interp0, 1, (uint32_t)V);
     interp_set_accumulator(interp1, 0, (uint32_t)Z);
@@ -448,20 +471,31 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
         interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
         interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
     }
+#endif
 }
 
 static void shade_span(uint16_t *dst, uint16_t length, PointLight *light, int32_t L, int32_t dLdx)
 {
-    if(length<=MAX_SHADING_SPAN_LEN)
+    if (length <= MAX_SHADING_SPAN_LEN)
     {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+        int32_t Lacc = L;
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Lcur = Lacc >> LIGHT_LERP_SHIFT;
+            shading(&dst[i], light, Lcur);
+            Lacc += dLdx;
+        }
+#else
         interp_set_accumulator(interp1, 1, (uint32_t)L);
-        
+
         for (uint16_t i = 0; i < length; i++)
         {
             int32_t Lcur = ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
             shading(&dst[i], light, Lcur);
             interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
         }
+#endif
     }
     else
     {
@@ -1072,3 +1106,4 @@ const IRenderer *get_renderer(void)
 {
     return &renderer;
 }
+

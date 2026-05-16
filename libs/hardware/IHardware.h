@@ -2,10 +2,17 @@
 #define IHARDWARE_h
 
 #include <stdint.h>
+
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+typedef struct spi_inst spi_inst_t;
+typedef struct audio_buffer_pool audio_buffer_pool_t;
+typedef struct spin_lock spin_lock_t;
+#else
 #include "hardware/spi.h"
 #include "hardware/pio.h"
 #include "pico/audio.h"
 #include "pico/audio_i2s.h"
+#endif
 
 // typedef struct
 // {

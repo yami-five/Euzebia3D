@@ -1,18 +1,60 @@
+﻿if(NOT DEFINED EUZEBIA3D_PLATFORM_NORMALIZED)
+    if(DEFINED EUZEBIA3D_PLATFORM)
+        string(TOUPPER "${EUZEBIA3D_PLATFORM}" EUZEBIA3D_PLATFORM_NORMALIZED)
+    else()
+        set(EUZEBIA3D_PLATFORM_NORMALIZED "PICO")
+    endif()
+endif()
+
+if(NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO" AND NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
+    message(FATAL_ERROR "Unsupported EUZEBIA3D_PLATFORM_NORMALIZED='${EUZEBIA3D_PLATFORM_NORMALIZED}'")
+endif()
+
+set(EUZEBIA3D_IS_WINDOWS OFF)
+if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
+    set(EUZEBIA3D_IS_WINDOWS ON)
+endif()
+
+add_library(Euzebia3D_PlatformDefs INTERFACE)
+if(EUZEBIA3D_IS_WINDOWS)
+    target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_PLATFORM_WINDOWS=1)
+else()
+    target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_PLATFORM_PICO=1)
+endif()
+
 add_library(Euzebia3D_PicoDeps INTERFACE)
-target_link_libraries(
-    Euzebia3D_PicoDeps
-    INTERFACE
-    pico_stdlib
-    hardware_adc
-    hardware_clocks
-    hardware_dma
-    hardware_i2c
-    hardware_pio
-    hardware_pwm
-    hardware_spi
-    pico_audio
-    pico_audio_i2s
+target_link_libraries(Euzebia3D_PicoDeps INTERFACE Euzebia3D_PlatformDefs)
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    target_link_libraries(
+        Euzebia3D_PicoDeps
+        INTERFACE
+        pico_stdlib
+        hardware_adc
+        hardware_clocks
+        hardware_dma
+        hardware_i2c
+        hardware_pio
+        hardware_pwm
+        hardware_spi
+        pico_audio
+        pico_audio_i2s
+    )
+endif()
+
+set(EUZEBIA3D_STORAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../storage")
+
+set(EUZEBIA3D_FILEREADER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
 )
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    list(APPEND EUZEBIA3D_FILEREADER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
+    )
+endif()
 
 add_library(
     Euzebia3D_Arithmetics
@@ -52,12 +94,7 @@ target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps Euzebia3D_Hard
 
 add_library(
     Euzebia3D_FileReader
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
+    ${EUZEBIA3D_FILEREADER_SOURCES}
 )
 target_include_directories(
     Euzebia3D_FileReader
@@ -66,8 +103,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
 )
-target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps)
-target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_Painter Euzebia3D_Hardware)
+target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
 
 add_library(
     Euzebia3D_Hardware
@@ -79,16 +115,19 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/hardware
 )
 target_link_libraries(Euzebia3D_Hardware PUBLIC Euzebia3D_PicoDeps)
-pico_generate_pio_header(Euzebia3D_Hardware ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    pico_generate_pio_header(Euzebia3D_Hardware ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
+endif()
 
 add_library(
     Euzebia3D_Storage
-    ${CMAKE_SOURCE_DIR}/storage/storage.c
+    ${EUZEBIA3D_STORAGE_DIR}/storage.c
 )
 target_include_directories(
     Euzebia3D_Storage
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/storage
+    ${EUZEBIA3D_STORAGE_DIR}
 )
 target_link_libraries(Euzebia3D_Storage PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
@@ -136,6 +175,9 @@ target_link_libraries(
     Euzebia3D_Storage
     Euzebia3D_PuppetFactory
 )
+if(EUZEBIA3D_IS_WINDOWS)
+    target_link_libraries(Euzebia3D_Painter PUBLIC SDL3::SDL3)
+endif()
 
 add_library(
     Euzebia3D_PuppetFactory
@@ -185,10 +227,12 @@ target_link_libraries(
     Euzebia3D_Transformations
     Euzebia3D_MeshFactory
     Euzebia3D_LightFactory
-    hardware_interp
     Euzebia3D_Painter
     Euzebia3D_CameraFactory
 )
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    target_link_libraries(Euzebia3D_Renderer PUBLIC hardware_interp)
+endif()
 
 add_library(Euzebia3D_libs INTERFACE)
 target_link_libraries(
