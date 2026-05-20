@@ -15,8 +15,8 @@ static const uint32_t TRIANGLE_CENTER_DIVIDER = 3 << SHIFT_FACTOR;
 static const uint16_t BASE_WIDTH = 320;
 static const uint16_t BASE_HEIGHT = 240;
 
-static uint8_t render_scale = 2; // 2 => 160x120 render; 1 => 320x240 render
-static uint8_t output_scale = 2;
+static uint8_t render_scale = 1; // 2 => 160x120 render; 1 => 320x240 render
+static uint8_t output_scale = 1;
 static uint16_t render_width = 160;
 static uint16_t render_height = 120;
 static uint16_t render_width_half = 80;
@@ -35,6 +35,138 @@ static uint16_t sceneCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
+
+// Build-time knobs injected from CMake (with safe fallbacks).
+#ifndef EUZEBIA3D_TEXTURE_CACHE_ENABLED
+#define EUZEBIA3D_TEXTURE_CACHE_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH
+#define EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM
+#define EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define EUZEBIA3D_TEXTURE_CACHE_SIZE 64
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_SLOTS
+#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 2
+#endif
+
+#if (EUZEBIA3D_TEXTURE_CACHE_SIZE < 1)
+#undef EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define EUZEBIA3D_TEXTURE_CACHE_SIZE 1
+#endif
+#if (EUZEBIA3D_TEXTURE_CACHE_SLOTS < 1)
+#undef EUZEBIA3D_TEXTURE_CACHE_SLOTS
+#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 1
+#endif
+
+#define TEXTURE_CACHE_SIZE EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define TEXTURE_CACHE_PIXELS (TEXTURE_CACHE_SIZE * TEXTURE_CACHE_SIZE)
+#define TEXTURE_CACHE_SLOTS EUZEBIA3D_TEXTURE_CACHE_SLOTS
+
+#if EUZEBIA3D_TEXTURE_CACHE_ENABLED
+typedef struct
+{
+    const uint16_t *source;
+    int32_t size;
+    uint8_t valid;
+    uint16_t pixels[TEXTURE_CACHE_PIXELS];
+} TextureCacheSlot;
+
+typedef enum
+{
+    TEXTURE_SOURCE_UNKNOWN = 0,
+    TEXTURE_SOURCE_FLASH = 1,
+    TEXTURE_SOURCE_PSRAM = 2
+} TextureSource;
+
+static TextureCacheSlot textureCache[TEXTURE_CACHE_SLOTS] = {0};
+static uint8_t textureCacheNextSlot = 0;
+
+static inline TextureSource detect_texture_source(const uint16_t *texture)
+{
+    (void)texture;
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+    uintptr_t address = (uintptr_t)texture;
+    uint32_t region = (uint32_t)(address & 0xff000000u);
+    if (region == 0x10000000u)
+        return TEXTURE_SOURCE_FLASH;
+    if (region == 0x11000000u)
+        return TEXTURE_SOURCE_PSRAM;
+#endif
+    return TEXTURE_SOURCE_UNKNOWN;
+}
+
+static inline uint8_t texture_cache_source_enabled(TextureSource source)
+{
+    if (source == TEXTURE_SOURCE_FLASH)
+        return (uint8_t)(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH ? 1 : 0);
+    if (source == TEXTURE_SOURCE_PSRAM)
+        return (uint8_t)(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM ? 1 : 0);
+#if (EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH || EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM)
+    return 1;
+#else
+    return 0;
+#endif
+}
+#endif
+
+static const uint16_t *activeTextureData = NULL;
+static int32_t activeTextureSize = 0;
+
+static inline void set_active_texture_direct(Material *mat)
+{
+    if (mat == NULL)
+    {
+        activeTextureData = NULL;
+        activeTextureSize = 0;
+        return;
+    }
+    activeTextureData = mat->texture;
+    activeTextureSize = mat->textureSize;
+}
+
+static void prepare_texture_cache(Material *mat)
+{
+    set_active_texture_direct(mat);
+
+#if EUZEBIA3D_TEXTURE_CACHE_ENABLED
+    if (mat == NULL || mat->texture == NULL || mat->textureSize <= 0)
+        return;
+
+    if (mat->textureSize > TEXTURE_CACHE_SIZE)
+        return;
+
+    if (!texture_cache_source_enabled(detect_texture_source(mat->texture)))
+        return;
+
+    for (uint8_t i = 0; i < TEXTURE_CACHE_SLOTS; i++)
+    {
+        if (textureCache[i].valid && textureCache[i].source == mat->texture && textureCache[i].size == mat->textureSize)
+        {
+            activeTextureData = textureCache[i].pixels;
+            activeTextureSize = textureCache[i].size;
+            return;
+        }
+    }
+
+    TextureCacheSlot *slot = &textureCache[textureCacheNextSlot];
+    textureCacheNextSlot++;
+    if (textureCacheNextSlot >= TEXTURE_CACHE_SLOTS)
+        textureCacheNextSlot = 0;
+
+    size_t texelCount = (size_t)mat->textureSize * (size_t)mat->textureSize;
+    memcpy(slot->pixels, mat->texture, texelCount * sizeof(uint16_t));
+    slot->source = mat->texture;
+    slot->size = mat->textureSize;
+    slot->valid = 1;
+
+    activeTextureData = slot->pixels;
+    activeTextureSize = slot->size;
+#endif
+}
 
 /* Pico path uses hardware interpolators to speed up span setup. */
 #if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -382,29 +514,29 @@ void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
     *color = (r << 11) | (g << 5) | b;
 }
 
-uint16_t texturing(Material *mat, int32_t U, int32_t V, int32_t Z)
+uint16_t texturing(const uint16_t *texture, int32_t textureSize, int32_t U, int32_t V, int32_t Z)
 {
     int32_t uv_x = (int32_t)fixed_mul(U, Z);
     int32_t uv_y = (int32_t)fixed_mul(V, Z);
-    uv_x = uv_x * mat->textureSize >> SHIFT_FACTOR;
-    uv_y = uv_y * mat->textureSize >> SHIFT_FACTOR;
+    uv_x = uv_x * textureSize >> SHIFT_FACTOR;
+    uv_y = uv_y * textureSize >> SHIFT_FACTOR;
     if (uv_x < 1)
         uv_x = 1;
     if (uv_y < 1)
         uv_y = 1;
-    if (uv_x > mat->textureSize - 2)
-        uv_x = mat->textureSize - 2;
-    if (uv_y > mat->textureSize - 2)
-        uv_y = mat->textureSize - 2;
+    if (uv_x > textureSize - 2)
+        uv_x = textureSize - 2;
+    if (uv_y > textureSize - 2)
+        uv_y = textureSize - 2;
     int32_t x0 = uv_x;
     int32_t y0 = uv_y;
     int32_t x1 = x0 + 1;
     int32_t y1 = y0 + 1;
 
-    uint16_t c00 = mat->texture[y0 * mat->textureSize + x0];
-    uint16_t c10 = mat->texture[y0 * mat->textureSize + x1];
-    uint16_t c01 = mat->texture[y1 * mat->textureSize + x0];
-    uint16_t c11 = mat->texture[y1 * mat->textureSize + x1];
+    uint16_t c00 = texture[y0 * textureSize + x0];
+    uint16_t c10 = texture[y0 * textureSize + x1];
+    uint16_t c01 = texture[y1 * textureSize + x0];
+    uint16_t c11 = texture[y1 * textureSize + x1];
 
     uint32_t r00 = (c00 >> 11) & 0x1f;
     uint32_t g00 = (c00 >> 5) & 0x3f;
@@ -441,6 +573,10 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
 
 static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t Z, int32_t dZdx)
 {
+    (void)mat;
+    const uint16_t *texture = activeTextureData;
+    int32_t textureSize = activeTextureSize;
+
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int32_t Uacc = U;
     int32_t Vacc = V;
@@ -451,7 +587,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
         int32_t Ucur = Uacc >> UV_LERP_SHIFT;
         int32_t Vcur = Vacc >> UV_LERP_SHIFT;
         int32_t Zcur = Zacc;
-        dst[i] = texturing(mat, Ucur, Vcur, Zcur);
+        dst[i] = texturing(texture, textureSize, Ucur, Vcur, Zcur);
         Uacc += dUdx;
         Vacc += dVdx;
         Zacc += dZdx;
@@ -466,7 +602,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
         int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
         int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
         int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-        dst[i] = texturing(mat, Ucur, Vcur, Zcur);
+        dst[i] = texturing(texture, textureSize, Ucur, Vcur, Zcur);
         interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
         interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
         interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
@@ -664,6 +800,8 @@ inline void swap_int32(int32_t *x, int32_t *y)
 
 void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
+    prepare_texture_cache(mat);
+
     int32_t x, y, Lx, Ux, Vx, Zx;
     if (triangle->a.y > triangle->b.y)
     {
