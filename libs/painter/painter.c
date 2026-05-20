@@ -26,11 +26,28 @@
 #define BUFFER_SIZE (BUFFER_SIZE_HALF * sizeof(uint16_t))
 #endif
 
+#define FONT_ASCII_FIRST 33u
+#define FONT_ASCII_LAST 125u
+#define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
+
+typedef struct
+{
+    const uint16_t *pixels;
+    uint8_t size;
+    bool canRotate;
+} CachedSprite;
+
+_Static_assert(sizeof(CachedSprite) == sizeof(Sprite), "CachedSprite must match Sprite layout");
+
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 static uint16_t temp_buffer[BUFFER_SIZE_HALF];
+static uint16_t *font_cache_pixels[FONT_GLYPHS_COUNT];
+static CachedSprite font_cache_sprites[FONT_GLYPHS_COUNT];
+static uint8_t font_cache_widths[FONT_GLYPHS_COUNT];
+static uint8_t font_cache_ready = 0;
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 static uint16_t mirrored_buffer[BUFFER_SIZE_HALF];
 static SDL_Window *sdl_window = NULL;
@@ -48,6 +65,54 @@ static const uint8_t DEFAULT_FONT_SIZE = 8;
 static inline uint32_t pixel_index(uint16_t x, uint16_t y)
 {
     return ((uint32_t)y * DISPLAY_WIDTH) + x;
+}
+
+static void init_font_cache(void)
+{
+    if (font_cache_ready || _storage == NULL || _storage->get_font_by_index == NULL)
+        return;
+
+    for (uint8_t i = 0; i < FONT_GLYPHS_COUNT; i++)
+    {
+        const Font *source_font = _storage->get_font_by_index(i);
+        if (source_font == NULL || source_font->sprite == NULL || source_font->sprite->pixels == NULL)
+            goto cache_fail;
+
+        const Sprite *source_sprite = source_font->sprite;
+        size_t pixel_count = (size_t)source_sprite->size * (size_t)source_sprite->size;
+        uint16_t *pixels = (uint16_t *)malloc(pixel_count * sizeof(uint16_t));
+        if (pixels == NULL)
+            goto cache_fail;
+
+        for (uint16_t y = 0; y < source_sprite->size; y++)
+        {
+            for (uint16_t x = 0; x < source_sprite->size; x++)
+            {
+                size_t dst = ((size_t)y * source_sprite->size) + x;
+                size_t src = ((size_t)x * source_sprite->size) + (source_sprite->size - 1u - y);
+                pixels[dst] = source_sprite->pixels[src];
+            }
+        }
+
+        font_cache_pixels[i] = pixels;
+        font_cache_sprites[i].canRotate = false;
+        font_cache_sprites[i].size = source_sprite->size;
+        font_cache_sprites[i].pixels = pixels;
+        font_cache_widths[i] = source_font->width;
+    }
+
+    font_cache_ready = 1;
+    return;
+
+cache_fail:
+    for (uint8_t j = 0; j < FONT_GLYPHS_COUNT; j++)
+    {
+        if (font_cache_pixels[j] != NULL)
+        {
+            free(font_cache_pixels[j]);
+            font_cache_pixels[j] = NULL;
+        }
+    }
 }
 
 static const uint8_t fadeInPatterns[9][16] = {
@@ -196,6 +261,7 @@ void init_painter(const IDisplay *display, const IHardware *hardware, const ISto
     _hardware = hardware;
     _display = display;
     _storage = storage;
+    init_font_cache();
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     (void)_hardware;
@@ -611,10 +677,46 @@ void draw_puppet(Puppet *puppet)
     }
 }
 
+// Legacy font atlas is stored transposed (x/y swapped), so glyph sampling
+// swaps coordinates to recover readable text on the current display layout.
+static void draw_font_glyph_transposed(const Sprite *sprite, int16_t pos_x, int16_t pos_y, uint8_t scale)
+{
+    if (sprite == NULL || scale == 0)
+        return;
+
+    int16_t sprite_size_scaled = sprite->size << (scale - 1);
+    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_size_scaled) - pos_y;
+
+    for (uint16_t y = 0; y < sprite->size; y++)
+    {
+        int16_t new_y = y + (pos_y_aligned >> (scale - 1));
+        if (new_y < 0 || new_y >= DISPLAY_HEIGHT)
+            continue;
+
+        for (uint16_t x = 0; x < sprite->size; x++)
+        {
+            uint16_t pixel = sprite->pixels[((size_t)x * sprite->size) + (sprite->size - 1u - y)];
+            if (pixel == 63519)
+                continue;
+
+            int16_t new_x = x + (pos_x >> (scale - 1));
+            if (new_x < 0 || new_x >= DISPLAY_WIDTH)
+                continue;
+
+            for (uint8_t i = 0; i < scale; i++)
+                for (uint8_t j = 0; j < scale; j++)
+                    draw_pixel((new_x << (scale - 1)) + i, (new_y << (scale - 1)) + j, pixel);
+        }
+    }
+}
+
 static void painter_print(const char *text, int16_t x, int16_t y, uint8_t scale)
 {
+    if (scale == 0 || text == NULL || _storage == NULL)
+        return;
     uint16_t offset = 0;
     uint16_t yFactor = 0;
+
     for (int i = 0; text[i] != '\0'; i++)
     {
         if (text[i] == 32)
@@ -633,8 +735,31 @@ static void painter_print(const char *text, int16_t x, int16_t y, uint8_t scale)
             offset += DEFAULT_FONT_SIZE << (scale);
             continue;
         }
-        const Font *font = _storage->get_font_by_index(text[i] - 33);
-        draw_sprite(font->sprite, x + offset - (((font->sprite->size - font->width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
+
+        uint8_t char_code = (uint8_t)text[i];
+        if (char_code < FONT_ASCII_FIRST || char_code > FONT_ASCII_LAST)
+        {
+            offset += (DEFAULT_FONT_SIZE << (scale - 1));
+            continue;
+        }
+
+        uint8_t glyph_index = (uint8_t)(char_code - FONT_ASCII_FIRST);
+        if (font_cache_ready)
+        {
+            const Sprite *sprite = (const Sprite *)&font_cache_sprites[glyph_index];
+            uint8_t width = font_cache_widths[glyph_index];
+            draw_sprite(sprite, x + offset - (((sprite->size - width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
+            offset += (width << (scale - 1));
+            continue;
+        }
+
+        const Font *font = _storage->get_font_by_index(glyph_index);
+        if (font == NULL || font->sprite == NULL)
+        {
+            offset += (DEFAULT_FONT_SIZE << (scale - 1));
+            continue;
+        }
+        draw_font_glyph_transposed(font->sprite, x + offset - (((font->sprite->size - font->width) << (scale - 1)) >> 1), y + yFactor, scale);
         offset += (font->width << (scale - 1));
     }
 };

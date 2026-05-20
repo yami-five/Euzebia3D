@@ -425,23 +425,15 @@ static const uint32_t *const *copy_effects(PsramArena *arena)
 
 static void copy_lookup_tables(PsramArena *arena)
 {
-    uint32_t i;
-    int *sin_copy;
-    int *cos_copy;
-    int *atan_copy;
+    const int16_t *sin_copy;
+    const int16_t *cos_copy;
+    const int16_t *atan_copy;
 
-    sin_copy = (int *)psram_alloc(arena, EUZEBIA3D_SIN_TABLE_LENGTH * sizeof(int), _Alignof(int));
-    cos_copy = (int *)psram_alloc(arena, EUZEBIA3D_COS_TABLE_LENGTH * sizeof(int), _Alignof(int));
-    atan_copy = (int *)psram_alloc(arena, EUZEBIA3D_ATAN_TABLE_LENGTH * sizeof(int), _Alignof(int));
+    sin_copy = (const int16_t *)psram_copy(arena, get_sin_source(), EUZEBIA3D_SIN_TABLE_LENGTH * sizeof(int16_t), _Alignof(int16_t));
+    cos_copy = (const int16_t *)psram_copy(arena, get_cos_source(), EUZEBIA3D_COS_TABLE_LENGTH * sizeof(int16_t), _Alignof(int16_t));
+    atan_copy = (const int16_t *)psram_copy(arena, get_atan_source(), EUZEBIA3D_ATAN_TABLE_LENGTH * sizeof(int16_t), _Alignof(int16_t));
     if ((sin_copy == NULL) || (cos_copy == NULL) || (atan_copy == NULL))
         return;
-
-    for (i = 0u; i < EUZEBIA3D_SIN_TABLE_LENGTH; i++)
-        sin_copy[i] = (int)get_sin((uint16_t)i);
-    for (i = 0u; i < EUZEBIA3D_COS_TABLE_LENGTH; i++)
-        cos_copy[i] = (int)get_cos((uint16_t)i);
-    for (i = 0u; i < EUZEBIA3D_ATAN_TABLE_LENGTH; i++)
-        atan_copy[i] = (int)get_atan((uint16_t)i);
 
     set_lookup_table_sources(sin_copy, cos_copy, atan_copy);
 }

@@ -17,7 +17,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(EUZEBIA3D_BUILD_APP "Build the Euzebia3D demo executable" ON)
-option(EUZEBIA3D_USE_PSRAM "Enable optional PSRAM-backed const asset copies on compatible Pico boards" OFF)
+option(EUZEBIA3D_USE_PSRAM "Enable optional PSRAM-backed const asset copies on compatible Pico boards" ON)
+option(EUZEBIA3D_TEXTURE_CACHE_ENABLED "Enable renderer texture cache for small textures" ON)
+option(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH "Allow renderer texture cache for textures stored in flash/XIP" OFF)
+option(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM "Allow renderer texture cache for textures stored in PSRAM/XIP" ON)
 
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
     # Initialise pico_sdk from installed location

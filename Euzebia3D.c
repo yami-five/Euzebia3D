@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pico/multicore.h"
+#include "pico/time.h"
 
 #include "ICameraFactory.h"
 #include "IDisplay.h"
@@ -79,6 +80,9 @@ int main()
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
     uint32_t t = 0;
+    uint32_t fps_window_frames = 0;
+    uint64_t fps_window_us = 0;
+    char fps_text[40] = "FPS: 0.0  MS: 0.0";
 
     const uint8_t sprite_size = 16;
     const Sprite *left_edge = storage->get_sprite(0);
@@ -88,6 +92,7 @@ int main()
 
     while (1)
     {
+        uint64_t frame_begin_us = time_us_64();
         float qt = t * 0.02f;
         modify_mesh_transformation(room->transformations, qt, 0.0f, 10.0f, 0.0f, 0);
         modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
@@ -104,6 +109,38 @@ int main()
         // painter->draw_sprite(top_edge,160-(sprite_size>>1),0,0,1);
         // painter->draw_sprite(bottom_edge,160-(sprite_size>>1),240-sprite_size,0,1);
 
+        painter->print(fps_text, 4, 220, 1);
+
+        uint64_t frame_end_us = time_us_64();
+        uint64_t frame_time_us = frame_end_us - frame_begin_us;
+        fps_window_frames++;
+        fps_window_us += frame_time_us;
+
+        if (fps_window_us >= 500000ull)
+        {
+            uint32_t avg_frame_us = (uint32_t)((fps_window_us + (fps_window_frames >> 1)) / fps_window_frames);
+            uint32_t fps_x10 = 0;
+            uint32_t ms_x10 = 0;
+
+            if (avg_frame_us > 0u)
+            {
+                fps_x10 = (uint32_t)((10000000ull + ((uint64_t)avg_frame_us >> 1)) / (uint64_t)avg_frame_us);
+                ms_x10 = (uint32_t)(((uint64_t)avg_frame_us + 50ull) / 100ull);
+            }
+
+            snprintf(
+                fps_text,
+                sizeof(fps_text),
+                "FPS: %lu.%lu  MS: %lu.%lu",
+                (unsigned long)(fps_x10 / 10u),
+                (unsigned long)(fps_x10 % 10u),
+                (unsigned long)(ms_x10 / 10u),
+                (unsigned long)(ms_x10 % 10u)
+            );
+
+            fps_window_frames = 0;
+            fps_window_us = 0;
+        }
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
