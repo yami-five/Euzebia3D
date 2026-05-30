@@ -183,8 +183,7 @@ static int ensure_sdl_backend(void)
         "Euzebia3D",
         DISPLAY_WIDTH * 3,
         DISPLAY_HEIGHT * 3,
-        SDL_WINDOW_RESIZABLE
-    );
+        SDL_WINDOW_RESIZABLE);
     if (sdl_window == NULL)
     {
         SDL_Log("Painter SDL window creation failed: %s", SDL_GetError());
@@ -205,8 +204,7 @@ static int ensure_sdl_backend(void)
         SDL_PIXELFORMAT_RGB565,
         SDL_TEXTUREACCESS_STREAMING,
         DISPLAY_WIDTH,
-        DISPLAY_HEIGHT
-    );
+        DISPLAY_HEIGHT);
     if (sdl_texture == NULL)
     {
         SDL_Log("Painter SDL texture creation failed: %s", SDL_GetError());
@@ -218,8 +216,7 @@ static int ensure_sdl_backend(void)
         sdl_renderer,
         DISPLAY_WIDTH,
         DISPLAY_HEIGHT,
-        SDL_LOGICAL_PRESENTATION_LETTERBOX
-    );
+        SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     if (!sdl_cleanup_registered)
     {
@@ -246,8 +243,7 @@ static void init_dma(void)
         &spi_get_hw(_hardware->get_spi_port())->dr,
         NULL,
         chunk_size,
-        false
-    );
+        false);
     dma_channel_set_irq1_enabled(dma_channel, true);
     irq_set_exclusive_handler(DMA_IRQ_1, dma_buffer_irq_handler);
     irq_set_enabled(DMA_IRQ_1, false);
@@ -300,8 +296,7 @@ void draw_buffer(void)
         sdl_texture,
         NULL,
         mirrored_buffer,
-        DISPLAY_WIDTH * (int32_t)sizeof(uint16_t)
-    );
+        DISPLAY_WIDTH * (int32_t)sizeof(uint16_t));
     SDL_RenderClear(sdl_renderer);
     SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
     SDL_RenderPresent(sdl_renderer);
@@ -379,8 +374,7 @@ void draw_image(uint8_t image_index)
         buffer,
         _storage->get_image(image_index)->image,
         BUFFER_SIZE_HALF,
-        false
-    );
+        false);
     dma_channel_start(dma_channel_flash);
     dma_channel_wait_for_finish_blocking(dma_channel_flash);
     dma_channel_unclaim(dma_channel_flash);
@@ -677,6 +671,20 @@ void draw_puppet(Puppet *puppet)
     }
 }
 
+void draw_background(Image *image)
+{
+    if (image == NULL)
+        return;
+    if (image->image == NULL)
+        return;
+    if (image->width != DISPLAY_WIDTH || image->heigth != DISPLAY_HEIGHT)
+        return;
+    if (image->size != BUFFER_SIZE)
+        return;
+
+    memcpy(buffer, image->image, BUFFER_SIZE);
+}
+
 // Legacy font atlas is stored transposed (x/y swapped), so glyph sampling
 // swaps coordinates to recover readable text on the current display layout.
 static void draw_font_glyph_transposed(const Sprite *sprite, int16_t pos_x, int16_t pos_y, uint8_t scale)
@@ -710,7 +718,7 @@ static void draw_font_glyph_transposed(const Sprite *sprite, int16_t pos_x, int1
     }
 }
 
-static void painter_print(const char *text, int16_t x, int16_t y, uint8_t scale)
+static void print(const char *text, int16_t x, int16_t y, uint8_t scale)
 {
     if (scale == 0 || text == NULL || _storage == NULL)
         return;
@@ -888,7 +896,7 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
     if (currentFrame < startFrame)
         return;
     uint8_t patternIndex = currentFrame - startFrame;
-    if(patternIndex>8)
+    if (patternIndex > 8)
         return;
     if ((patternIndex == 8 && mode == 0))
         return;
@@ -937,7 +945,8 @@ static IPainter painter = {
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
     .draw_puppet = draw_puppet,
-    .print = painter_print,
+    .draw_background = draw_background,
+    .print = print,
     .draw_gradient = draw_gradient,
     .override_buffer = override_buffer,
     .fade_fullscreen = fade_fullscreen,
@@ -949,4 +958,3 @@ const IPainter *get_painter(void)
 {
     return &painter;
 }
-

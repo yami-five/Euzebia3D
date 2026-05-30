@@ -19,6 +19,7 @@ typedef struct
     void (*apply_post_process_effect)(uint8_t effect_index, uint16_t *params);
     void (*draw_sprite)(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t angle, uint8_t scale);
     void (*draw_puppet)(Puppet *puppet);
+    void (*draw_background)(Image *image);
     void (*print)(const char *text, int16_t x, int16_t y, uint8_t scale);
     void (*draw_gradient)(Gradient *gradient);
     void (*override_buffer)(uint8_t mode, uint16_t lines);
