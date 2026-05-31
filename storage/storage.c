@@ -27,7 +27,8 @@
 typedef struct
 {
     const uint16_t *pixels;
-    uint8_t size;
+    uint8_t height;
+    uint8_t width;
     bool canRotate;
 } SpriteRuntime;
 
@@ -78,6 +79,10 @@ typedef struct
 } RawPuppetRuntime;
 
 _Static_assert(sizeof(SpriteRuntime) == sizeof(Sprite), "Sprite runtime type must match Sprite layout");
+_Static_assert(offsetof(SpriteRuntime, pixels) == offsetof(Sprite, pixels), "Sprite runtime pixels offset must match");
+_Static_assert(offsetof(SpriteRuntime, height) == offsetof(Sprite, height), "Sprite runtime height offset must match");
+_Static_assert(offsetof(SpriteRuntime, width) == offsetof(Sprite, width), "Sprite runtime width offset must match");
+_Static_assert(offsetof(SpriteRuntime, canRotate) == offsetof(Sprite, canRotate), "Sprite runtime canRotate offset must match");
 _Static_assert(sizeof(FontRuntime) == sizeof(Font), "Font runtime type must match Font layout");
 _Static_assert(sizeof(ImageRuntime) == sizeof(Image), "Image runtime type must match Image layout");
 _Static_assert(sizeof(ScrollerRuntime) == sizeof(Scroller), "Scroller runtime type must match Scroller layout");
@@ -179,7 +184,7 @@ static const Sprite *copy_sprites_with_pixels(PsramArena *arena, const Sprite *s
     for (i = 0u; i < count; i++)
     {
         const uint16_t *pixels = source[i].pixels;
-        size_t pixels_count = (size_t)source[i].size * (size_t)source[i].size;
+        size_t pixels_count = (size_t)source[i].width * (size_t)source[i].height;
 
         if ((pixels != NULL) && (pixels_count > 0u))
         {
@@ -190,7 +195,8 @@ static const Sprite *copy_sprites_with_pixels(PsramArena *arena, const Sprite *s
         }
 
         sprites_copy[i].pixels = pixels;
-        sprites_copy[i].size = source[i].size;
+        sprites_copy[i].height = source[i].height;
+        sprites_copy[i].width = source[i].width;
         sprites_copy[i].canRotate = source[i].canRotate;
     }
 

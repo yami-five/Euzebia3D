@@ -5,467 +5,560 @@ static const uint16_t characters[23808] = {63519,63519,63519,63519,63519,63519,6
 static const Sprite spritesFonts[93] = {
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters, //!
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 256, //"
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 512, // #
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 768, //$
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 1024, //%
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 1280, //&
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 1536, //'
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 1792, //(
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 2048, //)
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 2304, //*
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 2560, //+
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 2816, //,
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 3072, // -
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 3328, // .
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 3584, // /
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 3840, // 0
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 4096, // 1
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 4352, // 2
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 4608, // 3
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 4864, // 4
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 5120, // 5
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 5376, // 6
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 5632, // 7
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 5888, // 8
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 6144, // 9
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 6400, //:
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 6656, //;
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 6912, //<
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 7168, //=
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 7424, //>
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 7680, //?
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 7936, //@
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 8192, // A
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 8448, // B
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 8704, // C
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 8960, // D
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 9216, // E
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 9472, // F
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 9728, // G
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 9984, // H
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 10240, // I
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 10496, // J
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 10752, // K
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 11008, // L
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 11264, // M
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 11520, // N
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 11776, // O
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 12032, // P
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 12288, // Q
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 12544, // R
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 12800, // S
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 13056, // T
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 13312, // U
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 13568, // V
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 13824, // W
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 14080, // X
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 14336, // Y
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 14592, // Z
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 14848, //[
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 15104, // \//
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 15360, //]
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 15616, //^
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 15872, //_
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 16128, //`
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 16384, // a
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 16640, // b
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 16896, // c
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 17152, // d
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 17408, // e
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 17664, // f
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 17920, // g
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 18176, // h
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 18432, // i
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 18688, // j
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 18944, // k
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 19200, // l
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 19456, // m
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 19712, // n
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 19968, // o
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 20224, // p
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 20480, // q
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 20736, // r
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 20992, // s
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 21248, // t
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 21504, // u
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 21760, // v
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 22016, // w
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 22272, // x
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 22528, // y
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 22784, // z
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 23040, //{
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 23296, //|
     },
     {
         .canRotate = false,
-        .size = 16,
+        .height = 16,
+        .width = 16,
         .pixels = characters + 23552, //}
     },
 };
@@ -844,4 +937,6 @@ const Font fonts[93] = {
         .sprite = &spritesFonts[92],//}
     },
 };
+
+
 

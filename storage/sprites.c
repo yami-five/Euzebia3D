@@ -8,22 +8,28 @@ static const uint16_t bottom_edge[256]={52962,52962,52962,52962,52962,52962,5296
 const Sprite spriteSheet[4] = {
     {
         .pixels=left_edge,
-        .size=16,
+        .height = 16,
+        .width = 16,
         .canRotate=false
     },
     {
         .pixels=right_edge,
-        .size=16,
+        .height = 16,
+        .width = 16,
         .canRotate=false
     },
     {
         .pixels=top_edge,
-        .size=16,
+        .height = 16,
+        .width = 16,
         .canRotate=false
     },
     {
         .pixels=bottom_edge,
-        .size=16,
+        .height = 16,
+        .width = 16,
         .canRotate=false
     },
 };
+
+

@@ -33,11 +33,16 @@
 typedef struct
 {
     const uint16_t *pixels;
-    uint8_t size;
+    uint8_t height;
+    uint8_t width;
     bool canRotate;
 } CachedSprite;
 
 _Static_assert(sizeof(CachedSprite) == sizeof(Sprite), "CachedSprite must match Sprite layout");
+_Static_assert(offsetof(CachedSprite, pixels) == offsetof(Sprite, pixels), "CachedSprite::pixels offset mismatch");
+_Static_assert(offsetof(CachedSprite, height) == offsetof(Sprite, height), "CachedSprite::height offset mismatch");
+_Static_assert(offsetof(CachedSprite, width) == offsetof(Sprite, width), "CachedSprite::width offset mismatch");
+_Static_assert(offsetof(CachedSprite, canRotate) == offsetof(Sprite, canRotate), "CachedSprite::canRotate offset mismatch");
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
@@ -79,24 +84,33 @@ static void init_font_cache(void)
             goto cache_fail;
 
         const Sprite *source_sprite = source_font->sprite;
-        size_t pixel_count = (size_t)source_sprite->size * (size_t)source_sprite->size;
+        size_t pixel_count = (size_t)source_sprite->width * (size_t)source_sprite->height;
         uint16_t *pixels = (uint16_t *)malloc(pixel_count * sizeof(uint16_t));
         if (pixels == NULL)
             goto cache_fail;
 
-        for (uint16_t y = 0; y < source_sprite->size; y++)
+        if (source_sprite->width == source_sprite->height)
         {
-            for (uint16_t x = 0; x < source_sprite->size; x++)
+            for (uint16_t y = 0; y < source_sprite->height; y++)
             {
-                size_t dst = ((size_t)y * source_sprite->size) + x;
-                size_t src = ((size_t)x * source_sprite->size) + (source_sprite->size - 1u - y);
-                pixels[dst] = source_sprite->pixels[src];
+                for (uint16_t x = 0; x < source_sprite->width; x++)
+                {
+                    size_t dst = ((size_t)y * source_sprite->width) + x;
+                    size_t src = ((size_t)x * source_sprite->width) + (source_sprite->width - 1u - y);
+                    pixels[dst] = source_sprite->pixels[src];
+                }
             }
+        }
+        else
+        {
+            // Non-square glyphs are copied as-is to keep indexing valid.
+            memcpy(pixels, source_sprite->pixels, pixel_count * sizeof(uint16_t));
         }
 
         font_cache_pixels[i] = pixels;
         font_cache_sprites[i].canRotate = false;
-        font_cache_sprites[i].size = source_sprite->size;
+        font_cache_sprites[i].height = source_sprite->height;
+        font_cache_sprites[i].width = source_sprite->width;
         font_cache_sprites[i].pixels = pixels;
         font_cache_widths[i] = source_font->width;
     }
@@ -569,33 +583,73 @@ void middle_point(int16_t *x, int16_t *y, int16_t x1, int16_t y1, int16_t x2, in
     *y = y1 + ((y2 - y1) >> 1);
 }
 
-void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t angle, uint8_t scale)
+static void draw_rectangle_size(const Sprite *sprite, int16_t pos_x, int16_t pos_y, uint8_t scale)
 {
-    if (scale == 0)
+    if (sprite == NULL || sprite->pixels == NULL || scale == 0)
         return;
 
+    int16_t sprite_height_scaled = sprite->height << (scale - 1);
+    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_height_scaled) - pos_y;
+
+    for (uint16_t y = 0; y < sprite->height; y++)
+    {
+        int16_t new_y = y + (pos_y_aligned >> (scale - 1));
+        if (new_y < 0 || new_y >= DISPLAY_HEIGHT)
+            continue;
+
+        uint32_t row_offset = (uint32_t)y * sprite->width;
+        for (uint16_t x = 0; x < sprite->width; x++)
+        {
+            uint16_t pixel = sprite->pixels[row_offset + x];
+            if (pixel == 63519)
+                continue;
+
+            int16_t new_x = x + (pos_x >> (scale - 1));
+            if (new_x < 0 || new_x >= DISPLAY_WIDTH)
+                continue;
+
+            for (uint8_t i = 0; i < scale; i++)
+                for (uint8_t j = 0; j < scale; j++)
+                    draw_pixel((new_x << (scale - 1)) + i, (new_y << (scale - 1)) + j, pixel);
+        }
+    }
+}
+
+void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t angle, uint8_t scale)
+{
+    if (sprite == NULL || sprite->pixels == NULL || scale == 0)
+        return;
+
+    if (sprite->width != sprite->height)
+    {
+        draw_rectangle_size(sprite, pos_x, pos_y, scale);
+        return;
+    }
+
+    uint8_t size = sprite->width;
+
     // Align sprite Y axis with the rest of renderer output.
-    int16_t sprite_size_scaled = sprite->size << (scale - 1);
+    int16_t sprite_size_scaled = size << (scale - 1);
     int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_size_scaled) - pos_y;
 
     if (angle != 0 && sprite->canRotate)
     {
         int16_t cos = fast_cos(angle);
         int16_t sin = fast_sin(angle);
-        int8_t middle = sprite->size >> 1;
-        for (uint16_t y = 0; y < sprite->size; y++)
+        int8_t middle = size >> 1;
+        for (uint16_t y = 0; y < size; y++)
         {
             int16_t new_y = y + (pos_y_aligned >> (scale - 1));
             if (new_y >= 0 && new_y < DISPLAY_HEIGHT)
             {
-                for (uint16_t x = 0; x < sprite->size; x++)
+                for (uint16_t x = 0; x < size; x++)
                 {
                     int16_t new_x = x + (pos_x >> (scale - 1));
                     int16_t xr = (((x - middle) * cos - (y - middle) * sin) >> SHIFT_FACTOR) + middle;
                     int16_t yr = (((x - middle) * sin + (y - middle) * cos) >> SHIFT_FACTOR) + middle;
-                    if ((uint16_t)xr < sprite->size && (uint16_t)yr < sprite->size)
+                    if ((uint16_t)xr < size && (uint16_t)yr < size)
                     {
-                        uint16_t pixel = sprite->pixels[yr * sprite->size + xr];
+                        uint16_t pixel = sprite->pixels[((size_t)yr * size) + (size_t)xr];
                         if (pixel != 63519)
                         {
                             if (new_x >= 0 && new_x < DISPLAY_WIDTH)
@@ -610,13 +664,13 @@ void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t ang
     }
     else
     {
-        for (uint16_t y = 0; y < sprite->size; y++)
+        for (uint16_t y = 0; y < size; y++)
         {
             int16_t new_y = y + (pos_y_aligned >> (scale - 1));
             if (new_y >= 0 && new_y < DISPLAY_HEIGHT)
             {
-                uint32_t ydh = y * sprite->size;
-                for (uint16_t x = 0; x < sprite->size; x++)
+                uint32_t ydh = (uint32_t)y * size;
+                for (uint16_t x = 0; x < size; x++)
                 {
                     uint16_t pixel = sprite->pixels[ydh + x];
                     if (pixel != 63519)
@@ -641,7 +695,11 @@ void draw_bone(Bone *bone, int *parentWorldMatrix)
     }
     if (bone->sprite != NULL)
     {
-        uint8_t spriteSizeHalved = bone->sprite->size >> 1;
+        if (bone->sprite->width != bone->sprite->height)
+            return;
+
+        uint8_t spriteWidthHalved = bone->sprite->width >> 1;
+        uint8_t spriteHeightHalved = bone->sprite->height >> 1;
         int16_t startX = bone->worldMatrix[2] >> SHIFT_FACTOR;
         int16_t startY = bone->worldMatrix[5] >> SHIFT_FACTOR;
         int16_t parentX = parentWorldMatrix[2] >> SHIFT_FACTOR;
@@ -652,8 +710,8 @@ void draw_bone(Bone *bone, int *parentWorldMatrix)
             angle = fast_atan2(startY - parentY, startX - parentX) + bone->baseSpriteAngle;
             angle = radian_to_index(angle);
         }
-        startX += ((parentX - startX) >> 1) - spriteSizeHalved;
-        startY += ((parentY - startY) >> 1) - spriteSizeHalved;
+        startX += ((parentX - startX) >> 1) - spriteWidthHalved;
+        startY += ((parentY - startY) >> 1) - spriteHeightHalved;
         draw_sprite(bone->sprite, startX, startY, angle, 1);
     }
     // draw_sprite(bone->sprite, x, y, 0.0f);
@@ -692,18 +750,21 @@ static void draw_font_glyph_transposed(const Sprite *sprite, int16_t pos_x, int1
     if (sprite == NULL || scale == 0)
         return;
 
-    int16_t sprite_size_scaled = sprite->size << (scale - 1);
-    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_size_scaled) - pos_y;
+    int16_t sprite_height_scaled = sprite->height << (scale - 1);
+    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_height_scaled) - pos_y;
+    bool square_sprite = sprite->width == sprite->height;
 
-    for (uint16_t y = 0; y < sprite->size; y++)
+    for (uint16_t y = 0; y < sprite->height; y++)
     {
         int16_t new_y = y + (pos_y_aligned >> (scale - 1));
         if (new_y < 0 || new_y >= DISPLAY_HEIGHT)
             continue;
 
-        for (uint16_t x = 0; x < sprite->size; x++)
+        for (uint16_t x = 0; x < sprite->width; x++)
         {
-            uint16_t pixel = sprite->pixels[((size_t)x * sprite->size) + (sprite->size - 1u - y)];
+            uint16_t pixel = square_sprite
+                                 ? sprite->pixels[((size_t)x * sprite->width) + (sprite->width - 1u - y)]
+                                 : sprite->pixels[((size_t)y * sprite->width) + x];
             if (pixel == 63519)
                 continue;
 
@@ -755,8 +816,10 @@ static void print(const char *text, int16_t x, int16_t y, uint8_t scale)
         if (font_cache_ready)
         {
             const Sprite *sprite = (const Sprite *)&font_cache_sprites[glyph_index];
+            if (sprite->width != sprite->height)
+                return;
             uint8_t width = font_cache_widths[glyph_index];
-            draw_sprite(sprite, x + offset - (((sprite->size - width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
+            draw_sprite(sprite, x + offset - (((sprite->width - width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
             offset += (width << (scale - 1));
             continue;
         }
@@ -767,7 +830,7 @@ static void print(const char *text, int16_t x, int16_t y, uint8_t scale)
             offset += (DEFAULT_FONT_SIZE << (scale - 1));
             continue;
         }
-        draw_font_glyph_transposed(font->sprite, x + offset - (((font->sprite->size - font->width) << (scale - 1)) >> 1), y + yFactor, scale);
+        draw_font_glyph_transposed(font->sprite, x + offset - (((font->sprite->width - font->width) << (scale - 1)) >> 1), y + yFactor, scale);
         offset += (font->width << (scale - 1));
     }
 };
