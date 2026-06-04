@@ -27,7 +27,7 @@ typedef struct PuppetBone PuppetBone;
 
 typedef struct PuppetBone
 {
-    char *label;
+    const char *label;
     int16_t x;
     int16_t y;
     float angle;
@@ -49,7 +49,7 @@ typedef struct
 
 typedef struct
 {
-    char *label;
+    const char *label;
     int16_t x;
     int16_t y;
     float angle;
@@ -59,7 +59,7 @@ typedef struct
     uint8_t puppetBonesNum;
     PuppetBoneTimelinePair *boneTimelinePairs;
     uint8_t boneTimelinePairsNum;
-    uint32_t animationStartFrame;
+    int32_t animationStartFrame;
 } Puppet;
 
 #endif

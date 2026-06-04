@@ -366,6 +366,7 @@ static const RawPuppetBoneRuntime *copy_raw_PuppetBones_recursive(PsramArena *ar
                 return NULL;
         }
 
+        PuppetBones_copy[i].label = source[i].label;
         PuppetBones_copy[i].x = source[i].x;
         PuppetBones_copy[i].y = source[i].y;
         PuppetBones_copy[i].angle = source[i].angle;
@@ -540,6 +541,7 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
                 return rawPuppets;
         }
 
+        puppets_copy[i].label = rawPuppets[i].label;
         puppets_copy[i].x = rawPuppets[i].x;
         puppets_copy[i].y = rawPuppets[i].y;
         puppets_copy[i].angle = rawPuppets[i].angle;

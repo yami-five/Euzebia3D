@@ -27,35 +27,78 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones, const uint8_
         make_world_matrix(&newPuppetBones[i], parentWorldMatrix);
         newPuppetBones[i].childPuppetBonesNumLayer1 = rawPuppetBones[i].childPuppetBonesNumLayer1;
         newPuppetBones[i].childPuppetBonesNumLayer2 = rawPuppetBones[i].childPuppetBonesNumLayer2;
+        newPuppetBones[i].childPuppetBonesLayer1 = NULL;
+        newPuppetBones[i].childPuppetBonesLayer2 = NULL;
         if (rawPuppetBones[i].childPuppetBonesNumLayer1 != 0)
-            newPuppetBones[i].childPuppetBonesLayer1 = create_PuppetBones(rawPuppetBones[i].childPuppetBonesLayer1, rawPuppetBones[i].childPuppetBonesNumLayer1, newPuppetBones->worldMatrix);
+            newPuppetBones[i].childPuppetBonesLayer1 = create_PuppetBones(rawPuppetBones[i].childPuppetBonesLayer1, rawPuppetBones[i].childPuppetBonesNumLayer1, newPuppetBones[i].worldMatrix);
         if (rawPuppetBones[i].childPuppetBonesNumLayer2 != 0)
-            newPuppetBones[i].childPuppetBonesLayer2 = create_PuppetBones(rawPuppetBones[i].childPuppetBonesLayer2, rawPuppetBones[i].childPuppetBonesNumLayer2, newPuppetBones->worldMatrix);
+            newPuppetBones[i].childPuppetBonesLayer2 = create_PuppetBones(rawPuppetBones[i].childPuppetBonesLayer2, rawPuppetBones[i].childPuppetBonesNumLayer2, newPuppetBones[i].worldMatrix);
     }
     return newPuppetBones;
 }
 
-PuppetBoneTimelinePair *create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet, const PuppetBone *puppetBones)
+static PuppetBone *find_PuppetBone_by_label(PuppetBone *puppetBones, uint8_t puppetBonesNum, const char *label)
+{
+    if (puppetBones == NULL || label == NULL)
+        return NULL;
+
+    for (uint8_t i = 0; i < puppetBonesNum; i++)
+    {
+        PuppetBone *found;
+
+        if (puppetBones[i].label == label)
+            return &puppetBones[i];
+
+        found = find_PuppetBone_by_label(puppetBones[i].childPuppetBonesLayer1, puppetBones[i].childPuppetBonesNumLayer1, label);
+        if (found != NULL)
+            return found;
+
+        found = find_PuppetBone_by_label(puppetBones[i].childPuppetBonesLayer2, puppetBones[i].childPuppetBonesNumLayer2, label);
+        if (found != NULL)
+            return found;
+    }
+
+    return NULL;
+}
+
+PuppetBoneTimelinePair *create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet, PuppetBone *puppetBones)
 {
     PuppetBoneTimelinePair *newPairs = (PuppetBoneTimelinePair *)malloc(sizeof(PuppetBoneTimelinePair) * rawPuppet->boneAnimationPairsNum);
     for (uint8_t i = 0; i < rawPuppet->boneAnimationPairsNum; i++)
     {
-        for (uint8_t j = 0; j < rawPuppet->puppetBonesNum; j++)
+        const RawBoneAnimationPair *rawPair = &rawPuppet->boneAnimationPairs[i];
+        PuppetBone *bone = NULL;
+        PuppetBoneAnimTimeline *newTimeline = NULL;
+
+        newPairs[i].bone = NULL;
+        newPairs[i].boneTimeline = NULL;
+
+        if (rawPair->rawBone != NULL)
+            bone = find_PuppetBone_by_label(puppetBones, rawPuppet->puppetBonesNum, rawPair->rawBone->label);
+
+        if (bone != NULL && rawPair->rawAnimation != NULL)
         {
-            if (rawPuppet->boneAnimationPairs[i].rawBone->label == puppetBones[j].label)
+            newTimeline = (PuppetBoneAnimTimeline *)malloc(sizeof(PuppetBoneAnimTimeline));
+            if (newTimeline != NULL)
             {
-                PuppetBoneAnimTimeline *newTimeline = (PuppetBoneAnimTimeline *)malloc(sizeof(PuppetBoneAnimTimeline));
-                newTimeline->keyFramesNum = rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum;
-                for (uint8_t k = 0; k < rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum; k++)
+                newTimeline->keyFramesNum = rawPair->rawAnimation->framesNum;
+                newTimeline->keyFrames = (KeyFrame *)malloc(sizeof(KeyFrame) * newTimeline->keyFramesNum);
+                if (newTimeline->keyFrames != NULL)
                 {
-                    newTimeline->keyFrames[k].x = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].x;
-                    newTimeline->keyFrames[k].y = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].y;
-                    newTimeline->keyFrames[k].angle = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].angle;
-                    newTimeline->keyFrames[k].startFrameNum = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].startFrameNum;
+                    for (uint16_t k = 0; k < rawPair->rawAnimation->framesNum; k++)
+                    {
+                        newTimeline->keyFrames[k].x = rawPair->rawAnimation->frames[k].x;
+                        newTimeline->keyFrames[k].y = rawPair->rawAnimation->frames[k].y;
+                        newTimeline->keyFrames[k].angle = rawPair->rawAnimation->frames[k].angle;
+                        newTimeline->keyFrames[k].startFrameNum = rawPair->rawAnimation->frames[k].startFrameNum;
+                    }
+                    newPairs[i].boneTimeline = newTimeline;
+                    newPairs[i].bone = bone;
                 }
-                newPairs[i].boneTimeline = newTimeline;
-                newPairs[i].bone = &puppetBones[j];
-                break;
+                else
+                {
+                    free(newTimeline);
+                }
             }
         }
     }

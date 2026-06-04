@@ -9,12 +9,6 @@
 #include "string.h"
 #include "../storage/rawPuppets.h"
 
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-#include "hardware/interp.h"
-interp_config blend_cfg;
-interp_config alpha_cfg;
-#endif
-
 static const IPainter *_painter;
 static const IPuppetFactory *_puppetFactory;
 
@@ -23,22 +17,11 @@ void init_puppeteer(const IStorage *storage, const IPainter *painter)
     _puppetFactory = get_puppetFactory();
     _puppetFactory->init_puppet_factory(storage);
     _painter = painter;
-
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    blend_cfg = interp_default_config();
-    interp_config_set_blend(&blend_cfg, true);
-    interp_set_config(interp0, 0, &blend_cfg);
-
-    alpha_cfg = interp_default_config();
-    interp_config_set_mask(&alpha_cfg, 0, 7);
-    interp_config_set_signed(&alpha_cfg, true);
-    interp_set_config(interp0, 1, &alpha_cfg);
-#endif
 }
 
 Puppet *create_puppet(uint8_t puppetIndex)
 {
-    _puppetFactory->create(puppetIndex);
+    return _puppetFactory->create(puppetIndex);
 }
 
 void draw_PuppetBone(PuppetBone *PuppetBone, int *parentWorldMatrix)
@@ -82,36 +65,32 @@ void draw_puppet(Puppet *puppet)
     }
 }
 
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static int32_t anim_lerp_i32(int32_t a, int32_t b, uint8_t alpha)
-{
-    interp_set_base(interp0, 0, (uint32_t)a);
-    interp_set_base(interp0, 1, (uint32_t)b);
-    interp_set_accumulator(interp0, 1, alpha);
-    return (int32_t)interp_peek_lane_result(interp0, 1);
-}
-#else
 static int32_t anim_lerp_i32(int32_t a, int32_t b, uint8_t alpha)
 {
     return a + (((b - a) * alpha) >> 8);
 }
-#endif
 
 void perform(Puppet *puppet, uint32_t t)
 {
     if (puppet->boneTimelinePairsNum <= 0 || puppet->puppetBonesNum <= 0)
+        return;
+    if (puppet->boneTimelinePairs == NULL)
         return;
     if (puppet->animationStartFrame < 0)
         puppet->animationStartFrame = t;
     int localAnimFrame = t - puppet->animationStartFrame;
     for (uint8_t i = 0; i < puppet->boneTimelinePairsNum; i++)
     {
-        if (
-            localAnimFrame < puppet->boneTimelinePairs[i].boneTimeline->keyFrames[0].startFrameNum ||
-            localAnimFrame > puppet->boneTimelinePairs[i].boneTimeline->keyFrames[puppet->boneTimelinePairs[i].boneTimeline->keyFramesNum - 1].startFrameNum)
-            continue;
         PuppetBoneTimelinePair pair = puppet->boneTimelinePairs[i];
-        for (uint8_t j = 0; j < pair.boneTimeline->keyFramesNum - 1; j++)
+        if (pair.bone == NULL || pair.boneTimeline == NULL || pair.boneTimeline->keyFrames == NULL || pair.boneTimeline->keyFramesNum < 2)
+            continue;
+
+        if (
+            localAnimFrame < pair.boneTimeline->keyFrames[0].startFrameNum ||
+            localAnimFrame > pair.boneTimeline->keyFrames[pair.boneTimeline->keyFramesNum - 1].startFrameNum)
+            continue;
+
+        for (uint16_t j = 0; j < pair.boneTimeline->keyFramesNum - 1; j++)
         {
             KeyFrame *keyFrame = &pair.boneTimeline->keyFrames[j];
             KeyFrame *nextKeyFrame = &pair.boneTimeline->keyFrames[j + 1];
@@ -120,25 +99,27 @@ void perform(Puppet *puppet, uint32_t t)
                 localAnimFrame < nextKeyFrame->startFrameNum)
             {
                 uint32_t span = nextKeyFrame->startFrameNum - keyFrame->startFrameNum;
-                uint32_t frameInSpan = localAnimFrame - keyFrame->startFrameNum;
-                uint8_t alpha = (uint8_t)((frameInSpan << 8) / span);
+                if (span > 0)
+                {
+                    uint32_t frameInSpan = localAnimFrame - keyFrame->startFrameNum;
+                    uint8_t alpha = (uint8_t)((frameInSpan << 8) / span);
 
-                pair.bone->x = (int16_t)anim_lerp_i32(keyFrame->x, nextKeyFrame->x, alpha);
-                pair.bone->y = (int16_t)anim_lerp_i32(keyFrame->y, nextKeyFrame->y, alpha);
+                    pair.bone->x = (int16_t)anim_lerp_i32(keyFrame->x, nextKeyFrame->x, alpha);
+                    pair.bone->y = (int16_t)anim_lerp_i32(keyFrame->y, nextKeyFrame->y, alpha);
 
-                int32_t angleFixed = anim_lerp_i32(
-                    float_to_fixed(keyFrame->angle),
-                    float_to_fixed(nextKeyFrame->angle),
-                    alpha
-                );
-                pair.bone->angle = (float)angleFixed / (float)SCALE_FACTOR;
-                break;
+                    int32_t angleFixed = anim_lerp_i32(
+                        float_to_fixed(keyFrame->angle),
+                        float_to_fixed(nextKeyFrame->angle),
+                        alpha);
+                    pair.bone->angle = (float)angleFixed / (float)SCALE_FACTOR;
+                    break;
+                }
             }
-            else if (localAnimFrame == nextKeyFrame->startFrameNum)
+            if (localAnimFrame == nextKeyFrame->startFrameNum)
             {
-                pair.bone->x=nextKeyFrame->x;
-                pair.bone->y=nextKeyFrame->y;
-                pair.bone->angle=nextKeyFrame->angle;
+                pair.bone->x = nextKeyFrame->x;
+                pair.bone->y = nextKeyFrame->y;
+                pair.bone->angle = nextKeyFrame->angle;
                 break;
             }
         }
