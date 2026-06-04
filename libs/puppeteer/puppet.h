@@ -59,6 +59,7 @@ typedef struct
     uint8_t puppetBonesNum;
     PuppetBoneTimelinePair *boneTimelinePairs;
     uint8_t boneTimelinePairsNum;
+    uint32_t animationStartFrame;
 } Puppet;
 
 #endif

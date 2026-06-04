@@ -7,7 +7,7 @@
 
 static const IStorage *_storage;
 
-void init_puppet_factory(const IStorage * storage)
+void init_puppet_factory(const IStorage *storage)
 {
     _storage = storage;
 }
@@ -37,24 +37,24 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones, const uint8_
 
 PuppetBoneTimelinePair *create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet, const PuppetBone *puppetBones)
 {
-    PuppetBoneTimelinePair *newPairs = (PuppetBoneTimelinePair *)malloc(sizeof(PuppetBoneTimelinePair)*rawPuppet->boneAnimationPairsNum);
+    PuppetBoneTimelinePair *newPairs = (PuppetBoneTimelinePair *)malloc(sizeof(PuppetBoneTimelinePair) * rawPuppet->boneAnimationPairsNum);
     for (uint8_t i = 0; i < rawPuppet->boneAnimationPairsNum; i++)
     {
-        for(uint8_t j = 0; j < rawPuppet->puppetBonesNum; j++)
+        for (uint8_t j = 0; j < rawPuppet->puppetBonesNum; j++)
         {
-            if(rawPuppet->boneAnimationPairs[i].rawBone->label==puppetBones[j].label)
+            if (rawPuppet->boneAnimationPairs[i].rawBone->label == puppetBones[j].label)
             {
                 PuppetBoneAnimTimeline *newTimeline = (PuppetBoneAnimTimeline *)malloc(sizeof(PuppetBoneAnimTimeline));
                 newTimeline->keyFramesNum = rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum;
-                for(uint8_t k = 0; k < rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum; k++)
+                for (uint8_t k = 0; k < rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum; k++)
                 {
-                    newTimeline->keyFrames[k].x=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].x;
-                    newTimeline->keyFrames[k].y=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].y;
-                    newTimeline->keyFrames[k].angle=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].angle;
-                    newTimeline->keyFrames[k].startFrameNum=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].startFrameNum;
+                    newTimeline->keyFrames[k].x = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].x;
+                    newTimeline->keyFrames[k].y = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].y;
+                    newTimeline->keyFrames[k].angle = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].angle;
+                    newTimeline->keyFrames[k].startFrameNum = rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].startFrameNum;
                 }
-                newPairs[i].boneTimeline=newTimeline;
-                newPairs[i].bone=&puppetBones[j];
+                newPairs[i].boneTimeline = newTimeline;
+                newPairs[i].bone = &puppetBones[j];
                 break;
             }
         }
@@ -71,6 +71,7 @@ Puppet *create(uint8_t puppetIndex)
     newPuppet->angle = rawPuppet->angle;
     newPuppet->puppetBonesNum = rawPuppet->puppetBonesNum;
     newPuppet->boneTimelinePairsNum = rawPuppet->boneAnimationPairsNum;
+    newPuppet->animationStartFrame = -1;
     int32_t angleFixed = float_to_fixed(newPuppet->angle);
     int16_t sin = fast_sin(angleFixed);
     int16_t cos = fast_cos(angleFixed);
@@ -82,10 +83,10 @@ Puppet *create(uint8_t puppetIndex)
     newPuppet->localMatrix[5] = newPuppet->y;
     newPuppet->localMatrix[6] = newPuppet->localMatrix[7] = 0;
     newPuppet->localMatrix[8] = SCALE_FACTOR;
-    memcpy(newPuppet->worldMatrix,newPuppet->localMatrix,sizeof(newPuppet->localMatrix));
+    memcpy(newPuppet->worldMatrix, newPuppet->localMatrix, sizeof(newPuppet->localMatrix));
     if (rawPuppet->puppetBonesNum != 0)
         newPuppet->puppetBones = create_PuppetBones(rawPuppet->puppetBones, rawPuppet->puppetBonesNum, newPuppet->worldMatrix);
-    if (rawPuppet->boneAnimationPairsNum!=0)
+    if (rawPuppet->boneAnimationPairsNum != 0)
         newPuppet->boneTimelinePairs = create_PuppetBoneTimelinePair(rawPuppet, newPuppet->puppetBones);
     return newPuppet;
 }

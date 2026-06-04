@@ -209,6 +209,9 @@ target_link_libraries(
     Euzebia3D_Storage
     Euzebia3D_Painter
 )
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    target_link_libraries(Euzebia3D_Puppeteer PUBLIC hardware_interp)
+endif()
 
 add_library(
     Euzebia3D_Transformations

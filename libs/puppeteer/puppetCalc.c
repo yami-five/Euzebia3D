@@ -27,17 +27,17 @@ void make_world_matrix(PuppetBone *PuppetBone, int *parentWorldMatrix)
     free(result);
 }
 
-void update_PuppetBones_world_matrices(PuppetBone *PuppetBone, int *parentWorldMatrix)
+void update_bones_world_matrices(PuppetBone *PuppetBone, int *parentWorldMatrix)
 {
     make_local_matrix(PuppetBone);
     make_world_matrix(PuppetBone, parentWorldMatrix);
     for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer1; i++)
     {
-        update_PuppetBones_world_matrices(&PuppetBone->childPuppetBonesLayer1[i], PuppetBone->worldMatrix);
+        update_bones_world_matrices(&PuppetBone->childPuppetBonesLayer1[i], PuppetBone->worldMatrix);
     }
     for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer2; i++)
     {
-        update_PuppetBones_world_matrices(&PuppetBone->childPuppetBonesLayer2[i], PuppetBone->worldMatrix);
+        update_bones_world_matrices(&PuppetBone->childPuppetBonesLayer2[i], PuppetBone->worldMatrix);
     }
 }
 
@@ -57,6 +57,6 @@ void update_world_matrices(Puppet *puppet)
     memcpy(puppet->worldMatrix, puppet->localMatrix, sizeof(puppet->localMatrix));
     for (uint8_t i = 0; i < puppet->puppetBonesNum; i++)
     {
-        update_PuppetBones_world_matrices(&puppet->puppetBones[i], puppet->worldMatrix);
+        update_bones_world_matrices(&puppet->puppetBones[i], puppet->worldMatrix);
     }
 }
