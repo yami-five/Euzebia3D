@@ -1,6 +1,7 @@
-#include "IPainter.h"
 #include "IPuppeteer.h"
+#include "IPainter.h"
 #include "IStorage.h"
+#include "IPuppetFactory.h"
 #include "puppeteer.h"
 #include "puppetFactory.h"
 #include "puppet.h"
@@ -12,14 +13,14 @@ static const IPuppetFactory *_puppetFactory;
 
 void init_puppeteer(const IStorage *storage, const IPainter *painter)
 {
-    _puppetFactory = get_puppetFactory;
+    _puppetFactory = get_puppetFactory();
     _puppetFactory->init_puppet_factory(storage);
     _painter = painter;
 }
 
 Puppet *create_puppet(uint8_t puppetIndex)
 {
-    _puppetFactory->create_puppet(puppetIndex);
+    _puppetFactory->create(puppetIndex);
 }
 
 // void draw_PuppetBone(PuppetBone *PuppetBone, int *parentWorldMatrix)
@@ -66,6 +67,7 @@ Puppet *create_puppet(uint8_t puppetIndex)
 
 void perform(Puppet *puppet, uint8_t animationIndex, uint32_t t)
 {
+
 }
 
 static IPuppeteer puppet = {

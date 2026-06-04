@@ -10,7 +10,7 @@
 #include "IMeshFactory.h"
 #include "IPainter.h"
 #include "IRenderer.h"
-#include "IPuppetFactory.h"
+#include "IPuppeteer.h"
 #include "IStorage.h"
 
 #include "cameraFactory.h"
@@ -23,7 +23,7 @@
 #include "renderer.h"
 #include "mesh.h"
 #include "camera.h"
-#include "puppetFactory.h"
+#include "puppeteer.h"
 #include "puppet.h"
 #include "storage.h"
 
@@ -35,7 +35,7 @@ static const IRenderer *renderer;
 static const IMeshFactory *meshFactory;
 static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
-static const IPuppetFactory *puppetFactory;
+static const IPuppeteer *puppeteer;
 static const IStorage *storage;
 
 void core1_main();
@@ -54,6 +54,9 @@ int main()
 
     painter = get_painter();
     painter->init_painter(display, hardware_core, storage);
+
+    puppeteer = get_puppeteer();
+    puppeteer->init_puppeteer(storage, painter);
 
     renderer = get_renderer();
     renderer->init_renderer(hardware_core, painter);
@@ -135,8 +138,7 @@ int main()
                 (unsigned long)(fps_x10 / 10u),
                 (unsigned long)(fps_x10 % 10u),
                 (unsigned long)(ms_x10 / 10u),
-                (unsigned long)(ms_x10 % 10u)
-            );
+                (unsigned long)(ms_x10 % 10u));
 
             fps_window_frames = 0;
             fps_window_us = 0;

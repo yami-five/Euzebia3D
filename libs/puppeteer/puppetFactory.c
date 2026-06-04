@@ -34,7 +34,7 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones, const uint8_
     return newPuppetBones;
 }
 
-Puppet *create_puppet(uint8_t puppetIndex)
+Puppet *create(uint8_t puppetIndex)
 {
     Puppet *newPuppet = (Puppet *)malloc(sizeof(Puppet));
     const RawPuppet *rawPuppet = _storage->get_raw_puppet(puppetIndex);
@@ -61,7 +61,7 @@ Puppet *create_puppet(uint8_t puppetIndex)
 
 static IPuppetFactory puppet = {
     .init_puppet_factory = init_puppet_factory,
-    .create_puppet = create_puppet,
+    .create = create,
 };
 
 const IPuppetFactory *get_puppetFactory(void)

@@ -192,7 +192,8 @@ endif()
 
 add_library(
     Euzebia3D_Puppeteer
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppet.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppeteer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppetCalc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppetFactory.c
 )
 target_include_directories(
@@ -205,8 +206,8 @@ target_link_libraries(
     PUBLIC
     Euzebia3D_PicoDeps
     Euzebia3D_Arithmetics
-    Euzebia3D_MeshFactory
     Euzebia3D_Storage
+    Euzebia3D_Painter
 )
 
 add_library(

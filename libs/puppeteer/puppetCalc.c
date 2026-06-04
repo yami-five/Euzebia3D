@@ -1,4 +1,5 @@
 #include "puppetCalc.h"
+#include <string.h>
 
 void make_local_matrix(PuppetBone *PuppetBone)
 {

@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include "IStorage.h"
 #include "IPainter.h"
-#include "puppet.h"
-#include "puppetFactory.h"
 
 typedef struct
 {
