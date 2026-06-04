@@ -5,8 +5,8 @@
 #endif
 #include <stdlib.h>
 
-static volatile const IHardware *_hardware = NULL;
-static volatile const IPainter *_painter = NULL;
+static const IHardware *_hardware = NULL;
+static const IPainter *_painter = NULL;
 
 static const uint8_t FOCAL_LENGTH = 90;
 static const uint32_t FIRE_FLOOR_ADR = 76480;
@@ -266,7 +266,7 @@ void renderer_set_scale(uint8_t scale)
     configure_render_dimensions();
 }
 
-void init_renderer(volatile const IHardware *hardware, volatile const IPainter *painter)
+void init_renderer(const IHardware *hardware, const IPainter *painter)
 {
     _hardware = hardware;
     _painter = painter;

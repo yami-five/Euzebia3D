@@ -7,7 +7,7 @@
 static const uint16_t DISPLAY_WIDTH = 320;
 static const uint16_t DISPLAY_HEIGHT = 240;
 static const uint8_t HORIZONTAL = 0;
-static volatile const IHardware *_hardware = NULL;
+static const IHardware *_hardware;
 
 static void send_command(uint8_t reg)
 {
@@ -69,7 +69,7 @@ static void set_windows(uint16_t Xstart, uint16_t Ystart, uint16_t Xend, uint16_
 }
 #endif
 
-static void init_display(volatile const IHardware *hardware)
+static void init_display(const IHardware *hardware)
 {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     (void)hardware;

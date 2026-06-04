@@ -10,7 +10,7 @@
 
 typedef struct
 {
-    void (*init_renderer)(volatile const IHardware * hardware, volatile const IPainter * painter);
+    void (*init_renderer)(const IHardware * hardware, const IPainter * painter);
     void (*add_model_to_scene)(Mesh *mesh, Camera *camera, PointLight *pLight);
     void (*clean_scene)();
     void (*render_scene)(PointLight *pLight);

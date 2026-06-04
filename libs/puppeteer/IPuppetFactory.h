@@ -7,7 +7,7 @@
 
 typedef struct
 {
-    void (*init_puppet_factory)(volatile const IStorage * storage);
+    void (*init_puppet_factory)(const IStorage * storage);
     Puppet *(*create_puppet)(uint8_t puppetIndex);
 } IPuppetFactory;
 

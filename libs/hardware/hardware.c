@@ -7,21 +7,10 @@
 #include "pico/audio_i2s.h"
 #include "hardware/dma.h"
 
-volatile bool te_signal_detected = false;
 static uint32_t slice_num;
 static spin_lock_t *spi_spinlock;
 
 #define SAMPLES_PER_BUFFER 256
-
-bool get_te_signal_detected()
-{
-    return te_signal_detected;
-}
-
-void set_te_signal_detected(bool value)
-{
-    te_signal_detected = value;
-}
 #endif
 
 static void init_hardware(void)

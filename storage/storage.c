@@ -53,8 +53,8 @@ typedef struct
     uint8_t height;
 } ScrollerRuntime;
 
-typedef struct RawBoneRuntime RawBoneRuntime;
-struct RawBoneRuntime
+typedef struct RawPuppetBoneRuntime RawPuppetBoneRuntime;
+struct RawPuppetBoneRuntime
 {
     const char *label;
     int16_t x;
@@ -62,10 +62,10 @@ struct RawBoneRuntime
     float angle;
     uint8_t spriteIndex;
     float baseSpriteAngle;
-    const RawBoneRuntime *childBonesLayer1;
-    uint8_t childBonesNumLayer1;
-    const RawBoneRuntime *childBonesLayer2;
-    uint8_t childBonesNumLayer2;
+    const RawPuppetBoneRuntime *childPuppetBonesLayer1;
+    uint8_t childPuppetBonesNumLayer1;
+    const RawPuppetBoneRuntime *childPuppetBonesLayer2;
+    uint8_t childPuppetBonesNumLayer2;
 };
 
 typedef struct
@@ -74,8 +74,8 @@ typedef struct
     int16_t x;
     int16_t y;
     float angle;
-    const RawBoneRuntime *bones;
-    uint8_t bonesNum;
+    const RawPuppetBoneRuntime *puppetBones;
+    uint8_t puppetBonesNum;
 } RawPuppetRuntime;
 
 _Static_assert(sizeof(SpriteRuntime) == sizeof(Sprite), "Sprite runtime type must match Sprite layout");
@@ -86,7 +86,7 @@ _Static_assert(offsetof(SpriteRuntime, canRotate) == offsetof(Sprite, canRotate)
 _Static_assert(sizeof(FontRuntime) == sizeof(Font), "Font runtime type must match Font layout");
 _Static_assert(sizeof(ImageRuntime) == sizeof(Image), "Image runtime type must match Image layout");
 _Static_assert(sizeof(ScrollerRuntime) == sizeof(Scroller), "Scroller runtime type must match Scroller layout");
-_Static_assert(sizeof(RawBoneRuntime) == sizeof(RawBone), "RawBone runtime type must match RawBone layout");
+_Static_assert(sizeof(RawPuppetBoneRuntime) == sizeof(RawPuppetBone), "RawPuppetBone runtime type must match RawPuppetBone layout");
 _Static_assert(sizeof(RawPuppetRuntime) == sizeof(RawPuppet), "RawPuppet runtime type must match RawPuppet layout");
 
 static const size_t fonts_count = sizeof(fonts) / sizeof(fonts[0]);
@@ -299,23 +299,23 @@ static const Scroller *copy_scrollers(PsramArena *arena)
     return (const Scroller *)scrollers_copy;
 }
 
-static const RawBoneRuntime *copy_raw_bones_recursive(PsramArena *arena, const RawBone *source, uint8_t count)
+static const RawPuppetBoneRuntime *copy_raw_PuppetBones_recursive(PsramArena *arena, const RawPuppetBone *source, uint8_t count)
 {
     uint8_t i;
-    RawBoneRuntime *bones_copy;
+    RawPuppetBoneRuntime *PuppetBones_copy;
 
     if ((source == NULL) || (count == 0u))
         return NULL;
 
-    bones_copy = (RawBoneRuntime *)psram_alloc(arena, (size_t)count * sizeof(RawBoneRuntime), _Alignof(RawBoneRuntime));
-    if (bones_copy == NULL)
+    PuppetBones_copy = (RawPuppetBoneRuntime *)psram_alloc(arena, (size_t)count * sizeof(RawPuppetBoneRuntime), _Alignof(RawPuppetBoneRuntime));
+    if (PuppetBones_copy == NULL)
         return NULL;
 
     for (i = 0u; i < count; i++)
     {
         const char *label_ptr = source[i].label;
-        const RawBoneRuntime *child_layer1 = NULL;
-        const RawBoneRuntime *child_layer2 = NULL;
+        const RawPuppetBoneRuntime *child_layer1 = NULL;
+        const RawPuppetBoneRuntime *child_layer2 = NULL;
 
         if (label_ptr != NULL)
         {
@@ -326,32 +326,32 @@ static const RawBoneRuntime *copy_raw_bones_recursive(PsramArena *arena, const R
             label_ptr = label_copy;
         }
 
-        if ((source[i].childBonesNumLayer1 > 0u) && (source[i].childBonesLayer1 != NULL))
+        if ((source[i].childPuppetBonesNumLayer1 > 0u) && (source[i].childPuppetBonesLayer1 != NULL))
         {
-            child_layer1 = copy_raw_bones_recursive(arena, source[i].childBonesLayer1, source[i].childBonesNumLayer1);
+            child_layer1 = copy_raw_PuppetBones_recursive(arena, source[i].childPuppetBonesLayer1, source[i].childPuppetBonesNumLayer1);
             if (child_layer1 == NULL)
                 return NULL;
         }
-        if ((source[i].childBonesNumLayer2 > 0u) && (source[i].childBonesLayer2 != NULL))
+        if ((source[i].childPuppetBonesNumLayer2 > 0u) && (source[i].childPuppetBonesLayer2 != NULL))
         {
-            child_layer2 = copy_raw_bones_recursive(arena, source[i].childBonesLayer2, source[i].childBonesNumLayer2);
+            child_layer2 = copy_raw_PuppetBones_recursive(arena, source[i].childPuppetBonesLayer2, source[i].childPuppetBonesNumLayer2);
             if (child_layer2 == NULL)
                 return NULL;
         }
 
-        bones_copy[i].label = label_ptr;
-        bones_copy[i].x = source[i].x;
-        bones_copy[i].y = source[i].y;
-        bones_copy[i].angle = source[i].angle;
-        bones_copy[i].spriteIndex = source[i].spriteIndex;
-        bones_copy[i].baseSpriteAngle = source[i].baseSpriteAngle;
-        bones_copy[i].childBonesLayer1 = child_layer1;
-        bones_copy[i].childBonesNumLayer1 = source[i].childBonesNumLayer1;
-        bones_copy[i].childBonesLayer2 = child_layer2;
-        bones_copy[i].childBonesNumLayer2 = source[i].childBonesNumLayer2;
+        PuppetBones_copy[i].label = label_ptr;
+        PuppetBones_copy[i].x = source[i].x;
+        PuppetBones_copy[i].y = source[i].y;
+        PuppetBones_copy[i].angle = source[i].angle;
+        PuppetBones_copy[i].spriteIndex = source[i].spriteIndex;
+        PuppetBones_copy[i].baseSpriteAngle = source[i].baseSpriteAngle;
+        PuppetBones_copy[i].childPuppetBonesLayer1 = child_layer1;
+        PuppetBones_copy[i].childPuppetBonesNumLayer1 = source[i].childPuppetBonesNumLayer1;
+        PuppetBones_copy[i].childPuppetBonesLayer2 = child_layer2;
+        PuppetBones_copy[i].childPuppetBonesNumLayer2 = source[i].childPuppetBonesNumLayer2;
     }
 
-    return bones_copy;
+    return PuppetBones_copy;
 }
 
 static const RawPuppet *copy_raw_puppets(PsramArena *arena)
@@ -369,7 +369,7 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
     for (i = 0u; i < raw_puppets_count; i++)
     {
         const char *label_ptr = rawPuppets[i].label;
-        const RawBoneRuntime *bones_ptr = NULL;
+        const RawPuppetBoneRuntime *PuppetBones_ptr = NULL;
 
         if (label_ptr != NULL)
         {
@@ -380,10 +380,10 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
             label_ptr = label_copy;
         }
 
-        if ((rawPuppets[i].bonesNum > 0u) && (rawPuppets[i].bones != NULL))
+        if ((rawPuppets[i].puppetBonesNum > 0u) && (rawPuppets[i].puppetBones != NULL))
         {
-            bones_ptr = copy_raw_bones_recursive(arena, rawPuppets[i].bones, rawPuppets[i].bonesNum);
-            if (bones_ptr == NULL)
+            PuppetBones_ptr = copy_raw_PuppetBones_recursive(arena, rawPuppets[i].puppetBones, rawPuppets[i].puppetBonesNum);
+            if (PuppetBones_ptr == NULL)
                 return rawPuppets;
         }
 
@@ -391,8 +391,8 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
         puppets_copy[i].x = rawPuppets[i].x;
         puppets_copy[i].y = rawPuppets[i].y;
         puppets_copy[i].angle = rawPuppets[i].angle;
-        puppets_copy[i].bones = bones_ptr;
-        puppets_copy[i].bonesNum = rawPuppets[i].bonesNum;
+        puppets_copy[i].puppetBones = PuppetBones_ptr;
+        puppets_copy[i].puppetBonesNum = rawPuppets[i].puppetBonesNum;
     }
 
     return (const RawPuppet *)puppets_copy;

@@ -5,9 +5,9 @@
 #include "fpa.h"
 #include <stdlib.h>
 
-static volatile const IStorage *_storage = NULL;
+static const IStorage *_storage = NULL;
 
-void init_mesh_factory(volatile const IStorage *storage)
+void init_mesh_factory(const IStorage *storage)
 {
     _storage=storage;
 }
