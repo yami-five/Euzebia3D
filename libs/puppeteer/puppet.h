@@ -11,22 +11,23 @@
 
 typedef struct
 {
-    const int x;
-    const int y;
-    const int angle;
-    const int startFrameNum;
+    int x;
+    int y;
+    float angle;
+    int startFrameNum;
 } KeyFrame;
 
 typedef struct
 {
-    const KeyFrame* keyFrames;
-    const uint16_t keyFramesNum;
+    KeyFrame* keyFrames;
+    uint16_t keyFramesNum;
 } PuppetBoneAnimTimeline;
 
 typedef struct PuppetBone PuppetBone;
 
 typedef struct PuppetBone
 {
+    char *label;
     int16_t x;
     int16_t y;
     float angle;
@@ -48,6 +49,7 @@ typedef struct
 
 typedef struct
 {
+    char *label;
     int16_t x;
     int16_t y;
     float angle;

@@ -53,6 +53,20 @@ typedef struct
     uint8_t height;
 } ScrollerRuntime;
 
+typedef struct
+{
+    int x;
+    int y;
+    float angle;
+    int startFrameNum;
+} KeyFrameRuntime;
+
+typedef struct
+{
+    const KeyFrameRuntime *keyFrames;
+    uint16_t keyFramesNum;
+} PuppetBoneAnimTimelineRuntime;
+
 typedef struct RawPuppetBoneRuntime RawPuppetBoneRuntime;
 struct RawPuppetBoneRuntime
 {
@@ -70,12 +84,20 @@ struct RawPuppetBoneRuntime
 
 typedef struct
 {
+    const RawPuppetBoneRuntime *rawBone;
+    const PuppetBoneAnimTimelineRuntime *rawAnimation;
+} RawBoneAnimationPairRuntime;
+
+typedef struct
+{
     const char *label;
     int16_t x;
     int16_t y;
     float angle;
     const RawPuppetBoneRuntime *puppetBones;
     uint8_t puppetBonesNum;
+    const RawBoneAnimationPairRuntime *boneAnimationPairs;
+    uint8_t boneAnimationPairsNum;
 } RawPuppetRuntime;
 
 _Static_assert(sizeof(SpriteRuntime) == sizeof(Sprite), "Sprite runtime type must match Sprite layout");
@@ -86,8 +108,23 @@ _Static_assert(offsetof(SpriteRuntime, canRotate) == offsetof(Sprite, canRotate)
 _Static_assert(sizeof(FontRuntime) == sizeof(Font), "Font runtime type must match Font layout");
 _Static_assert(sizeof(ImageRuntime) == sizeof(Image), "Image runtime type must match Image layout");
 _Static_assert(sizeof(ScrollerRuntime) == sizeof(Scroller), "Scroller runtime type must match Scroller layout");
+_Static_assert(sizeof(KeyFrameRuntime) == sizeof(RawFrame), "KeyFrame runtime type must match RawFrame layout");
+_Static_assert(offsetof(KeyFrameRuntime, x) == offsetof(RawFrame, x), "KeyFrame runtime x offset must match");
+_Static_assert(offsetof(KeyFrameRuntime, y) == offsetof(RawFrame, y), "KeyFrame runtime y offset must match");
+_Static_assert(offsetof(KeyFrameRuntime, angle) == offsetof(RawFrame, angle), "KeyFrame runtime angle offset must match");
+_Static_assert(offsetof(KeyFrameRuntime, startFrameNum) == offsetof(RawFrame, startFrameNum), "KeyFrame runtime startFrameNum offset must match");
+_Static_assert(sizeof(PuppetBoneAnimTimelineRuntime) == sizeof(RawAnimation), "PuppetBoneAnimTimeline runtime type must match RawAnimation layout");
+_Static_assert(offsetof(PuppetBoneAnimTimelineRuntime, keyFrames) == offsetof(RawAnimation, frames), "PuppetBoneAnimTimeline runtime keyFrames offset must match");
+_Static_assert(offsetof(PuppetBoneAnimTimelineRuntime, keyFramesNum) == offsetof(RawAnimation, framesNum), "PuppetBoneAnimTimeline runtime keyFramesNum offset must match");
 _Static_assert(sizeof(RawPuppetBoneRuntime) == sizeof(RawPuppetBone), "RawPuppetBone runtime type must match RawPuppetBone layout");
+_Static_assert(sizeof(RawBoneAnimationPairRuntime) == sizeof(RawBoneAnimationPair), "RawBoneAnimationPair runtime type must match RawBoneAnimationPair layout");
+_Static_assert(offsetof(RawBoneAnimationPairRuntime, rawBone) == offsetof(RawBoneAnimationPair, rawBone), "RawBoneAnimationPair runtime rawBone offset must match");
+_Static_assert(offsetof(RawBoneAnimationPairRuntime, rawAnimation) == offsetof(RawBoneAnimationPair, rawAnimation), "RawBoneAnimationPair runtime rawAnimation offset must match");
 _Static_assert(sizeof(RawPuppetRuntime) == sizeof(RawPuppet), "RawPuppet runtime type must match RawPuppet layout");
+_Static_assert(offsetof(RawPuppetRuntime, puppetBones) == offsetof(RawPuppet, puppetBones), "RawPuppet runtime puppetBones offset must match");
+_Static_assert(offsetof(RawPuppetRuntime, puppetBonesNum) == offsetof(RawPuppet, puppetBonesNum), "RawPuppet runtime puppetBonesNum offset must match");
+_Static_assert(offsetof(RawPuppetRuntime, boneAnimationPairs) == offsetof(RawPuppet, boneAnimationPairs), "RawPuppet runtime boneAnimationPairs offset must match");
+_Static_assert(offsetof(RawPuppetRuntime, boneAnimationPairsNum) == offsetof(RawPuppet, boneAnimationPairsNum), "RawPuppet runtime boneAnimationPairsNum offset must match");
 
 static const size_t fonts_count = sizeof(fonts) / sizeof(fonts[0]);
 static const size_t images_count = sizeof(images) / sizeof(images[0]);
@@ -313,18 +350,8 @@ static const RawPuppetBoneRuntime *copy_raw_PuppetBones_recursive(PsramArena *ar
 
     for (i = 0u; i < count; i++)
     {
-        const char *label_ptr = source[i].label;
         const RawPuppetBoneRuntime *child_layer1 = NULL;
         const RawPuppetBoneRuntime *child_layer2 = NULL;
-
-        if (label_ptr != NULL)
-        {
-            size_t label_len = strlen(label_ptr) + 1u;
-            char *label_copy = (char *)psram_copy(arena, label_ptr, label_len, _Alignof(char));
-            if (label_copy == NULL)
-                return NULL;
-            label_ptr = label_copy;
-        }
 
         if ((source[i].childPuppetBonesNumLayer1 > 0u) && (source[i].childPuppetBonesLayer1 != NULL))
         {
@@ -339,7 +366,6 @@ static const RawPuppetBoneRuntime *copy_raw_PuppetBones_recursive(PsramArena *ar
                 return NULL;
         }
 
-        PuppetBones_copy[i].label = label_ptr;
         PuppetBones_copy[i].x = source[i].x;
         PuppetBones_copy[i].y = source[i].y;
         PuppetBones_copy[i].angle = source[i].angle;
@@ -352,6 +378,131 @@ static const RawPuppetBoneRuntime *copy_raw_PuppetBones_recursive(PsramArena *ar
     }
 
     return PuppetBones_copy;
+}
+
+static const RawPuppetBoneRuntime *find_copied_raw_puppet_bone(const RawPuppetBone *source,
+                                                               const RawPuppetBoneRuntime *copy,
+                                                               uint8_t count,
+                                                               const RawPuppetBone *target)
+{
+    uint8_t i;
+
+    if ((source == NULL) || (copy == NULL) || (target == NULL))
+        return NULL;
+
+    for (i = 0u; i < count; i++)
+    {
+        const RawPuppetBoneRuntime *found;
+
+        if (&source[i] == target)
+            return &copy[i];
+
+        found = find_copied_raw_puppet_bone(source[i].childPuppetBonesLayer1,
+                                            copy[i].childPuppetBonesLayer1,
+                                            source[i].childPuppetBonesNumLayer1,
+                                            target);
+        if (found != NULL)
+            return found;
+
+        found = find_copied_raw_puppet_bone(source[i].childPuppetBonesLayer2,
+                                            copy[i].childPuppetBonesLayer2,
+                                            source[i].childPuppetBonesNumLayer2,
+                                            target);
+        if (found != NULL)
+            return found;
+    }
+
+    return NULL;
+}
+
+static const KeyFrameRuntime *copy_key_frames(PsramArena *arena, const RawFrame *source, uint16_t count)
+{
+    uint16_t i;
+    KeyFrameRuntime *frames_copy;
+
+    if ((source == NULL) || (count == 0u))
+        return NULL;
+
+    frames_copy = (KeyFrameRuntime *)psram_alloc(arena, (size_t)count * sizeof(KeyFrameRuntime), _Alignof(KeyFrameRuntime));
+    if (frames_copy == NULL)
+        return NULL;
+
+    for (i = 0u; i < count; i++)
+    {
+        frames_copy[i].x = source[i].x;
+        frames_copy[i].y = source[i].y;
+        frames_copy[i].angle = source[i].angle;
+        frames_copy[i].startFrameNum = source[i].startFrameNum;
+    }
+
+    return frames_copy;
+}
+
+static const PuppetBoneAnimTimelineRuntime *copy_puppet_bone_anim_timeline(PsramArena *arena, const RawAnimation *source)
+{
+    const KeyFrameRuntime *frames_ptr = NULL;
+    PuppetBoneAnimTimelineRuntime *timeline_copy;
+
+    if (source == NULL)
+        return NULL;
+
+    timeline_copy = (PuppetBoneAnimTimelineRuntime *)psram_alloc(arena, sizeof(PuppetBoneAnimTimelineRuntime), _Alignof(PuppetBoneAnimTimelineRuntime));
+    if (timeline_copy == NULL)
+        return NULL;
+
+    if ((source->framesNum > 0u) && (source->frames != NULL))
+    {
+        frames_ptr = copy_key_frames(arena, source->frames, source->framesNum);
+        if (frames_ptr == NULL)
+            return NULL;
+    }
+
+    timeline_copy->keyFrames = frames_ptr;
+    timeline_copy->keyFramesNum = source->framesNum;
+    return timeline_copy;
+}
+
+static const RawBoneAnimationPairRuntime *copy_raw_bone_animation_pairs(PsramArena *arena,
+                                                                        const RawPuppetBone *source_bones,
+                                                                        const RawPuppetBoneRuntime *copied_bones,
+                                                                        uint8_t source_bones_count,
+                                                                        const RawBoneAnimationPair *source,
+                                                                        uint8_t count)
+{
+    uint8_t i;
+    RawBoneAnimationPairRuntime *pairs_copy;
+
+    if ((source == NULL) || (count == 0u))
+        return NULL;
+
+    pairs_copy = (RawBoneAnimationPairRuntime *)psram_alloc(arena, (size_t)count * sizeof(RawBoneAnimationPairRuntime), _Alignof(RawBoneAnimationPairRuntime));
+    if (pairs_copy == NULL)
+        return NULL;
+
+    for (i = 0u; i < count; i++)
+    {
+        const RawPuppetBoneRuntime *raw_bone = NULL;
+        const PuppetBoneAnimTimelineRuntime *raw_animation = NULL;
+
+        if (source[i].rawBone != NULL)
+        {
+            raw_bone = find_copied_raw_puppet_bone(source_bones, copied_bones, source_bones_count, source[i].rawBone);
+            if (raw_bone == NULL)
+                return NULL;
+        }
+
+        if (source[i].rawAnimation != NULL)
+        {
+            raw_animation = copy_puppet_bone_anim_timeline(arena, source[i].rawAnimation);
+            if (raw_animation == NULL)
+                return NULL;
+        }
+
+        pairs_copy[i].rawBone = raw_bone;
+        pairs_copy[i].rawAnimation = raw_animation;
+    }
+
+    return pairs_copy;
 }
 
 static const RawPuppet *copy_raw_puppets(PsramArena *arena)
@@ -368,17 +519,8 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
 
     for (i = 0u; i < raw_puppets_count; i++)
     {
-        const char *label_ptr = rawPuppets[i].label;
         const RawPuppetBoneRuntime *PuppetBones_ptr = NULL;
-
-        if (label_ptr != NULL)
-        {
-            size_t label_len = strlen(label_ptr) + 1u;
-            char *label_copy = (char *)psram_copy(arena, label_ptr, label_len, _Alignof(char));
-            if (label_copy == NULL)
-                return rawPuppets;
-            label_ptr = label_copy;
-        }
+        const RawBoneAnimationPairRuntime *bone_animation_pairs_ptr = NULL;
 
         if ((rawPuppets[i].puppetBonesNum > 0u) && (rawPuppets[i].puppetBones != NULL))
         {
@@ -386,13 +528,25 @@ static const RawPuppet *copy_raw_puppets(PsramArena *arena)
             if (PuppetBones_ptr == NULL)
                 return rawPuppets;
         }
+        if ((rawPuppets[i].boneAnimationPairsNum > 0u) && (rawPuppets[i].boneAnimationPairs != NULL))
+        {
+            bone_animation_pairs_ptr = copy_raw_bone_animation_pairs(arena,
+                                                                     rawPuppets[i].puppetBones,
+                                                                     PuppetBones_ptr,
+                                                                     rawPuppets[i].puppetBonesNum,
+                                                                     rawPuppets[i].boneAnimationPairs,
+                                                                     rawPuppets[i].boneAnimationPairsNum);
+            if (bone_animation_pairs_ptr == NULL)
+                return rawPuppets;
+        }
 
-        puppets_copy[i].label = label_ptr;
         puppets_copy[i].x = rawPuppets[i].x;
         puppets_copy[i].y = rawPuppets[i].y;
         puppets_copy[i].angle = rawPuppets[i].angle;
         puppets_copy[i].puppetBones = PuppetBones_ptr;
         puppets_copy[i].puppetBonesNum = rawPuppets[i].puppetBonesNum;
+        puppets_copy[i].boneAnimationPairs = bone_animation_pairs_ptr;
+        puppets_copy[i].boneAnimationPairsNum = rawPuppets[i].boneAnimationPairsNum;
     }
 
     return (const RawPuppet *)puppets_copy;

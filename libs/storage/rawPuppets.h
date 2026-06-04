@@ -18,7 +18,7 @@ typedef struct
 
 typedef struct
 {
-    const RawFrame* frames;
+    const RawFrame *frames;
     const uint16_t framesNum;
 } RawAnimation;
 
@@ -40,12 +40,20 @@ typedef struct RawPuppetBone
 
 typedef struct
 {
-    const char* label;
+    const RawPuppetBone *rawBone;
+    const RawAnimation *rawAnimation;
+} RawBoneAnimationPair;
+
+typedef struct
+{
+    const char *label;
     const int16_t x;
     const int16_t y;
     const float angle;
     const RawPuppetBone *puppetBones;
     const uint8_t puppetBonesNum;
+    const RawBoneAnimationPair *boneAnimationPairs;
+    const uint8_t boneAnimationPairsNum;
 } RawPuppet;
 
 #endif

@@ -17,6 +17,7 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones, const uint8_
     PuppetBone *newPuppetBones = (PuppetBone *)malloc(sizeof(PuppetBone) * puppetBonesNum);
     for (uint8_t i = 0; i < puppetBonesNum; i++)
     {
+        newPuppetBones[i].label = rawPuppetBones[i].label;
         newPuppetBones[i].x = rawPuppetBones[i].x;
         newPuppetBones[i].y = rawPuppetBones[i].y;
         newPuppetBones[i].angle = rawPuppetBones[i].angle;
@@ -34,6 +35,33 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones, const uint8_
     return newPuppetBones;
 }
 
+PuppetBoneTimelinePair *create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet, const PuppetBone *puppetBones)
+{
+    PuppetBoneTimelinePair *newPairs = (PuppetBoneTimelinePair *)malloc(sizeof(PuppetBoneTimelinePair)*rawPuppet->boneAnimationPairsNum);
+    for (uint8_t i = 0; i < rawPuppet->boneAnimationPairsNum; i++)
+    {
+        for(uint8_t j = 0; j < rawPuppet->puppetBonesNum; j++)
+        {
+            if(rawPuppet->boneAnimationPairs[i].rawBone->label==puppetBones[j].label)
+            {
+                PuppetBoneAnimTimeline *newTimeline = (PuppetBoneAnimTimeline *)malloc(sizeof(PuppetBoneAnimTimeline));
+                newTimeline->keyFramesNum = rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum;
+                for(uint8_t k = 0; k < rawPuppet->boneAnimationPairs[i].rawAnimation->framesNum; k++)
+                {
+                    newTimeline->keyFrames[k].x=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].x;
+                    newTimeline->keyFrames[k].y=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].y;
+                    newTimeline->keyFrames[k].angle=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].angle;
+                    newTimeline->keyFrames[k].startFrameNum=rawPuppet->boneAnimationPairs[i].rawAnimation->frames[k].startFrameNum;
+                }
+                newPairs[i].boneTimeline=newTimeline;
+                newPairs[i].bone=&puppetBones[j];
+                break;
+            }
+        }
+    }
+    return newPairs;
+}
+
 Puppet *create(uint8_t puppetIndex)
 {
     Puppet *newPuppet = (Puppet *)malloc(sizeof(Puppet));
@@ -42,6 +70,7 @@ Puppet *create(uint8_t puppetIndex)
     newPuppet->y = rawPuppet->y;
     newPuppet->angle = rawPuppet->angle;
     newPuppet->puppetBonesNum = rawPuppet->puppetBonesNum;
+    newPuppet->boneTimelinePairsNum = rawPuppet->boneAnimationPairsNum;
     int32_t angleFixed = float_to_fixed(newPuppet->angle);
     int16_t sin = fast_sin(angleFixed);
     int16_t cos = fast_cos(angleFixed);
@@ -56,6 +85,8 @@ Puppet *create(uint8_t puppetIndex)
     memcpy(newPuppet->worldMatrix,newPuppet->localMatrix,sizeof(newPuppet->localMatrix));
     if (rawPuppet->puppetBonesNum != 0)
         newPuppet->puppetBones = create_PuppetBones(rawPuppet->puppetBones, rawPuppet->puppetBonesNum, newPuppet->worldMatrix);
+    if (rawPuppet->boneAnimationPairsNum!=0)
+        newPuppet->boneTimelinePairs = create_PuppetBoneTimelinePair(rawPuppet, newPuppet->puppetBones);
     return newPuppet;
 }
 
