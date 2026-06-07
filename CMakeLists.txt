@@ -59,6 +59,7 @@ if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
     if(EUZEBIA3D_BUILD_APP)
         # Add executable. Default name is the project name, version 0.1
         add_executable(Euzebia3D Euzebia3D.c)
+        target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_PLATFORM_PICO=1)
 
         pico_set_program_name(Euzebia3D "Euzebia3D")
         pico_set_program_version(Euzebia3D "0.1")
@@ -96,9 +97,9 @@ if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
 elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     project(Euzebia3D C)
 
-    set(EUZEBIA3D_WINDOWS_MAIN "${CMAKE_CURRENT_LIST_DIR}/main_windows.c")
-    if(NOT EXISTS "${EUZEBIA3D_WINDOWS_MAIN}")
-        message(FATAL_ERROR "Missing Windows main file in ${EUZEBIA3D_WINDOWS_MAIN}")
+    set(EUZEBIA3D_APP_MAIN "${CMAKE_CURRENT_LIST_DIR}/Euzebia3D.c")
+    if(NOT EXISTS "${EUZEBIA3D_APP_MAIN}")
+        message(FATAL_ERROR "Missing app main file in ${EUZEBIA3D_APP_MAIN}")
     endif()
     if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/libs/CMakeLists.txt")
         message(FATAL_ERROR "Missing libraries in ${CMAKE_CURRENT_LIST_DIR}/libs")
@@ -113,7 +114,7 @@ elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/libs" "${CMAKE_CURRENT_BINARY_DIR}/windows_libs")
 
     if(EUZEBIA3D_BUILD_APP)
-        add_executable(Euzebia3D_PC "${EUZEBIA3D_WINDOWS_MAIN}")
+        add_executable(Euzebia3D_PC "${EUZEBIA3D_APP_MAIN}")
         target_include_directories(Euzebia3D_PC PRIVATE
                 "${CMAKE_CURRENT_LIST_DIR}"
                 "${CMAKE_CURRENT_LIST_DIR}/storage"

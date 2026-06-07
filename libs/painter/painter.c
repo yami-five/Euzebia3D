@@ -687,48 +687,6 @@ void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t ang
     }
 }
 
-void draw_bone(Bone *bone, int *parentWorldMatrix)
-{
-    for (uint8_t i = 0; i < bone->childBonesNumLayer2; i++)
-    {
-        draw_bone(&bone->childBonesLayer2[i], bone->worldMatrix);
-    }
-    if (bone->sprite != NULL)
-    {
-        if (bone->sprite->width != bone->sprite->height)
-            return;
-
-        uint8_t spriteWidthHalved = bone->sprite->width >> 1;
-        uint8_t spriteHeightHalved = bone->sprite->height >> 1;
-        int16_t startX = bone->worldMatrix[2] >> SHIFT_FACTOR;
-        int16_t startY = bone->worldMatrix[5] >> SHIFT_FACTOR;
-        int16_t parentX = parentWorldMatrix[2] >> SHIFT_FACTOR;
-        int16_t parentY = parentWorldMatrix[5] >> SHIFT_FACTOR;
-        int32_t angle = 0;
-        if (bone->sprite->canRotate)
-        {
-            angle = fast_atan2(startY - parentY, startX - parentX) + bone->baseSpriteAngle;
-            angle = radian_to_index(angle);
-        }
-        startX += ((parentX - startX) >> 1) - spriteWidthHalved;
-        startY += ((parentY - startY) >> 1) - spriteHeightHalved;
-        draw_sprite(bone->sprite, startX, startY, angle, 1);
-    }
-    // draw_sprite(bone->sprite, x, y, 0.0f);
-    for (uint8_t i = 0; i < bone->childBonesNumLayer1; i++)
-    {
-        draw_bone(&bone->childBonesLayer1[i], bone->worldMatrix);
-    }
-}
-
-void draw_puppet(Puppet *puppet)
-{
-    for (uint8_t i = 0; i < puppet->bonesNum; i++)
-    {
-        draw_bone(&puppet->bones[i], puppet->worldMatrix);
-    }
-}
-
 void draw_background(Image *image)
 {
     if (image == NULL)
@@ -1007,7 +965,7 @@ static IPainter painter = {
     .draw_image = draw_image,
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
-    .draw_puppet = draw_puppet,
+    // .draw_puppet = draw_puppet,
     .draw_background = draw_background,
     .print = print,
     .draw_gradient = draw_gradient,

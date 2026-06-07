@@ -184,31 +184,34 @@ target_link_libraries(
     Euzebia3D_Hardware
     Euzebia3D_Arithmetics
     Euzebia3D_Storage
-    Euzebia3D_PuppetFactory
+    Euzebia3D_Puppeteer
 )
 if(EUZEBIA3D_IS_WINDOWS)
     target_link_libraries(Euzebia3D_Painter PUBLIC SDL3::SDL3)
 endif()
 
 add_library(
-    Euzebia3D_PuppetFactory
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/animation.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppet.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory/puppetFactory.c
+    Euzebia3D_Puppeteer
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppeteer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppetCalc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppetFactory.c
 )
 target_include_directories(
-    Euzebia3D_PuppetFactory
+    Euzebia3D_Puppeteer
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/puppetFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer
 )
 target_link_libraries(
-    Euzebia3D_PuppetFactory
+    Euzebia3D_Puppeteer
     PUBLIC
     Euzebia3D_PicoDeps
     Euzebia3D_Arithmetics
-    Euzebia3D_MeshFactory
     Euzebia3D_Storage
+    Euzebia3D_Painter
 )
+if(NOT EUZEBIA3D_IS_WINDOWS)
+    target_link_libraries(Euzebia3D_Puppeteer PUBLIC hardware_interp)
+endif()
 
 add_library(
     Euzebia3D_Transformations
@@ -272,7 +275,7 @@ target_link_libraries(
     Euzebia3D_LightFactory
     Euzebia3D_MeshFactory
     Euzebia3D_Painter
-    Euzebia3D_PuppetFactory
+    Euzebia3D_Puppeteer
     Euzebia3D_Renderer
     Euzebia3D_Storage
     Euzebia3D_Transformations
@@ -285,7 +288,7 @@ add_library(Euzebia3D_HardwareInterface INTERFACE)
 add_library(Euzebia3D_LightFactoryInterface INTERFACE)
 add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
-add_library(Euzebia3D_PuppetFactoryInterface INTERFACE)
+add_library(Euzebia3D_PuppeteerInterface INTERFACE)
 add_library(Euzebia3D_RendererInterface INTERFACE)
 add_library(Euzebia3D_StorageInterface INTERFACE)
 
@@ -296,6 +299,6 @@ target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)
 target_link_libraries(Euzebia3D_LightFactoryInterface INTERFACE Euzebia3D_LightFactory)
 target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFactory)
 target_link_libraries(Euzebia3D_PainterInterface INTERFACE Euzebia3D_Painter)
-target_link_libraries(Euzebia3D_PuppetFactoryInterface INTERFACE Euzebia3D_PuppetFactory)
+target_link_libraries(Euzebia3D_PuppeteerInterface INTERFACE Euzebia3D_Puppeteer)
 target_link_libraries(Euzebia3D_RendererInterface INTERFACE Euzebia3D_Renderer)
 target_link_libraries(Euzebia3D_StorageInterface INTERFACE Euzebia3D_Storage)

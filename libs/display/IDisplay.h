@@ -6,7 +6,7 @@
 
 typedef struct
 {
-    void (*init_display)(volatile const IHardware* hardware);
+    void (*init_display)(const IHardware* hardware);
 } IDisplay;
 
 #endif

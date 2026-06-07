@@ -1,47 +1,114 @@
+#include <stdint.h>
 #include <stdio.h>
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
 #include "pico/multicore.h"
 #include "pico/time.h"
+#elif defined(EUZEBIA3D_PLATFORM_WINDOWS)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+#else
+#error "Unsupported Euzebia3D platform"
+#endif
 
 #include "ICameraFactory.h"
 #include "IDisplay.h"
-#include "IFileReader.h"
 #include "IHardware.h"
 #include "ILightFactory.h"
 #include "IMeshFactory.h"
 #include "IPainter.h"
 #include "IRenderer.h"
-#include "IPuppetFactory.h"
 #include "IStorage.h"
+#include "IPuppeteer.h"
 
-#include "cameraFactory.h"
-#include "display.h"
-#include "fileReader.h"
-#include "hardware.h"
-#include "lightFactory.h"
-#include "meshFactory.h"
-#include "painter.h"
-#include "renderer.h"
-#include "mesh.h"
 #include "camera.h"
-#include "puppetFactory.h"
-#include "puppet.h"
+#include "cameraFactory.h"
+#include "lightFactory.h"
+#include "mesh.h"
+#include "meshFactory.h"
+#include "renderer.h"
 #include "storage.h"
+#include "puppet.h"
+#include "puppeteer.h"
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+#include "display.h"
+#include "hardware.h"
+#endif
+
+const IPainter *get_painter(void);
 
 static const IHardware *hardware_core;
 static const IDisplay *display;
 static const IPainter *painter;
-static const IFileReader *fileReader;
 static const IRenderer *renderer;
 static const IMeshFactory *meshFactory;
 static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
-static const IPuppetFactory *puppetFactory;
 static const IStorage *storage;
+static const IPuppeteer *puppeteer;
 
-void core1_main();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+#define EUZEBIA3D_WINDOWS_TARGET_FPS 24u
 
-int main()
+static int require_pointer(const void *pointer, const char *name)
 {
+    if (pointer != NULL) {
+        return 1;
+    }
+
+    SDL_Log("%s failed", name);
+    return 0;
+}
+
+static int process_window_events(void)
+{
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_EVENT_QUIT) {
+            return 0;
+        }
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static void cap_window_frame_rate(uint64_t frame_begin_ticks)
+{
+    uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+    if (performance_frequency == 0u || EUZEBIA3D_WINDOWS_TARGET_FPS == 0u) {
+        return;
+    }
+
+    uint64_t target_frame_ticks = performance_frequency / EUZEBIA3D_WINDOWS_TARGET_FPS;
+    uint64_t elapsed_ticks = SDL_GetPerformanceCounter() - frame_begin_ticks;
+    if (elapsed_ticks >= target_frame_ticks) {
+        return;
+    }
+
+    uint64_t remaining_ticks = target_frame_ticks - elapsed_ticks;
+    uint64_t remaining_ms = (remaining_ticks * 1000u) / performance_frequency;
+    if (remaining_ms > 0u) {
+        SDL_Delay((uint32_t)remaining_ms);
+    }
+}
+#endif
+
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+int main(int argc, char **argv)
+#else
+int main(void)
+#endif
+{
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    (void)argc;
+    (void)argv;
+#endif
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
     set_sys_clock_khz(300000, true);
 
     hardware_core = get_hardware();
@@ -49,17 +116,42 @@ int main()
 
     display = get_display();
     display->init_display(hardware_core);
+#endif
 
     storage = get_storage();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(storage, "get_storage")) {
+        return 1;
+    }
+#endif
 
     painter = get_painter();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(painter, "get_painter")) {
+        return 1;
+    }
+#endif
     painter->init_painter(display, hardware_core, storage);
 
+    puppeteer = get_puppeteer();
+    puppeteer->init_puppeteer(storage, painter);
+    Puppet *pogodynka = puppeteer->create_puppet(0);
+
     renderer = get_renderer();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(renderer, "get_renderer")) {
+        return 1;
+    }
+#endif
     renderer->init_renderer(hardware_core, painter);
     renderer->set_scale(1);
 
     meshFactory = get_meshFactory();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(meshFactory, "get_meshFactory")) {
+        return 1;
+    }
+#endif
     meshFactory->init_mesh_factory(storage);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
@@ -71,81 +163,65 @@ int main()
     room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
     lightFactory = get_lightFactory();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(lightFactory, "get_lightFactory")) {
+        return 1;
+    }
+#endif
     PointLight *pointLight = lightFactory->create_point_light(10.0f, 10.0f, 0.0f, 15.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(cameraFactory, "get_cameraFactory")) {
+        return 1;
+    }
+#endif
     Camera *camera = cameraFactory->create_camera(0.0f, 50.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_ROTATE);
 
     painter->clear_buffer(0x1100);
     painter->draw_buffer();
+
     uint32_t t = 0;
-    uint32_t fps_window_frames = 0;
-    uint64_t fps_window_us = 0;
-    char fps_text[40] = "FPS: 0.0  MS: 0.0";
 
-    const uint8_t sprite_size = 16;
-    const Sprite *left_edge = storage->get_sprite(0);
-    const Sprite *right_edge = storage->get_sprite(1);
-    const Sprite *top_edge = storage->get_sprite(2);
-    const Sprite *bottom_edge = storage->get_sprite(3);
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    int running = 1;
+    while (running) {
+        uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
 
-    while (1)
-    {
-        uint64_t frame_begin_us = time_us_64();
-        float qt = t * 0.02f;
-        modify_mesh_transformation(room->transformations, qt, 0.0f, 10.0f, 0.0f, 0);
-        modify_mesh_transformation(mug->transformations, qt, 10.0f, 10.0f, 10.0f, 0);
-        update_camera(camera);
-        modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
-        renderer->clean_scene();
-        renderer->add_model_to_scene(room, camera, pointLight);
-        renderer->add_model_to_scene(mug, camera, pointLight);
-        renderer->render_scene(pointLight);
-        // painter->apply_post_process_effect(0);
+        running = process_window_events();
 
-        // painter->draw_sprite(left_edge,0,120-(sprite_size>>1),0,1);
-        // painter->draw_sprite(right_edge,320-sprite_size,120-(sprite_size>>1),0,1);
-        // painter->draw_sprite(top_edge,160-(sprite_size>>1),0,0,1);
-        // painter->draw_sprite(bottom_edge,160-(sprite_size>>1),240-sprite_size,0,1);
-
-        painter->print(fps_text, 4, 220, 1);
-
-        uint64_t frame_end_us = time_us_64();
-        uint64_t frame_time_us = frame_end_us - frame_begin_us;
-        fps_window_frames++;
-        fps_window_us += frame_time_us;
-
-        if (fps_window_us >= 500000ull)
-        {
-            uint32_t avg_frame_us = (uint32_t)((fps_window_us + (fps_window_frames >> 1)) / fps_window_frames);
-            uint32_t fps_x10 = 0;
-            uint32_t ms_x10 = 0;
-
-            if (avg_frame_us > 0u)
-            {
-                fps_x10 = (uint32_t)((10000000ull + ((uint64_t)avg_frame_us >> 1)) / (uint64_t)avg_frame_us);
-                ms_x10 = (uint32_t)(((uint64_t)avg_frame_us + 50ull) / 100ull);
-            }
-
-            snprintf(
-                fps_text,
-                sizeof(fps_text),
-                "FPS: %lu.%lu  MS: %lu.%lu",
-                (unsigned long)(fps_x10 / 10u),
-                (unsigned long)(fps_x10 % 10u),
-                (unsigned long)(ms_x10 / 10u),
-                (unsigned long)(ms_x10 % 10u)
-            );
-
-            fps_window_frames = 0;
-            fps_window_us = 0;
-        }
+        float qt = t * 0.002f;
+        //modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
+        //modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
+        //update_camera(camera);
+        //modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
+        //renderer->clean_scene();
+        //renderer->add_model_to_scene(room, camera, pointLight);
+        //renderer->add_model_to_scene(mug, camera, pointLight);
+        //renderer->render_scene(pointLight);
+        puppeteer->perform(pogodynka, t);
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
-        // sleep_ms(2000);
-        // painter->clear_buffer(0x11);
+
+        cap_window_frame_rate(frame_begin_ticks);
     }
-    // multicore_launch_core1(core1_main);
+
+    SDL_Quit();
+    return 0;
+#else
+    while (1) {
+        uint64_t frame_begin_us = time_us_64();
+        (void)frame_begin_us;
+
+        puppeteer->perform(pogodynka, t);
+
+        painter->draw_buffer();
+        t++;
+        painter->clear_buffer(10);
+    }
+
+    return 0;
+#endif
 }

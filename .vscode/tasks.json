@@ -31,7 +31,7 @@
                 "Configure Project (PSRAM ON)"
             ],
             "dependsOrder": "sequence",
-            "command": "${userHome}/.pico-sdk/ninja/v1.12.1/ninja",
+            "command": "${userHome}/.pico-sdk/ninja/v1.13.2/ninja",
             "args": ["-C", "${workspaceFolder}/build"],
             "group": "build",
             "presentation": {
@@ -40,7 +40,7 @@
             },
             "problemMatcher": "$gcc",
             "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/ninja/v1.12.1/ninja.exe"
+                "command": "${env:USERPROFILE}/.pico-sdk/ninja/v1.13.2/ninja.exe"
             }
         },
         {
