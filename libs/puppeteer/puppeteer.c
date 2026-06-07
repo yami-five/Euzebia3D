@@ -82,7 +82,7 @@ void perform(Puppet *puppet, uint32_t t)
     for (uint8_t i = 0; i < puppet->boneTimelinePairsNum; i++)
     {
         PuppetBoneTimelinePair pair = puppet->boneTimelinePairs[i];
-        if (pair.bone == NULL || pair.boneTimeline == NULL || pair.boneTimeline->keyFrames == NULL || pair.boneTimeline->keyFramesNum < 2)
+        if (pair.bone == NULL || pair.boneTimeline == NULL || pair.boneTimeline->keyFrames == NULL)
             continue;
 
         if (
