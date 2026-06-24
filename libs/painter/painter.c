@@ -18,6 +18,14 @@
 #define DISPLAY_HEIGHT 240
 #endif
 
+#ifndef WIDTH_HALF
+#define WIDTH_HALF 160
+#endif
+
+#ifndef HEIGHT_HALF
+#define HEIGHT_HALF 120
+#endif
+
 #ifndef BUFFER_SIZE_HALF
 #define BUFFER_SIZE_HALF ((uint32_t)DISPLAY_WIDTH * (uint32_t)DISPLAY_HEIGHT)
 #endif
@@ -956,6 +964,40 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
     free(lineBuffer);
 }
 
+
+
+void draw_plasma(uint16_t *colors, uint8_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD)
+{
+    int phase1 = (t << facA) % TABLE_SIZE;
+    int phase2 = (t << facB) % TABLE_SIZE;
+    int phase3 = (t << facC) % TABLE_SIZE;
+    int phase4 = (t << facD) % TABLE_SIZE;
+
+    int step_x    = TABLE_SIZE >> facA;
+    int step_y    = TABLE_SIZE >> facB;
+    int step_diag = TABLE_SIZE >> facC;
+    int step_dist = TABLE_SIZE >> facD;
+
+    uint16_t span[DISPLAY_WIDTH];
+    for (int16_t x = 0; x < DISPLAY_HEIGHT; x++)
+    {
+        int32_t step1 = fast_sin(x * step_x + phase1) << 7;
+        for (int16_t y = 0; y < DISPLAY_WIDTH; y++)
+        {
+            int dist = fast_sqrt((x - HEIGHT_HALF) * (x - HEIGHT_HALF) + (y - WIDTH_HALF) * (y- WIDTH_HALF));
+
+            int32_t c = 0;
+            c += step1;
+            c += fast_sin(y * step_y + phase2)<<7;
+            c += fast_sin((x + y) * step_diag + phase3) << 7;
+            c += fast_sin(dist * step_dist + phase4);
+            c >>= 4;
+            span[y] = colors[((c>>SHIFT_FACTOR) + t) % colorsNum];
+        }
+        draw_span(0, x, span, DISPLAY_WIDTH);
+    }
+}
+
 static IPainter painter = {
     .init_painter = init_painter,
     .draw_buffer = draw_buffer,
@@ -965,7 +1007,6 @@ static IPainter painter = {
     .draw_image = draw_image,
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
-    // .draw_puppet = draw_puppet,
     .draw_background = draw_background,
     .print = print,
     .draw_gradient = draw_gradient,
@@ -973,6 +1014,7 @@ static IPainter painter = {
     .fade_fullscreen = fade_fullscreen,
     .draw_scroller = draw_scroller,
     .fade = fade,
+    .draw_plasma = draw_plasma,
 };
 
 const IPainter *get_painter(void)

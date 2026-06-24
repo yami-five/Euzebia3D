@@ -53,7 +53,8 @@ static const IPuppeteer *puppeteer;
 
 static int require_pointer(const void *pointer, const char *name)
 {
-    if (pointer != NULL) {
+    if (pointer != NULL)
+    {
         return 1;
     }
 
@@ -64,11 +65,14 @@ static int require_pointer(const void *pointer, const char *name)
 static int process_window_events(void)
 {
     SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_EVENT_QUIT)
+        {
             return 0;
         }
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
+        {
             return 0;
         }
     }
@@ -79,19 +83,22 @@ static int process_window_events(void)
 static void cap_window_frame_rate(uint64_t frame_begin_ticks)
 {
     uint64_t performance_frequency = SDL_GetPerformanceFrequency();
-    if (performance_frequency == 0u || EUZEBIA3D_WINDOWS_TARGET_FPS == 0u) {
+    if (performance_frequency == 0u || EUZEBIA3D_WINDOWS_TARGET_FPS == 0u)
+    {
         return;
     }
 
     uint64_t target_frame_ticks = performance_frequency / EUZEBIA3D_WINDOWS_TARGET_FPS;
     uint64_t elapsed_ticks = SDL_GetPerformanceCounter() - frame_begin_ticks;
-    if (elapsed_ticks >= target_frame_ticks) {
+    if (elapsed_ticks >= target_frame_ticks)
+    {
         return;
     }
 
     uint64_t remaining_ticks = target_frame_ticks - elapsed_ticks;
     uint64_t remaining_ms = (remaining_ticks * 1000u) / performance_frequency;
-    if (remaining_ms > 0u) {
+    if (remaining_ms > 0u)
+    {
         SDL_Delay((uint32_t)remaining_ms);
     }
 }
@@ -120,14 +127,16 @@ int main(void)
 
     storage = get_storage();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(storage, "get_storage")) {
+    if (!require_pointer(storage, "get_storage"))
+    {
         return 1;
     }
 #endif
 
     painter = get_painter();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(painter, "get_painter")) {
+    if (!require_pointer(painter, "get_painter"))
+    {
         return 1;
     }
 #endif
@@ -139,7 +148,8 @@ int main(void)
 
     renderer = get_renderer();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(renderer, "get_renderer")) {
+    if (!require_pointer(renderer, "get_renderer"))
+    {
         return 1;
     }
 #endif
@@ -148,7 +158,8 @@ int main(void)
 
     meshFactory = get_meshFactory();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(meshFactory, "get_meshFactory")) {
+    if (!require_pointer(meshFactory, "get_meshFactory"))
+    {
         return 1;
     }
 #endif
@@ -164,7 +175,8 @@ int main(void)
 
     lightFactory = get_lightFactory();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(lightFactory, "get_lightFactory")) {
+    if (!require_pointer(lightFactory, "get_lightFactory"))
+    {
         return 1;
     }
 #endif
@@ -172,7 +184,8 @@ int main(void)
 
     cameraFactory = get_cameraFactory();
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(cameraFactory, "get_cameraFactory")) {
+    if (!require_pointer(cameraFactory, "get_cameraFactory"))
+    {
         return 1;
     }
 #endif
@@ -184,23 +197,42 @@ int main(void)
 
     uint32_t t = 0;
 
+    uint16_t plasmaColors[15] = {
+        0x1be6,
+        0x2427,
+        0x3447,
+        0x4488,
+        0x54c8,
+        0x5d09,
+        0x6d49,
+        0x7d8a,
+        0x6d49,
+        0x5d09,
+        0x54c8,
+        0x4488,
+        0x3447,
+        0x2427,
+        0x1be6,
+    };
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int running = 1;
-    while (running) {
+    while (running)
+    {
         uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
 
         running = process_window_events();
 
         float qt = t * 0.002f;
-        //modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
-        //modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
-        //update_camera(camera);
-        //modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
-        //renderer->clean_scene();
-        //renderer->add_model_to_scene(room, camera, pointLight);
-        //renderer->add_model_to_scene(mug, camera, pointLight);
-        //renderer->render_scene(pointLight);
-        puppeteer->perform(pogodynka, t);
+        // modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
+        // modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
+        // update_camera(camera);
+        // modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
+        // renderer->clean_scene();
+        // renderer->add_model_to_scene(room, camera, pointLight);
+        // renderer->add_model_to_scene(mug, camera, pointLight);
+        // renderer->render_scene(pointLight);
+        //  puppeteer->perform(pogodynka, t);
+        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7);
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
@@ -211,11 +243,13 @@ int main(void)
     SDL_Quit();
     return 0;
 #else
-    while (1) {
+    while (1)
+    {
         uint64_t frame_begin_us = time_us_64();
         (void)frame_begin_us;
 
-        puppeteer->perform(pogodynka, t);
+        // puppeteer->perform(pogodynka, t);
+        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7);
 
         painter->draw_buffer();
         t++;

@@ -65,9 +65,18 @@ void draw_puppet(Puppet *puppet)
     }
 }
 
-static int32_t anim_lerp_i32(int32_t a, int32_t b, uint8_t alpha)
+static int32_t anim_lerp_i32(int32_t a, int32_t b, int32_t alpha)
 {
-    return a + (((b - a) * alpha) >> 8);
+    return a + (int32_t)(((int64_t)(b - a) * alpha) >> SHIFT_FACTOR);
+}
+
+static int32_t anim_sine_alpha(uint32_t frameInSpan, uint32_t span)
+{
+    if (span == 0)
+        return SCALE_FACTOR;
+
+    int32_t angle = (int32_t)(((int64_t)PI * frameInSpan) / ((int64_t)span * 2));
+    return fast_sin(radian_to_index(angle));
 }
 
 void perform(Puppet *puppet, uint32_t t)
@@ -102,7 +111,7 @@ void perform(Puppet *puppet, uint32_t t)
                 if (span > 0)
                 {
                     uint32_t frameInSpan = localAnimFrame - keyFrame->startFrameNum;
-                    uint8_t alpha = (uint8_t)((frameInSpan << 8) / span);
+                    int32_t alpha = anim_sine_alpha(frameInSpan, span);
 
                     pair.bone->x = (int16_t)anim_lerp_i32(keyFrame->x, nextKeyFrame->x, alpha);
                     pair.bone->y = (int16_t)anim_lerp_i32(keyFrame->y, nextKeyFrame->y, alpha);
