@@ -964,37 +964,50 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
     free(lineBuffer);
 }
 
-
-
-void draw_plasma(uint16_t *colors, uint8_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD)
+void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle)
 {
+    if (colors == NULL || colorsNum == 0)
+        return;
+
+    if (rectangle == NULL)
+        return;
+
+    if ((rectangle->x+rectangle->height)>=DISPLAY_HEIGHT)
+        rectangle->height-=rectangle->x;
+
+    if ((rectangle->y+rectangle->width)>=DISPLAY_WIDTH)
+        rectangle->width-=rectangle->y;    
+
     int phase1 = (t << facA) % TABLE_SIZE;
     int phase2 = (t << facB) % TABLE_SIZE;
     int phase3 = (t << facC) % TABLE_SIZE;
     int phase4 = (t << facD) % TABLE_SIZE;
 
-    int step_x    = TABLE_SIZE >> facA;
-    int step_y    = TABLE_SIZE >> facB;
+    int step_x = TABLE_SIZE >> facA;
+    int step_y = TABLE_SIZE >> facB;
     int step_diag = TABLE_SIZE >> facC;
     int step_dist = TABLE_SIZE >> facD;
 
     uint16_t span[DISPLAY_WIDTH];
-    for (int16_t x = 0; x < DISPLAY_HEIGHT; x++)
+    uint16_t recHeightHalf = rectangle->height>>1;
+    uint16_t recWidthHalf = rectangle->width>>1;
+
+    for (int16_t x = 0; x < rectangle->height; x++)
     {
         int32_t step1 = fast_sin(x * step_x + phase1) << 7;
-        for (int16_t y = 0; y < DISPLAY_WIDTH; y++)
+        for (int16_t y = 0; y < rectangle->width; y++)
         {
-            int dist = fast_sqrt((x - HEIGHT_HALF) * (x - HEIGHT_HALF) + (y - WIDTH_HALF) * (y- WIDTH_HALF));
+            int dist = fast_sqrt((x - recHeightHalf) * (x - recHeightHalf) + (y - recWidthHalf) * (y - recWidthHalf));
 
             int32_t c = 0;
             c += step1;
-            c += fast_sin(y * step_y + phase2)<<7;
+            c += fast_sin(y * step_y + phase2) << 7;
             c += fast_sin((x + y) * step_diag + phase3) << 7;
             c += fast_sin(dist * step_dist + phase4);
             c >>= 4;
-            span[y] = colors[((c>>SHIFT_FACTOR) + t) % colorsNum];
+            span[y] = colors[((c >> SHIFT_FACTOR) + t) % colorsNum];
         }
-        draw_span(0, x, span, DISPLAY_WIDTH);
+        draw_span(rectangle->y, rectangle->x+x, span, rectangle->width);
     }
 }
 
