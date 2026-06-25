@@ -214,6 +214,12 @@ int main(void)
         0x2427,
         0x1be6,
     };
+    Rectangle plasmaRect={
+        .x=0,
+        .y=0,
+        .height=150,
+        .width=150,
+    };
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int running = 1;
     while (running)
@@ -232,7 +238,7 @@ int main(void)
         // renderer->add_model_to_scene(mug, camera, pointLight);
         // renderer->render_scene(pointLight);
         //  puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7);
+        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7, &plasmaRect);
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
@@ -249,7 +255,7 @@ int main(void)
         (void)frame_begin_us;
 
         // puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7);
+        painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7, &plasmaRect);
 
         painter->draw_buffer();
         t++;

@@ -11,9 +11,9 @@
 #include "../storage/gfx.h"
 
 #define WIDTH_DOUBLED 640
-#define HEIGHT_DOUBLED 480 
+#define HEIGHT_DOUBLED 480
 #define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 240 
+#define DISPLAY_HEIGHT 240
 #define WIDTH_HALF 160
 #define HEIGHT_HALF 120
 #define BUFFER_SIZE 153600
