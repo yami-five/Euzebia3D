@@ -16,6 +16,8 @@
 #define EUZEBIA3D_PSRAM_RUNTIME_ENABLED 0
 #endif
 
+#define STORAGE_FONT_GLYPHS_COUNT 93u
+
 // Single translation unit for all storage implementation.
 #include "fonts.c"
 #include "gfx.c"
@@ -34,8 +36,8 @@ typedef struct
 
 typedef struct
 {
-    const Sprite *sprite;
-    uint8_t width;
+    const uint16_t *characters;
+    uint8_t size;
 } FontRuntime;
 
 typedef struct
@@ -106,6 +108,8 @@ _Static_assert(offsetof(SpriteRuntime, height) == offsetof(Sprite, height), "Spr
 _Static_assert(offsetof(SpriteRuntime, width) == offsetof(Sprite, width), "Sprite runtime width offset must match");
 _Static_assert(offsetof(SpriteRuntime, canRotate) == offsetof(Sprite, canRotate), "Sprite runtime canRotate offset must match");
 _Static_assert(sizeof(FontRuntime) == sizeof(Font), "Font runtime type must match Font layout");
+_Static_assert(offsetof(FontRuntime, characters) == offsetof(Font, characters), "Font runtime characters offset must match");
+_Static_assert(offsetof(FontRuntime, size) == offsetof(Font, size), "Font runtime size offset must match");
 _Static_assert(sizeof(ImageRuntime) == sizeof(Image), "Image runtime type must match Image layout");
 _Static_assert(sizeof(ScrollerRuntime) == sizeof(Scroller), "Scroller runtime type must match Scroller layout");
 _Static_assert(sizeof(KeyFrameRuntime) == sizeof(RawFrame), "KeyFrame runtime type must match RawFrame layout");
@@ -133,7 +137,6 @@ static const size_t effects_count = sizeof(effects) / sizeof(effects[0]);
 static const size_t raw_puppets_count = sizeof(rawPuppets) / sizeof(rawPuppets[0]);
 static const size_t scrollers_count = sizeof(scrollers) / sizeof(scrollers[0]);
 static const size_t sprite_sheet_count = sizeof(spriteSheet) / sizeof(spriteSheet[0]);
-static const size_t sprite_fonts_count = sizeof(spritesFonts) / sizeof(spritesFonts[0]);
 
 static const Font *fonts_runtime = fonts;
 static const Image *images_runtime = images;
@@ -240,7 +243,7 @@ static const Sprite *copy_sprites_with_pixels(PsramArena *arena, const Sprite *s
     return (const Sprite *)sprites_copy;
 }
 
-static const Font *copy_fonts_with_sprites(PsramArena *arena, const Sprite *font_sprites)
+static const Font *copy_fonts(PsramArena *arena)
 {
     size_t i;
     FontRuntime *fonts_copy;
@@ -254,17 +257,19 @@ static const Font *copy_fonts_with_sprites(PsramArena *arena, const Sprite *font
 
     for (i = 0u; i < fonts_count; i++)
     {
-        const Sprite *sprite_ref = fonts[i].sprite;
+        const uint16_t *characters = fonts[i].characters;
+        size_t characters_count = (size_t)fonts[i].size * (size_t)fonts[i].size * STORAGE_FONT_GLYPHS_COUNT;
 
-        if (sprite_ref != NULL)
+        if ((characters != NULL) && (characters_count > 0u))
         {
-            ptrdiff_t sprite_index = sprite_ref - spritesFonts;
-            if ((sprite_index >= 0) && ((size_t)sprite_index < sprite_fonts_count))
-                sprite_ref = &font_sprites[sprite_index];
+            const uint16_t *characters_copy = copy_u16_elements(arena, characters, characters_count);
+            if (characters_copy == NULL)
+                return fonts;
+            characters = characters_copy;
         }
 
-        fonts_copy[i].width = fonts[i].width;
-        fonts_copy[i].sprite = sprite_ref;
+        fonts_copy[i].characters = characters;
+        fonts_copy[i].size = fonts[i].size;
     }
 
     return (const Font *)fonts_copy;
@@ -603,15 +608,12 @@ static void copy_lookup_tables(PsramArena *arena)
 static void init_optional_psram_assets(void)
 {
     PsramArena arena;
-    const Sprite *font_sprites_psram;
 
     if (!init_psram_arena(&arena))
         return;
 
-    font_sprites_psram = copy_sprites_with_pixels(&arena, spritesFonts, sprite_fonts_count);
-    if (font_sprites_psram != spritesFonts)
     {
-        const Font *fonts_psram = copy_fonts_with_sprites(&arena, font_sprites_psram);
+        const Font *fonts_psram = copy_fonts(&arena);
         if (fonts_psram != fonts)
             fonts_runtime = fonts_psram;
     }
@@ -662,7 +664,7 @@ static void ensure_storage_initialized(void)
 #endif
 }
 
-const Font *get_font_by_index(uint8_t index)
+const Font *get_font(uint8_t index)
 {
     return &fonts_runtime[index];
 }
@@ -710,7 +712,7 @@ const Sprite *get_sprite(uint8_t sprite_index)
 }
 
 static IStorage storage = {
-    .get_font_by_index = get_font_by_index,
+    .get_font = get_font,
     .get_image = get_image,
     .get_model = get_model,
     .get_effect_table = get_effect_table,

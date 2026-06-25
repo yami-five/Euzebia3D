@@ -65,7 +65,7 @@ meshFactory->init_mesh_factory(storage);
 ```
 
 `IStorage` API includes:
-- `get_font_by_index(uint8_t index)`
+- `get_font(uint8_t index)`
 - `get_image(uint8_t image_index)`
 - `get_model(uint8_t model_index)`
 - `get_effect_table(uint8_t effect_index)`

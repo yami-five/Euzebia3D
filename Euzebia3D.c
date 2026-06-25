@@ -239,6 +239,7 @@ int main(void)
         // renderer->render_scene(pointLight);
         //  puppeteer->perform(pogodynka, t);
         painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7, &plasmaRect);
+        painter->print("test", 0, 20, 0, 0xffff);
         painter->draw_buffer();
         t++;
         painter->clear_buffer(10);
@@ -256,6 +257,7 @@ int main(void)
 
         // puppeteer->perform(pogodynka, t);
         painter->draw_plasma(plasmaColors, 15, t, 7, 7, 8, 7, &plasmaRect);
+        painter->print("test",0,20,0,0xffff);
 
         painter->draw_buffer();
         t++;

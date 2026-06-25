@@ -22,7 +22,7 @@ def transform_font_atlas(
     image: Image.Image,
     glyph_width: int = DEFAULT_GLYPH_WIDTH,
     glyph_height: int = DEFAULT_GLYPH_HEIGHT,
-    transpose_glyphs: bool = True,
+    transpose_glyphs: bool = False,
 ) -> Image.Image:
     if glyph_width <= 0 or glyph_height <= 0:
         raise ValueError("Glyph width and height must be greater than 0.")
@@ -54,7 +54,7 @@ def convert_font_to_rgb565(
     input_path: Path,
     glyph_width: int = DEFAULT_GLYPH_WIDTH,
     glyph_height: int = DEFAULT_GLYPH_HEIGHT,
-    transpose_glyphs: bool = True,
+    transpose_glyphs: bool = False,
 ) -> tuple[int, int, int, list[int]]:
     with Image.open(input_path) as image:
         converted_image = transform_font_atlas(
@@ -92,7 +92,7 @@ def convert_and_save(
     output_path: Path,
     glyph_width: int = DEFAULT_GLYPH_WIDTH,
     glyph_height: int = DEFAULT_GLYPH_HEIGHT,
-    transpose_glyphs: bool = True,
+    transpose_glyphs: bool = False,
 ) -> tuple[int, int, int, str]:
     img_x, img_y, glyph_count, pixels = convert_font_to_rgb565(
         input_path=input_path,
@@ -172,10 +172,8 @@ def run_gui() -> int:
             output_row.addWidget(self.output_browse_button)
             form_layout.addRow("Output file:", output_row)
 
-            self.transpose_checkbox = QCheckBox(
-                "Transpose each glyph for legacy painter layout"
-            )
-            self.transpose_checkbox.setChecked(True)
+            self.transpose_checkbox = QCheckBox("Transpose each glyph before export")
+            self.transpose_checkbox.setChecked(False)
             root_layout.addWidget(self.transpose_checkbox)
 
             actions_row = QHBoxLayout()
@@ -396,9 +394,9 @@ def parse_args() -> argparse.Namespace:
         help=f"Glyph height in pixels (default: {DEFAULT_GLYPH_HEIGHT}).",
     )
     parser.add_argument(
-        "--no-transpose",
+        "--transpose",
         action="store_true",
-        help="Do not transpose each glyph before exporting.",
+        help="Transpose each glyph before exporting.",
     )
     parser.add_argument(
         "--stdout",
@@ -433,7 +431,7 @@ def main() -> int:
             output_path=args.output,
             glyph_width=args.glyph_width,
             glyph_height=args.glyph_height,
-            transpose_glyphs=not args.no_transpose,
+            transpose_glyphs=args.transpose,
         )
     except Exception as exc:
         print(f"Export failed: {exc}", file=sys.stderr)
