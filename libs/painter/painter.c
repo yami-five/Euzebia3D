@@ -1,5 +1,6 @@
 #include "IPainter.h"
 #include "fpa.h"
+#include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -37,30 +38,14 @@
 #define FONT_ASCII_FIRST 33u
 #define FONT_ASCII_LAST 125u
 #define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
-
-typedef struct
-{
-    const uint16_t *pixels;
-    uint8_t height;
-    uint8_t width;
-    bool canRotate;
-} CachedSprite;
-
-_Static_assert(sizeof(CachedSprite) == sizeof(Sprite), "CachedSprite must match Sprite layout");
-_Static_assert(offsetof(CachedSprite, pixels) == offsetof(Sprite, pixels), "CachedSprite::pixels offset mismatch");
-_Static_assert(offsetof(CachedSprite, height) == offsetof(Sprite, height), "CachedSprite::height offset mismatch");
-_Static_assert(offsetof(CachedSprite, width) == offsetof(Sprite, width), "CachedSprite::width offset mismatch");
-_Static_assert(offsetof(CachedSprite, canRotate) == offsetof(Sprite, canRotate), "CachedSprite::canRotate offset mismatch");
+#define FONT_TRANSPARENT_COLOR 63519u
+#define FONT_GLYPH_END_COLOR 0u
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 static uint16_t temp_buffer[BUFFER_SIZE_HALF];
-static uint16_t *font_cache_pixels[FONT_GLYPHS_COUNT];
-static CachedSprite font_cache_sprites[FONT_GLYPHS_COUNT];
-static uint8_t font_cache_widths[FONT_GLYPHS_COUNT];
-static uint8_t font_cache_ready = 0;
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 static uint16_t mirrored_buffer[BUFFER_SIZE_HALF];
 static SDL_Window *sdl_window = NULL;
@@ -73,68 +58,10 @@ static const uint32_t chunk_size = 15360;
 static spin_lock_t *lcd_spinlock;
 #endif
 static uint8_t scanline_offset = 0;
-static const uint8_t DEFAULT_FONT_SIZE = 8;
 
 static inline uint32_t pixel_index(uint16_t x, uint16_t y)
 {
     return ((uint32_t)y * DISPLAY_WIDTH) + x;
-}
-
-static void init_font_cache(void)
-{
-    if (font_cache_ready || _storage == NULL || _storage->get_font_by_index == NULL)
-        return;
-
-    for (uint8_t i = 0; i < FONT_GLYPHS_COUNT; i++)
-    {
-        const Font *source_font = _storage->get_font_by_index(i);
-        if (source_font == NULL || source_font->sprite == NULL || source_font->sprite->pixels == NULL)
-            goto cache_fail;
-
-        const Sprite *source_sprite = source_font->sprite;
-        size_t pixel_count = (size_t)source_sprite->width * (size_t)source_sprite->height;
-        uint16_t *pixels = (uint16_t *)malloc(pixel_count * sizeof(uint16_t));
-        if (pixels == NULL)
-            goto cache_fail;
-
-        if (source_sprite->width == source_sprite->height)
-        {
-            for (uint16_t y = 0; y < source_sprite->height; y++)
-            {
-                for (uint16_t x = 0; x < source_sprite->width; x++)
-                {
-                    size_t dst = ((size_t)y * source_sprite->width) + x;
-                    size_t src = ((size_t)x * source_sprite->width) + (source_sprite->width - 1u - y);
-                    pixels[dst] = source_sprite->pixels[src];
-                }
-            }
-        }
-        else
-        {
-            // Non-square glyphs are copied as-is to keep indexing valid.
-            memcpy(pixels, source_sprite->pixels, pixel_count * sizeof(uint16_t));
-        }
-
-        font_cache_pixels[i] = pixels;
-        font_cache_sprites[i].canRotate = false;
-        font_cache_sprites[i].height = source_sprite->height;
-        font_cache_sprites[i].width = source_sprite->width;
-        font_cache_sprites[i].pixels = pixels;
-        font_cache_widths[i] = source_font->width;
-    }
-
-    font_cache_ready = 1;
-    return;
-
-cache_fail:
-    for (uint8_t j = 0; j < FONT_GLYPHS_COUNT; j++)
-    {
-        if (font_cache_pixels[j] != NULL)
-        {
-            free(font_cache_pixels[j]);
-            font_cache_pixels[j] = NULL;
-        }
-    }
 }
 
 static const uint8_t fadeInPatterns[9][16] = {
@@ -279,7 +206,6 @@ void init_painter(const IDisplay *display, const IHardware *hardware, const ISto
     _hardware = hardware;
     _display = display;
     _storage = storage;
-    init_font_cache();
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     (void)_hardware;
@@ -709,95 +635,109 @@ void draw_background(Image *image)
     memcpy(buffer, image->image, BUFFER_SIZE);
 }
 
-// Legacy font atlas is stored transposed (x/y swapped), so glyph sampling
-// swaps coordinates to recover readable text on the current display layout.
-static void draw_font_glyph_transposed(const Sprite *sprite, int16_t pos_x, int16_t pos_y, uint8_t scale)
+static void draw_font_glyph(const Font *font, uint8_t glyph_index, int16_t pos_x, int16_t pos_y, uint16_t color)
 {
-    if (sprite == NULL || scale == 0)
+    if (font == NULL || font->characters == NULL || font->size == 0u)
         return;
 
-    int16_t sprite_height_scaled = sprite->height << (scale - 1);
-    int16_t pos_y_aligned = (DISPLAY_HEIGHT - sprite_height_scaled) - pos_y;
-    bool square_sprite = sprite->width == sprite->height;
+    uint8_t glyph_size = font->size;
+    uint16_t strip_width = (uint16_t)glyph_size * FONT_GLYPHS_COUNT;
+    int16_t pos_y_aligned = (DISPLAY_HEIGHT - glyph_size) - pos_y;
 
-    for (uint16_t y = 0; y < sprite->height; y++)
+    for (uint16_t glyph_y = 0; glyph_y < glyph_size; glyph_y++)
     {
-        int16_t new_y = y + (pos_y_aligned >> (scale - 1));
-        if (new_y < 0 || new_y >= DISPLAY_HEIGHT)
+        int16_t dst_y = pos_y_aligned + glyph_y;
+        if (dst_y < 0 || dst_y >= DISPLAY_HEIGHT)
             continue;
 
-        for (uint16_t x = 0; x < sprite->width; x++)
+        size_t row_offset = (size_t)glyph_y * strip_width;
+        size_t glyph_offset = (size_t)glyph_index * glyph_size;
+        for (uint16_t glyph_x = 0; glyph_x < glyph_size; glyph_x++)
         {
-            uint16_t pixel = square_sprite
-                                 ? sprite->pixels[((size_t)x * sprite->width) + (sprite->width - 1u - y)]
-                                 : sprite->pixels[((size_t)y * sprite->width) + x];
-            if (pixel == 63519)
+            uint16_t pixel = font->characters[row_offset + glyph_offset + glyph_x];
+            if (pixel == FONT_TRANSPARENT_COLOR || pixel == FONT_GLYPH_END_COLOR)
                 continue;
 
-            int16_t new_x = x + (pos_x >> (scale - 1));
-            if (new_x < 0 || new_x >= DISPLAY_WIDTH)
+            int16_t dst_x = pos_x + glyph_x;
+            if (dst_x < 0 || dst_x >= DISPLAY_WIDTH)
                 continue;
 
-            for (uint8_t i = 0; i < scale; i++)
-                for (uint8_t j = 0; j < scale; j++)
-                    draw_pixel((new_x << (scale - 1)) + i, (new_y << (scale - 1)) + j, pixel);
+            draw_pixel((uint16_t)dst_x, (uint16_t)dst_y, color);
         }
     }
 }
 
-static void print(const char *text, int16_t x, int16_t y, uint8_t scale)
+static uint8_t get_font_glyph_advance(const Font *font, uint8_t glyph_index)
 {
-    if (scale == 0 || text == NULL || _storage == NULL)
+    if (font == NULL || font->characters == NULL || font->size == 0u)
+        return 0u;
+
+    uint8_t glyph_size = font->size;
+    uint16_t strip_width = (uint16_t)glyph_size * FONT_GLYPHS_COUNT;
+    size_t glyph_offset = (size_t)glyph_index * glyph_size;
+
+    for (uint8_t glyph_x = 0u; glyph_x < glyph_size; glyph_x++)
+    {
+        bool has_end_marker = true;
+        for (uint8_t glyph_y = 0u; glyph_y < glyph_size; glyph_y++)
+        {
+            size_t row_offset = (size_t)glyph_y * strip_width;
+            uint16_t pixel = font->characters[row_offset + glyph_offset + glyph_x];
+            if (pixel != FONT_GLYPH_END_COLOR)
+            {
+                has_end_marker = false;
+                break;
+            }
+        }
+        if (has_end_marker)
+            return glyph_x + 1u;
+    }
+
+    return glyph_size;
+}
+
+static void print(const char *text, int16_t x, int16_t y, uint8_t fontIndex, uint16_t color)
+{
+    if (text == NULL || _storage == NULL || _storage->get_font == NULL)
         return;
+
+    const Font *font = _storage->get_font(fontIndex);
+    if (font == NULL || font->characters == NULL || font->size == 0u)
+        return;
+
     uint16_t offset = 0;
-    uint16_t yFactor = 0;
+    uint16_t y_offset = 0;
+    uint8_t glyph_size = font->size;
 
     for (int i = 0; text[i] != '\0'; i++)
     {
-        if (text[i] == 32)
+        if (text[i] == ' ')
         {
-            offset += (DEFAULT_FONT_SIZE << (scale - 1));
+            offset += glyph_size;
             continue;
         }
-        else if (text[i] == 10)
+        if (text[i] == '\n')
         {
-            yFactor += DEFAULT_FONT_SIZE << (scale);
+            y_offset += glyph_size;
             offset = 0;
             continue;
         }
-        else if (text[i] == 9)
+        if (text[i] == '\t')
         {
-            offset += DEFAULT_FONT_SIZE << (scale);
+            offset += (uint16_t)glyph_size * 4u;
             continue;
         }
 
         uint8_t char_code = (uint8_t)text[i];
         if (char_code < FONT_ASCII_FIRST || char_code > FONT_ASCII_LAST)
         {
-            offset += (DEFAULT_FONT_SIZE << (scale - 1));
+            offset += glyph_size;
             continue;
         }
 
         uint8_t glyph_index = (uint8_t)(char_code - FONT_ASCII_FIRST);
-        if (font_cache_ready)
-        {
-            const Sprite *sprite = (const Sprite *)&font_cache_sprites[glyph_index];
-            if (sprite->width != sprite->height)
-                return;
-            uint8_t width = font_cache_widths[glyph_index];
-            draw_sprite(sprite, x + offset - (((sprite->width - width) << (scale - 1)) >> 1), y + yFactor, 0, scale);
-            offset += (width << (scale - 1));
-            continue;
-        }
-
-        const Font *font = _storage->get_font_by_index(glyph_index);
-        if (font == NULL || font->sprite == NULL)
-        {
-            offset += (DEFAULT_FONT_SIZE << (scale - 1));
-            continue;
-        }
-        draw_font_glyph_transposed(font->sprite, x + offset - (((font->sprite->width - font->width) << (scale - 1)) >> 1), y + yFactor, scale);
-        offset += (font->width << (scale - 1));
+        draw_font_glyph(font, glyph_index, x + offset, y + y_offset, color);
+        offset += get_font_glyph_advance(font, glyph_index);
     }
 };
 
@@ -972,11 +912,11 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     if (rectangle == NULL)
         return;
 
-    if ((rectangle->x+rectangle->height)>=DISPLAY_HEIGHT)
-        rectangle->height-=rectangle->x;
+    if ((rectangle->x + rectangle->height) >= DISPLAY_HEIGHT)
+        rectangle->height -= rectangle->x;
 
-    if ((rectangle->y+rectangle->width)>=DISPLAY_WIDTH)
-        rectangle->width-=rectangle->y;    
+    if ((rectangle->y + rectangle->width) >= DISPLAY_WIDTH)
+        rectangle->width -= rectangle->y;
 
     int phase1 = (t << facA) % TABLE_SIZE;
     int phase2 = (t << facB) % TABLE_SIZE;
@@ -989,8 +929,8 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     int step_dist = TABLE_SIZE >> facD;
 
     uint16_t span[DISPLAY_WIDTH];
-    uint16_t recHeightHalf = rectangle->height>>1;
-    uint16_t recWidthHalf = rectangle->width>>1;
+    uint16_t recHeightHalf = rectangle->height >> 1;
+    uint16_t recWidthHalf = rectangle->width >> 1;
 
     for (int16_t x = 0; x < rectangle->height; x++)
     {
@@ -1007,7 +947,20 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
             c >>= 4;
             span[y] = colors[((c >> SHIFT_FACTOR) + t) % colorsNum];
         }
-        draw_span(rectangle->y, rectangle->x+x, span, rectangle->width);
+        draw_span(rectangle->y, rectangle->x + x, span, rectangle->width);
+    }
+}
+
+void draw_rectangle(Rectangle *rect, uint16_t color)
+{
+    uint16_t span[DISPLAY_WIDTH];
+    for (uint16_t i = 0; i < DISPLAY_WIDTH; i++)
+    {
+        span[i] = color;
+    }
+    for (int16_t x = 0; x < rect->height; x++)
+    {
+        draw_span(rect->y, rect->x + x, span, rect->width);
     }
 }
 
@@ -1028,6 +981,7 @@ static IPainter painter = {
     .draw_scroller = draw_scroller,
     .fade = fade,
     .draw_plasma = draw_plasma,
+    .draw_rectangle = draw_rectangle,
 };
 
 const IPainter *get_painter(void)

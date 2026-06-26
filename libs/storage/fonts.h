@@ -6,8 +6,8 @@
 
 typedef struct 
 {
-    const Sprite *sprite;
-    const uint8_t width;
+    const uint16_t *characters;
+    const uint8_t size;
 } Font;
 
 #endif

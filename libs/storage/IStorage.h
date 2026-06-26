@@ -11,7 +11,7 @@
 
 typedef struct
 {
-    const Font *(*get_font_by_index)(uint8_t index);
+    const Font *(*get_font)(uint8_t index);
     const Image *(*get_image)(uint8_t image_index);
     const Model *(*get_model)(uint8_t model_index);
     const uint32_t *(*get_effect_table)(uint8_t effect_index);
