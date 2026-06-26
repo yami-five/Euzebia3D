@@ -951,6 +951,19 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     }
 }
 
+void draw_rectangle(Rectangle *rect, uint16_t color)
+{
+    uint16_t span[DISPLAY_WIDTH];
+    for (uint16_t i = 0; i < DISPLAY_WIDTH; i++)
+    {
+        span[i] = color;
+    }
+    for (int16_t x = 0; x < rect->height; x++)
+    {
+        draw_span(rect->y, rect->x + x, span, rect->width);
+    }
+}
+
 static IPainter painter = {
     .init_painter = init_painter,
     .draw_buffer = draw_buffer,
@@ -968,6 +981,7 @@ static IPainter painter = {
     .draw_scroller = draw_scroller,
     .fade = fade,
     .draw_plasma = draw_plasma,
+    .draw_rectangle = draw_rectangle,
 };
 
 const IPainter *get_painter(void)
