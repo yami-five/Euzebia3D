@@ -53,7 +53,6 @@ static SDL_Texture *sdl_texture = NULL;
 static uint8_t sdl_video_initialized_here = 0;
 static uint8_t sdl_cleanup_registered = 0;
 #else
-static const uint32_t chunk_size = 15360;
 static spin_lock_t *lcd_spinlock;
 #endif
 static uint8_t scanline_offset = 0;
@@ -184,19 +183,19 @@ static void init_dma(void)
     dma_channel = dma_claim_unused_channel(true);
     dma_channel_config config = dma_channel_get_default_config(dma_channel);
     channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
+    channel_config_set_read_increment(&config, true);
+    channel_config_set_write_increment(&config, false);
     channel_config_set_dreq(&config, spi_get_dreq(_hardware->get_spi_port(), true));
     dma_channel_configure(
         dma_channel,
         &config,
         &spi_get_hw(_hardware->get_spi_port())->dr,
         NULL,
-        chunk_size,
+        BUFFER_SIZE_HALF,
         false);
     dma_channel_set_irq1_enabled(dma_channel, true);
     irq_set_exclusive_handler(DMA_IRQ_1, dma_buffer_irq_handler);
     irq_set_enabled(DMA_IRQ_1, false);
-    channel_config_set_read_increment(&config, true);
-    channel_config_set_write_increment(&config, false);
 }
 #endif
 
@@ -248,7 +247,6 @@ void draw_buffer(void)
     SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
     SDL_RenderPresent(sdl_renderer);
 #else
-    uint32_t current_offset = 0;
     spi_inst_t *spi_port = _hardware->get_spi_port();
     spin_lock_t *spi_spinlock = _hardware->get_spinlock();
     (void)spi_spinlock;
@@ -259,12 +257,9 @@ void draw_buffer(void)
     _hardware->write(LCD_DC_PIN, 1);
     spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
-    while (current_offset < BUFFER_SIZE_HALF)
-    {
-        dma_channel_set_read_addr(dma_channel, buffer + current_offset, true);
-        dma_channel_wait_for_finish_blocking(dma_channel);
-        current_offset += chunk_size;
-    }
+    dma_channel_set_trans_count(dma_channel, BUFFER_SIZE_HALF, false);
+    dma_channel_set_read_addr(dma_channel, buffer, true);
+    dma_channel_wait_for_finish_blocking(dma_channel);
 
     while (spi_is_busy(spi_port))
     {
