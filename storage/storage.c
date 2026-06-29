@@ -29,8 +29,8 @@
 typedef struct
 {
     const uint16_t *pixels;
-    uint8_t height;
-    uint8_t width;
+    uint16_t height;
+    uint16_t width;
     bool canRotate;
 } SpriteRuntime;
 
