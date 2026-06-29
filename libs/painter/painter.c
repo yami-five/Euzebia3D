@@ -40,6 +40,9 @@
 #define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
 #define FONT_TRANSPARENT_COLOR 63519u
 #define FONT_GLYPH_END_COLOR 0u
+#define PLASMA_COLOR_VALUE_MIN (-25)
+#define PLASMA_COLOR_VALUE_MAX 24
+#define PLASMA_COLOR_LOOKUP_SIZE ((PLASMA_COLOR_VALUE_MAX - PLASMA_COLOR_VALUE_MIN) + 1)
 
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
@@ -928,16 +931,24 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     int step_diag = TABLE_SIZE >> facC;
     int step_dist = TABLE_SIZE >> facD;
 
+    uint16_t colorLookup[PLASMA_COLOR_LOOKUP_SIZE];
+    for (int16_t colorValue = PLASMA_COLOR_VALUE_MIN; colorValue <= PLASMA_COLOR_VALUE_MAX; colorValue++)
+    {
+        colorLookup[colorValue - PLASMA_COLOR_VALUE_MIN] = colors[((uint32_t)colorValue + t) % colorsNum];
+    }
+
     uint16_t span[DISPLAY_WIDTH];
     uint16_t recHeightHalf = rectangle->height >> 1;
     uint16_t recWidthHalf = rectangle->width >> 1;
 
     for (int16_t x = 0; x < rectangle->height; x++)
     {
+        int distX = x - recHeightHalf;
         int32_t step1 = fast_sin(x * step_x + phase1) << 7;
         for (int16_t y = 0; y < rectangle->width; y++)
         {
-            int dist = fast_sqrt((x - recHeightHalf) * (x - recHeightHalf) + (y - recWidthHalf) * (y - recWidthHalf));
+            int distY=y - recWidthHalf;
+            int dist = fast_sqrt(distX * distX + distY * distY);
 
             int32_t c = 0;
             c += step1;
@@ -945,7 +956,8 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
             c += fast_sin((x + y) * step_diag + phase3) << 7;
             c += fast_sin(dist * step_dist + phase4);
             c >>= 4;
-            span[y] = colors[((c >> SHIFT_FACTOR) + t) % colorsNum];
+            int16_t colorValue = (int16_t)(c >> SHIFT_FACTOR);
+            span[y] = colorLookup[colorValue - PLASMA_COLOR_VALUE_MIN];
         }
         draw_span(rectangle->y, rectangle->x + x, span, rectangle->width);
     }
