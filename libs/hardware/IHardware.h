@@ -37,6 +37,7 @@ typedef struct
     void (*set_spi_port)(uint8_t spiNum);
     audio_buffer_pool_t *(*get_audio_buffer_pool)(void);
     spin_lock_t *(*get_spinlock)(void);
+    uint32_t (*get_lcd_spi_baudrate_hz)(void);
     void (*set_lcd_cs_pin_high)(void);
     void (*set_lcd_cs_pin_low)(void);
 } IHardware;

@@ -3,7 +3,6 @@
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
 #include "pico/multicore.h"
-#include "pico/time.h"
 #elif defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -12,6 +11,9 @@
 #endif
 
 #include "ICameraFactory.h"
+#if defined(EUZEBIA3D_DEBUG_MODE)
+#include "IDebugMode.h"
+#endif
 #include "IDisplay.h"
 #include "IHardware.h"
 #include "ILightFactory.h"
@@ -23,6 +25,9 @@
 
 #include "camera.h"
 #include "cameraFactory.h"
+#if defined(EUZEBIA3D_DEBUG_MODE)
+#include "debugMode.h"
+#endif
 #include "lightFactory.h"
 #include "mesh.h"
 #include "meshFactory.h"
@@ -47,6 +52,9 @@ static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
 static const IStorage *storage;
 static const IPuppeteer *puppeteer;
+#if defined(EUZEBIA3D_DEBUG_MODE)
+static const IDebugMode *debugMode;
+#endif
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #define EUZEBIA3D_WINDOWS_TARGET_FPS 24u
@@ -116,7 +124,7 @@ int main(void)
 #endif
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
-    set_sys_clock_khz(300000, true);
+    set_sys_clock_khz(320000, true);
 
     hardware_core = get_hardware();
     hardware_core->init_hardware();
@@ -141,6 +149,17 @@ int main(void)
     }
 #endif
     painter->init_painter(display, hardware_core, storage);
+
+#if defined(EUZEBIA3D_DEBUG_MODE)
+    debugMode = get_debugMode();
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    if (!require_pointer(debugMode, "get_debugMode"))
+    {
+        return 1;
+    }
+#endif
+    debugMode->init_debug_mode(hardware_core, painter);
+#endif
 
     puppeteer = get_puppeteer();
     puppeteer->init_puppeteer(storage, painter);
@@ -222,16 +241,19 @@ int main(void)
         .width = 241,
     };
     Rectangle bar1 = {
-        .x=0,
-        .y=0,
-        .height=6,
-        .width=320,
+        .x = 0,
+        .y = 0,
+        .height = 6,
+        .width = 320,
     };
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int running = 1;
     while (running)
     {
         uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->begin_frame();
+#endif
 
         running = process_window_events();
 
@@ -248,9 +270,19 @@ int main(void)
         painter->draw_plasma(plasmaColors, 16, t, 1, 7, 7, 8, 7, &plasmaRect);
         painter->print("test", 0, 20, 1, 0xffff);
         painter->draw_rectangle(&bar1, 0x34b2);
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->show_info();
+        debugMode->begin_draw_buffer();
+#endif
         painter->draw_buffer();
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->end_draw_buffer();
+#endif
         t++;
         painter->clear_buffer(10);
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->end_frame();
+#endif
 
         cap_window_frame_rate(frame_begin_ticks);
     }
@@ -260,16 +292,27 @@ int main(void)
 #else
     while (1)
     {
-        uint64_t frame_begin_us = time_us_64();
-        (void)frame_begin_us;
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->begin_frame();
+#endif
 
         // puppeteer->perform(pogodynka, t);
         painter->draw_plasma(plasmaColors, 16, t, 2, 6, 6, 7, 6, &plasmaRect);
-        painter->print("test",0,20,1,0xffff);
+        painter->print("test", 0, 20, 1, 0xffff);
 
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->show_info();
+        debugMode->begin_draw_buffer();
+#endif
         painter->draw_buffer();
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->end_draw_buffer();
+#endif
         t++;
         painter->clear_buffer(10);
+#if defined(EUZEBIA3D_DEBUG_MODE)
+        debugMode->end_frame();
+#endif
     }
 
     return 0;

@@ -190,6 +190,25 @@ if(EUZEBIA3D_IS_WINDOWS)
     target_link_libraries(Euzebia3D_Painter PUBLIC SDL3::SDL3)
 endif()
 
+if(DEBUG_MODE)
+    add_library(
+        Euzebia3D_DebugMode
+        ${CMAKE_CURRENT_SOURCE_DIR}/debugMode/debugMode.c
+    )
+    target_include_directories(
+        Euzebia3D_DebugMode
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/debugMode
+    )
+    target_link_libraries(
+        Euzebia3D_DebugMode
+        PUBLIC
+        Euzebia3D_PicoDeps
+        Euzebia3D_Hardware
+        Euzebia3D_Painter
+    )
+endif()
+
 add_library(
     Euzebia3D_Puppeteer
     ${CMAKE_CURRENT_SOURCE_DIR}/puppeteer/puppeteer.c
@@ -280,8 +299,12 @@ target_link_libraries(
     Euzebia3D_Storage
     Euzebia3D_Transformations
 )
+if(DEBUG_MODE)
+    target_link_libraries(Euzebia3D_libs INTERFACE Euzebia3D_DebugMode)
+endif()
 
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)
+add_library(Euzebia3D_DebugModeInterface INTERFACE)
 add_library(Euzebia3D_DisplayInterface INTERFACE)
 add_library(Euzebia3D_FileReaderInterface INTERFACE)
 add_library(Euzebia3D_HardwareInterface INTERFACE)
@@ -293,6 +316,9 @@ add_library(Euzebia3D_RendererInterface INTERFACE)
 add_library(Euzebia3D_StorageInterface INTERFACE)
 
 target_link_libraries(Euzebia3D_CameraFactoryInterface INTERFACE Euzebia3D_CameraFactory)
+if(DEBUG_MODE)
+    target_link_libraries(Euzebia3D_DebugModeInterface INTERFACE Euzebia3D_DebugMode)
+endif()
 target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
 target_link_libraries(Euzebia3D_FileReaderInterface INTERFACE Euzebia3D_FileReader)
 target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)

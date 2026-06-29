@@ -8,9 +8,11 @@
 #include "hardware/dma.h"
 
 static uint32_t slice_num;
+static uint32_t lcd_spi_baudrate_hz;
 static spin_lock_t *spi_spinlock;
 
 #define SAMPLES_PER_BUFFER 256
+#define LCD_SPI_REQUESTED_BAUDRATE_HZ (100000u * 1000u)
 #endif
 
 static void init_hardware(void)
@@ -18,11 +20,26 @@ static void init_hardware(void)
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     return;
 #else
+    uint32_t sys_clock_hz = clock_get_hz(clk_sys);
+    clock_configure(
+        clk_peri,
+        0,
+        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+        sys_clock_hz,
+        sys_clock_hz);
+
     stdio_init_all();
 
     // SPI config
-    spi_init(spi0, 100000 * 1000);
-    spi_init(spi1, 100000 * 1000);
+    uint32_t actual_spi0_baud = spi_init(spi0, LCD_SPI_REQUESTED_BAUDRATE_HZ);
+    uint32_t actual_spi1_baud = spi_init(spi1, LCD_SPI_REQUESTED_BAUDRATE_HZ);
+    lcd_spi_baudrate_hz = (SPI_PORT == spi0) ? actual_spi0_baud : actual_spi1_baud;
+    printf(
+        "SPI requested: %lu Hz, spi0 actual: %lu Hz, spi1 actual: %lu Hz, LCD actual: %lu Hz\n",
+        (unsigned long)LCD_SPI_REQUESTED_BAUDRATE_HZ,
+        (unsigned long)actual_spi0_baud,
+        (unsigned long)actual_spi1_baud,
+        (unsigned long)lcd_spi_baudrate_hz);
     gpio_set_function(LCD_CLK_PIN, GPIO_FUNC_SPI);
     gpio_set_function(LCD_MOSI_PIN, GPIO_FUNC_SPI);
     gpio_set_function(LCD_MISO_PIN, GPIO_FUNC_SPI);
@@ -203,6 +220,15 @@ static spin_lock_t *get_spinlock(void)
 #endif
 }
 
+static uint32_t get_lcd_spi_baudrate_hz(void)
+{
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    return 0u;
+#else
+    return lcd_spi_baudrate_hz;
+#endif
+}
+
 static void set_lcd_cs_pin_high(void)
 {
 #if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -229,6 +255,7 @@ static IHardware hardware = {
     .set_spi_port = set_spi_port,
     .get_audio_buffer_pool = get_audio_buffer_pool,
     .get_spinlock = get_spinlock,
+    .get_lcd_spi_baudrate_hz = get_lcd_spi_baudrate_hz,
     .set_lcd_cs_pin_high = set_lcd_cs_pin_high,
     .set_lcd_cs_pin_low = set_lcd_cs_pin_low,
 };
