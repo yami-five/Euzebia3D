@@ -970,9 +970,9 @@ void draw_rectangle(Rectangle *rect, uint16_t color)
     {
         span[i] = color;
     }
-    for (int16_t x = 0; x < rect->height; x++)
+    for (int16_t i = 0; i < rect->height; i++)
     {
-        draw_span(rect->y, rect->x + x, span, rect->width);
+        draw_span(rect->x, rect->y + i, span, rect->width);
     }
 }
 
