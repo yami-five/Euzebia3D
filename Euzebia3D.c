@@ -215,11 +215,11 @@ int main(void)
         0x2427,
         0x1be6,
     };
-    Rectangle plasmaRect={
-        .x=0,
-        .y=0,
-        .height=150,
-        .width=150,
+    Rectangle plasmaRect = {
+        .x = 28,
+        .y = 44,
+        .height = 181,
+        .width = 241,
     };
     Rectangle bar1 = {
         .x=0,
@@ -245,7 +245,7 @@ int main(void)
         // renderer->add_model_to_scene(mug, camera, pointLight);
         // renderer->render_scene(pointLight);
         //  puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 16, t, 7, 7, 8, 7, &plasmaRect);
+        painter->draw_plasma(plasmaColors, 16, t, 1, 7, 7, 8, 7, &plasmaRect);
         painter->print("test", 0, 20, 1, 0xffff);
         painter->draw_rectangle(&bar1, 0x34b2);
         painter->draw_buffer();
@@ -264,7 +264,7 @@ int main(void)
         (void)frame_begin_us;
 
         // puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 16, t, 7, 7, 8, 7, &plasmaRect);
+        painter->draw_plasma(plasmaColors, 16, t, 2, 6, 6, 7, 6, &plasmaRect);
         painter->print("test",0,20,1,0xffff);
 
         painter->draw_buffer();

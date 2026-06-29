@@ -903,19 +903,34 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
     free(lineBuffer);
 }
 
-void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle)
+void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, uint8_t scale, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle)
 {
-    if (colors == NULL || colorsNum == 0 || ((colorsNum & (colorsNum - 1)) != 0))
+    if (colors == NULL || colorsNum == 0 || ((colorsNum & (colorsNum - 1)) != 0) || scale == 0)
         return;
 
     if (rectangle == NULL)
         return;
 
-    if ((rectangle->x + rectangle->height) >= DISPLAY_HEIGHT)
-        rectangle->height -= rectangle->x;
+    if (rectangle->x < 0 || rectangle->y < 0 || rectangle->x >= DISPLAY_HEIGHT || rectangle->y >= DISPLAY_WIDTH)
+        return;;
 
-    if ((rectangle->y + rectangle->width) >= DISPLAY_WIDTH)
-        rectangle->width -= rectangle->y;
+    uint16_t dstX = (uint16_t)rectangle->y;
+    uint16_t dstY = (uint16_t)rectangle->x;
+    uint16_t plasmaHeight = rectangle->height / scale;
+    uint16_t plasmaWidth = rectangle->width / scale;
+
+    uint32_t maxHeightPixels = DISPLAY_HEIGHT - dstY;
+    if ((uint32_t)plasmaHeight * scale > maxHeightPixels)
+        plasmaHeight = (uint16_t)((maxHeightPixels + scale - 1u) / scale);
+
+    uint32_t maxWidthPixels = DISPLAY_WIDTH - dstX;
+    uint32_t scaledWidth = (uint32_t)plasmaWidth * scale;
+    if (scaledWidth > maxWidthPixels)
+        scaledWidth = maxWidthPixels;
+
+    plasmaWidth = (uint16_t)((scaledWidth + scale - 1u) / scale);
+    if (plasmaHeight == 0 || plasmaWidth == 0 || scaledWidth == 0)
+        return;
 
     int phase1 = (t << facA) % TABLE_SIZE;
     int phase2 = (t << facB) % TABLE_SIZE;
@@ -928,17 +943,17 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     int step_dist = TABLE_SIZE >> facD;
 
     uint16_t span[DISPLAY_WIDTH];
-    uint16_t recHeightHalf = rectangle->height >> 1;
-    uint16_t recWidthHalf = rectangle->width >> 1;
+    uint16_t recHeightHalf = plasmaHeight >> 1;
+    uint16_t recWidthHalf = plasmaWidth >> 1;
     uint32_t colorMask = (uint32_t)colorsNum - 1u;
 
-    for (int16_t x = 0; x < rectangle->height; x++)
+    for (int16_t x = 0; x < plasmaHeight; x++)
     {
         int distX = x - recHeightHalf;
         int32_t step1 = fast_sin(x * step_x + phase1) << 7;
-        for (int16_t y = 0; y < rectangle->width; y++)
+        for (int16_t y = 0; y < plasmaWidth; y++)
         {
-            int distY=y - recWidthHalf;
+            int distY = y - recWidthHalf;
             int dist = fast_sqrt(distX * distX + distY * distY);
 
             int32_t c = 0;
@@ -947,9 +962,18 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
             c += fast_sin((x + y) * step_diag + phase3) << 7;
             c += fast_sin(dist * step_dist + phase4);
             c >>= 4;
-            span[y] = colors[((uint32_t)(c >> SHIFT_FACTOR) + t) & colorMask];
+            uint16_t color = colors[((uint32_t)(c >> SHIFT_FACTOR) + t) & colorMask];
+            uint32_t spanIndex = (uint32_t)y * scale;
+            for (uint8_t i = 0; i < scale && spanIndex + i < scaledWidth; i++)
+                span[spanIndex + i] = color;
         }
-        draw_span(rectangle->y, rectangle->x + x, span, rectangle->width);
+        for (uint8_t i = 0; i < scale; i++)
+        {
+            uint16_t lineY = dstY + (x * scale) + i;
+            if (lineY >= DISPLAY_HEIGHT)
+                break;
+            draw_span(dstX, lineY, span, (uint16_t)scaledWidth);
+        }
     }
 }
 

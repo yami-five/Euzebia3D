@@ -27,7 +27,7 @@ typedef struct
     void (*fade_fullscreen)(uint8_t mode, uint32_t startFrame, uint32_t currentFrame);
     void (*draw_scroller)(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t startFrame, uint32_t currentFrame);
     void (*fade)(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t x, uint16_t y, uint16_t width, uint16_t height);
-    void (*draw_plasma)(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle);
+    void (*draw_plasma)(uint16_t *colors, uint16_t colorsNum, uint32_t t, uint8_t scale, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle);
     void (*draw_rectangle)(Rectangle *rect, uint16_t color);
 } IPainter;
 
