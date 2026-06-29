@@ -40,10 +40,6 @@
 #define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
 #define FONT_TRANSPARENT_COLOR 63519u
 #define FONT_GLYPH_END_COLOR 0u
-#define PLASMA_COLOR_VALUE_MIN (-25)
-#define PLASMA_COLOR_VALUE_MAX 24
-#define PLASMA_COLOR_LOOKUP_SIZE ((PLASMA_COLOR_VALUE_MAX - PLASMA_COLOR_VALUE_MIN) + 1)
-
 static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
@@ -909,7 +905,7 @@ void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, 
 
 void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle)
 {
-    if (colors == NULL || colorsNum == 0)
+    if (colors == NULL || colorsNum == 0 || ((colorsNum & (colorsNum - 1)) != 0))
         return;
 
     if (rectangle == NULL)
@@ -931,15 +927,10 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
     int step_diag = TABLE_SIZE >> facC;
     int step_dist = TABLE_SIZE >> facD;
 
-    uint16_t colorLookup[PLASMA_COLOR_LOOKUP_SIZE];
-    for (int16_t colorValue = PLASMA_COLOR_VALUE_MIN; colorValue <= PLASMA_COLOR_VALUE_MAX; colorValue++)
-    {
-        colorLookup[colorValue - PLASMA_COLOR_VALUE_MIN] = colors[((uint32_t)colorValue + t) % colorsNum];
-    }
-
     uint16_t span[DISPLAY_WIDTH];
     uint16_t recHeightHalf = rectangle->height >> 1;
     uint16_t recWidthHalf = rectangle->width >> 1;
+    uint32_t colorMask = (uint32_t)colorsNum - 1u;
 
     for (int16_t x = 0; x < rectangle->height; x++)
     {
@@ -956,8 +947,7 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, int8_t facA, 
             c += fast_sin((x + y) * step_diag + phase3) << 7;
             c += fast_sin(dist * step_dist + phase4);
             c >>= 4;
-            int16_t colorValue = (int16_t)(c >> SHIFT_FACTOR);
-            span[y] = colorLookup[colorValue - PLASMA_COLOR_VALUE_MIN];
+            span[y] = colors[((uint32_t)(c >> SHIFT_FACTOR) + t) & colorMask];
         }
         draw_span(rectangle->y, rectangle->x + x, span, rectangle->width);
     }
