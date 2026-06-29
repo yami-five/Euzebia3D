@@ -8,8 +8,8 @@
 typedef struct
 {
     const uint16_t *pixels;
-    const uint8_t height;
-    const uint8_t width;
+    const uint16_t height;
+    const uint16_t width;
     const bool canRotate;
 } Sprite;
 
