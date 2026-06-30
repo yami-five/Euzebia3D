@@ -56,9 +56,33 @@ static const IPuppeteer *puppeteer;
 static const IDebugMode *debugMode;
 #endif
 
+#define EUZEBIA3D_PLASMA_COLORS_NUM 16
+
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #define EUZEBIA3D_WINDOWS_TARGET_FPS 24u
+#define EUZEBIA3D_PLASMA_SCALE 1
+#define EUZEBIA3D_PLASMA_FAC_A 7
+#define EUZEBIA3D_PLASMA_FAC_B 7
+#define EUZEBIA3D_PLASMA_FAC_C 8
+#define EUZEBIA3D_PLASMA_FAC_D 7
+#define EUZEBIA3D_REQUIRE_POINTER(pointer, name) \
+    do                                           \
+    {                                            \
+        if (!require_pointer((pointer), (name))) \
+        {                                        \
+            return 1;                            \
+        }                                        \
+    } while (0)
+#else
+#define EUZEBIA3D_PLASMA_SCALE 2
+#define EUZEBIA3D_PLASMA_FAC_A 6
+#define EUZEBIA3D_PLASMA_FAC_B 6
+#define EUZEBIA3D_PLASMA_FAC_C 7
+#define EUZEBIA3D_PLASMA_FAC_D 6
+#define EUZEBIA3D_REQUIRE_POINTER(pointer, name) ((void)0)
+#endif
 
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 static int require_pointer(const void *pointer, const char *name)
 {
     if (pointer != NULL)
@@ -134,30 +158,15 @@ int main(void)
 #endif
 
     storage = get_storage();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(storage, "get_storage"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(storage, "get_storage");
 
     painter = get_painter();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(painter, "get_painter"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(painter, "get_painter");
     painter->init_painter(display, hardware_core, storage);
 
 #if defined(EUZEBIA3D_DEBUG_MODE)
     debugMode = get_debugMode();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(debugMode, "get_debugMode"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(debugMode, "get_debugMode");
     debugMode->init_debug_mode(hardware_core, painter);
 #endif
 
@@ -166,22 +175,12 @@ int main(void)
     Puppet *pogodynka = puppeteer->create_puppet(0);
 
     renderer = get_renderer();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(renderer, "get_renderer"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(renderer, "get_renderer");
     renderer->init_renderer(hardware_core, painter);
     renderer->set_scale(1);
 
     meshFactory = get_meshFactory();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(meshFactory, "get_meshFactory"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(meshFactory, "get_meshFactory");
     meshFactory->init_mesh_factory(storage);
 
     Mesh *mug = meshFactory->create_textured_mesh(0, 1);
@@ -193,21 +192,11 @@ int main(void)
     room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
     lightFactory = get_lightFactory();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(lightFactory, "get_lightFactory"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(lightFactory, "get_lightFactory");
     PointLight *pointLight = lightFactory->create_point_light(10.0f, 10.0f, 0.0f, 15.0f, 0xffff);
 
     cameraFactory = get_cameraFactory();
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    if (!require_pointer(cameraFactory, "get_cameraFactory"))
-    {
-        return 1;
-    }
-#endif
+    EUZEBIA3D_REQUIRE_POINTER(cameraFactory, "get_cameraFactory");
     Camera *camera = cameraFactory->create_camera(0.0f, 50.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_ROTATE);
 
@@ -216,7 +205,7 @@ int main(void)
 
     uint32_t t = 0;
 
-    uint16_t plasmaColors[16] = {
+    uint16_t plasmaColors[EUZEBIA3D_PLASMA_COLORS_NUM] = {
         0x1be6,
         0x2427,
         0x3447,
@@ -246,18 +235,29 @@ int main(void)
         .height = 6,
         .width = 320,
     };
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    Point lineStart = {
+        .x = 0,
+        .y = 0,
+    };
+    Point lineEnd = {
+        .x = 100,
+        .y = 100,
+    };
     int running = 1;
     while (running)
     {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
         uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
+#endif
 #if defined(EUZEBIA3D_DEBUG_MODE)
         debugMode->begin_frame();
 #endif
 
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
         running = process_window_events();
-
-        float qt = t * 0.002f;
+#endif
+        float qt = t * 0.02f;
+        (void)qt;
         // modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
         // modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
         // update_camera(camera);
@@ -266,10 +266,21 @@ int main(void)
         // renderer->add_model_to_scene(room, camera, pointLight);
         // renderer->add_model_to_scene(mug, camera, pointLight);
         // renderer->render_scene(pointLight);
-        //  puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 16, t, 1, 7, 7, 8, 7, &plasmaRect);
+        // puppeteer->perform(pogodynka, t);
+        painter->draw_plasma(
+            plasmaColors,
+            EUZEBIA3D_PLASMA_COLORS_NUM,
+            t,
+            EUZEBIA3D_PLASMA_SCALE,
+            EUZEBIA3D_PLASMA_FAC_A,
+            EUZEBIA3D_PLASMA_FAC_B,
+            EUZEBIA3D_PLASMA_FAC_C,
+            EUZEBIA3D_PLASMA_FAC_D,
+            &plasmaRect);
         painter->print("test", 0, 20, 1, 0xffff);
         painter->draw_rectangle(&bar1, 0x34b2);
+        painter->draw_line(&lineStart, &lineEnd, 0xfafa);
+
 #if defined(EUZEBIA3D_DEBUG_MODE)
         debugMode->show_info();
         debugMode->begin_draw_buffer();
@@ -284,37 +295,14 @@ int main(void)
         debugMode->end_frame();
 #endif
 
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
         cap_window_frame_rate(frame_begin_ticks);
+#endif
     }
 
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     SDL_Quit();
-    return 0;
-#else
-    while (1)
-    {
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->begin_frame();
 #endif
-
-        // puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(plasmaColors, 16, t, 2, 6, 6, 7, 6, &plasmaRect);
-        painter->print("test", 0, 20, 1, 0xffff);
-
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->show_info();
-        debugMode->begin_draw_buffer();
-#endif
-        painter->draw_buffer();
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->end_draw_buffer();
-#endif
-        t++;
-        painter->clear_buffer(10);
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->end_frame();
-#endif
-    }
 
     return 0;
-#endif
 }

@@ -21,7 +21,7 @@ option(EUZEBIA3D_USE_PSRAM "Enable optional PSRAM-backed const asset copies on c
 option(EUZEBIA3D_TEXTURE_CACHE_ENABLED "Enable renderer texture cache for small textures" ON)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH "Allow renderer texture cache for textures stored in flash/XIP" OFF)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM "Allow renderer texture cache for textures stored in PSRAM/XIP" ON)
-option(DEBUG_MODE "Show metrics on the display" OFF)
+option(DEBUG_MODE "Show metrics on the display" ON)
 
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
     # Initialise pico_sdk from installed location

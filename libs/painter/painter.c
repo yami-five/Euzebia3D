@@ -907,7 +907,7 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t, uint8_t scale
         return;
 
     if (rectangle->x < 0 || rectangle->y < 0 || rectangle->x >= DISPLAY_HEIGHT || rectangle->y >= DISPLAY_WIDTH)
-        return;;
+        return;
 
     uint16_t dstX = (uint16_t)rectangle->y;
     uint16_t dstY = (uint16_t)rectangle->x;
@@ -985,6 +985,43 @@ void draw_rectangle(Rectangle *rect, uint16_t color)
     }
 }
 
+void draw_line(Point *start, Point *end, uint16_t color)
+{
+    if (start == NULL || end == NULL)
+        return;
+
+    int32_t x = start->x;
+    int32_t y = start->y;
+    int32_t endX = end->x;
+    int32_t endY = end->y;
+    int32_t dX = endX > x ? endX - x : x - endX;
+    int32_t dY = endY > y ? y - endY : endY - y;
+    int32_t sX = x < endX ? 1 : -1;
+    int32_t sY = y < endY ? 1 : -1;
+    int32_t err = dX + dY;
+
+    while (1)
+    {
+        if (x >= 0 && x < DISPLAY_WIDTH && y >= 0 && y < DISPLAY_HEIGHT)
+            draw_pixel((uint16_t)x, (uint16_t)y, color);
+
+        if (x == endX && y == endY)
+            break;
+
+        int32_t e2 = err << 1;
+        if (e2 >= dY)
+        {
+            err += dY;
+            x += sX;
+        }
+        if (e2 <= dX)
+        {
+            err += dX;
+            y += sY;
+        }
+    }
+}
+
 static IPainter painter = {
     .init_painter = init_painter,
     .draw_buffer = draw_buffer,
@@ -1003,6 +1040,7 @@ static IPainter painter = {
     .fade = fade,
     .draw_plasma = draw_plasma,
     .draw_rectangle = draw_rectangle,
+    .draw_line = draw_line,
 };
 
 const IPainter *get_painter(void)
