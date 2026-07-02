@@ -231,13 +231,6 @@ void draw_buffer(void)
             mirrored_buffer[dst_row_start + x] = buffer[src_row_start + x];
     }
 
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        if (event.type == SDL_EVENT_QUIT)
-            break;
-    }
-
     SDL_UpdateTexture(
         sdl_texture,
         NULL,

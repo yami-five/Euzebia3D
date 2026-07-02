@@ -136,6 +136,7 @@ static void cap_window_frame_rate(uint64_t frame_begin_ticks)
 }
 #endif
 
+
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 int main(int argc, char **argv)
 #else
@@ -267,7 +268,8 @@ int main(void)
         // renderer->add_model_to_scene(mug, camera, pointLight);
         // renderer->render_scene(pointLight);
         // puppeteer->perform(pogodynka, t);
-        painter->draw_plasma(
+
+        /*painter->draw_plasma(
             plasmaColors,
             EUZEBIA3D_PLASMA_COLORS_NUM,
             t,
@@ -279,7 +281,7 @@ int main(void)
             &plasmaRect);
         painter->print("test", 0, 20, 1, 0xffff);
         painter->draw_rectangle(&bar1, 0x34b2);
-        painter->draw_line(&lineStart, &lineEnd, 0xfafa);
+        painter->draw_line(&lineStart, &lineEnd, 0xfafa);*/
 
 #if defined(EUZEBIA3D_DEBUG_MODE)
         debugMode->show_info();
