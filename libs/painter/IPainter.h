@@ -6,7 +6,6 @@
 #include "IHardware.h"
 #include "IStorage.h"
 #include "puppet.h"
-#include "gradient.h"
 #include "painter_types.h"
 
 typedef struct
@@ -22,7 +21,6 @@ typedef struct
     void (*draw_puppet)(Puppet *puppet);
     void (*draw_background)(Image *image);
     void (*print)(const char *text, int16_t x, int16_t y, uint8_t fontIndex, uint16_t color);
-    void (*draw_gradient)(Gradient *gradient);
     void (*override_buffer)(uint8_t mode, uint16_t lines);
     void (*fade_fullscreen)(uint8_t mode, uint32_t startFrame, uint32_t currentFrame);
     void (*draw_scroller)(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t startFrame, uint32_t currentFrame);
@@ -30,6 +28,7 @@ typedef struct
     void (*draw_plasma)(uint16_t *colors, uint16_t colorsNum, uint32_t t, uint8_t scale, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle);
     void (*draw_rectangle)(Rectangle *rect, uint16_t color);
     void (*draw_line)(Point *start, Point *end, uint16_t color);
+    void (*draw_gradient)(uint16_t colorA, uint16_t colorB, Rectangle *rectangle, uint8_t direction);
 } IPainter;
 
 #endif

@@ -17,4 +17,9 @@ typedef struct
     uint16_t width;
 } Rectangle;
 
+#define UP 0u
+#define DOWN 1u
+#define LEFT 2u
+#define RIGHT 3u
+
 #endif

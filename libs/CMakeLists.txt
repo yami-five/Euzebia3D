@@ -169,7 +169,6 @@ target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_
 add_library(
     Euzebia3D_Painter
     ${CMAKE_CURRENT_SOURCE_DIR}/painter/painter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/painter/gradient.c
 )
 target_include_directories(
     Euzebia3D_Painter

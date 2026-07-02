@@ -728,46 +728,6 @@ static void print(const char *text, int16_t x, int16_t y, uint8_t fontIndex, uin
     }
 };
 
-static inline uint16_t rgb888_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
-{
-    return ((r >> 3 << 11) | (g >> 2 << 5) | (b >> 3));
-}
-
-void draw_gradient(Gradient *gradient)
-{
-    GradientColor *calculatedGradient = (GradientColor *)malloc(sizeof(GradientColor) * 320);
-    for (uint8_t i = 1; i < gradient->colorsNum; i++)
-    {
-        GradientColor *color1 = gradient->colors[i - 1];
-        if (color1->pos >= 320)
-            break;
-        GradientColor *color2 = gradient->colors[i];
-        uint16_t dist = color2->pos - color1->pos;
-        if (dist == 0)
-            continue;
-        int16_t rDiff = color2->r - color1->r;
-        int16_t gDiff = color2->g - color1->g;
-        int16_t bDiff = color2->b - color1->b;
-        for (uint16_t j = 0; j < dist; j++)
-        {
-            if (j + color1->pos >= 320)
-                break;
-            calculatedGradient[j + color1->pos].r = color1->r + rDiff * j / dist;
-            calculatedGradient[j + color1->pos].g = color1->g + gDiff * j / dist;
-            calculatedGradient[j + color1->pos].b = color1->b + bDiff * j / dist;
-        }
-    }
-    for (uint16_t i = 0; i < 320; i++)
-    {
-        uint16_t color = rgb888_to_rgb565(calculatedGradient[i].r, calculatedGradient[i].g, calculatedGradient[i].b);
-        for (uint16_t j = 0; j < 240; j++)
-        {
-            draw_pixel(i, j, color);
-        }
-    }
-    free(calculatedGradient);
-}
-
 void override_buffer(uint8_t mode, uint16_t lines)
 {
     if (lines > DISPLAY_HEIGHT)
@@ -1011,6 +971,130 @@ void draw_line(Point *start, Point *end, uint16_t color)
         {
             err += dX;
             y += sY;
+        }
+    }
+}
+
+static const uint8_t gradient_bayer4[4][4] = {
+    {0u, 8u, 2u, 10u},
+    {12u, 4u, 14u, 6u},
+    {3u, 11u, 1u, 9u},
+    {15u, 7u, 13u, 5u},
+};
+
+static inline uint8_t rgb565_r8(uint16_t color)
+{
+    uint8_t r = (color >> 11) & 0x1F;
+    return (r << 3) | (r >> 2);
+}
+
+static inline uint8_t rgb565_g8(uint16_t color)
+{
+    uint8_t g = (color >> 5) & 0x3F;
+    return (g << 2) | (g >> 4);
+}
+
+static inline uint8_t rgb565_b8(uint16_t color)
+{
+    uint8_t b = color & 0x1F;
+    return (b << 3) | (b >> 2);
+}
+
+static inline uint8_t gradient_lerp(uint8_t a, uint8_t b, uint16_t step, uint16_t stepMax)
+{
+    if (stepMax == 0)
+        return a;
+    return (uint8_t)(a + (((int32_t)b - a) * step) / stepMax);
+}
+
+static inline uint16_t rgb888_to_rgb565(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint16_t)(((uint16_t)(r >> 3) << 11) | ((uint16_t)(g >> 2) << 5) | (b >> 3));
+}
+
+static inline uint16_t rgb888_to_rgb565_dithered(uint8_t r, uint8_t g, uint8_t b, uint16_t x, uint16_t y)
+{
+    uint8_t dither = gradient_bayer4[y & 3u][x & 3u];
+    uint16_t rd = r + (dither >> 1);
+    uint16_t gd = g + (dither >> 2);
+    uint16_t bd = b + (dither >> 1);
+
+    if (rd > 255u)
+        rd = 255u;
+    if (gd > 255u)
+        gd = 255u;
+    if (bd > 255u)
+        bd = 255u;
+
+    return rgb888_to_rgb565((uint8_t)rd, (uint8_t)gd, (uint8_t)bd);
+}
+
+void draw_gradient(uint16_t colorA, uint16_t colorB, Rectangle *rectangle, uint8_t direction)
+{
+    if (rectangle == NULL || rectangle->width == 0u || rectangle->height == 0u)
+        return;
+
+    int32_t x0 = rectangle->x;
+    int32_t y0 = rectangle->y;
+    int32_t x1 = x0 + rectangle->width;
+    int32_t y1 = y0 + rectangle->height;
+
+    if (x1 <= 0 || y1 <= 0 || x0 >= DISPLAY_WIDTH || y0 >= DISPLAY_HEIGHT)
+        return;
+
+    int32_t drawX0 = x0 < 0 ? 0 : x0;
+    int32_t drawY0 = y0 < 0 ? 0 : y0;
+    int32_t drawX1 = x1 > DISPLAY_WIDTH ? DISPLAY_WIDTH : x1;
+    int32_t drawY1 = y1 > DISPLAY_HEIGHT ? DISPLAY_HEIGHT : y1;
+
+    uint8_t redA = rgb565_r8(colorA);
+    uint8_t greenA = rgb565_g8(colorA);
+    uint8_t blueA = rgb565_b8(colorA);
+    uint8_t redB = rgb565_r8(colorB);
+    uint8_t greenB = rgb565_g8(colorB);
+    uint8_t blueB = rgb565_b8(colorB);
+
+    uint16_t stepMax;
+    if (direction == LEFT || direction == RIGHT)
+        stepMax = rectangle->width - 1u;
+    else if (direction == UP || direction == DOWN)
+        stepMax = rectangle->height - 1u;
+    else
+        return;
+
+    for (int32_t y = drawY0; y < drawY1; y++)
+    {
+        uint16_t localY = (uint16_t)(y - y0);
+        uint32_t row = (uint32_t)y * DISPLAY_WIDTH;
+
+        for (int32_t x = drawX0; x < drawX1; x++)
+        {
+            uint16_t localX = (uint16_t)(x - x0);
+            uint16_t step;
+
+            switch (direction)
+            {
+            case RIGHT:
+                step = localX;
+                break;
+            case LEFT:
+                step = stepMax - localX;
+                break;
+            case DOWN:
+                step = localY;
+                break;
+            case UP:
+                step = stepMax - localY;
+                break;
+            default:
+                return;
+            }
+
+            uint8_t r = gradient_lerp(redA, redB, step, stepMax);
+            uint8_t g = gradient_lerp(greenA, greenB, step, stepMax);
+            uint8_t b = gradient_lerp(blueA, blueB, step, stepMax);
+
+            buffer[row + (uint32_t)x] = rgb888_to_rgb565_dithered(r, g, b, (uint16_t)x, (uint16_t)y);
         }
     }
 }
