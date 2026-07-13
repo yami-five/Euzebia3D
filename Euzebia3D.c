@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
 #include "pico/multicore.h"
@@ -17,6 +18,7 @@
 #include "IDisplay.h"
 #include "IHardware.h"
 #include "ILightFactory.h"
+#include "IMaterialFactory.h"
 #include "IMeshFactory.h"
 #include "IPainter.h"
 #include "IRenderer.h"
@@ -29,6 +31,8 @@
 #include "debugMode.h"
 #endif
 #include "lightFactory.h"
+#include "material.h"
+#include "materialFactory.h"
 #include "mesh.h"
 #include "meshFactory.h"
 #include "renderer.h"
@@ -46,13 +50,23 @@
 const IPainter *get_painter(void);
 static char t_char[11];
 
+#if EUZEBIA3D_DEBUG_STAGE_ENABLED
 volatile uint32_t euzebia_debug_stage = 0;
+#define EUZEBIA3D_SET_DEBUG_STAGE(stage) \
+    do                                   \
+    {                                    \
+        euzebia_debug_stage = (stage);   \
+    } while (0)
+#else
+#define EUZEBIA3D_SET_DEBUG_STAGE(stage) ((void)0)
+#endif
 volatile uint32_t euzebia_debug_frame = 0;
 
 static const IHardware *hardware_core;
 static const IDisplay *display;
 static const IPainter *painter;
 static const IRenderer *renderer;
+static const IMaterialFactory *materialFactory;
 static const IMeshFactory *meshFactory;
 static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
@@ -186,6 +200,10 @@ int main(void)
     renderer->init_renderer(hardware_core, painter);
     renderer->set_scale(1);
 
+    materialFactory = get_materialFactory();
+    EUZEBIA3D_REQUIRE_POINTER(materialFactory, "get_materialFactory");
+    materialFactory->init_material_factory(storage);
+
     meshFactory = get_meshFactory();
     EUZEBIA3D_REQUIRE_POINTER(meshFactory, "get_meshFactory");
     meshFactory->init_mesh_factory(storage);
@@ -198,7 +216,8 @@ int main(void)
     // room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
     // room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
-    Mesh *bug = meshFactory->create_textured_mesh(2, 3);
+    Material *bugMat=materialFactory->create_textured_mat(2, 0.0f, 0.0f, true);
+    Mesh *bug = meshFactory->create_mesh(bugMat, 3);
     if (bug == NULL)
         return 1;
 
@@ -208,7 +227,8 @@ int main(void)
     if (bug->transformations == NULL || bug->transformationsNum == 0)
         return 1;
 
-    Mesh *earth = meshFactory->create_textured_mesh(3, 4);
+    Material *earthMat=materialFactory->create_textured_mat(3, 0.0f, 0.0f, false);
+    Mesh *earth = meshFactory->create_mesh(earthMat, 4);
     if (earth == NULL)
         return 1;
 
@@ -218,7 +238,8 @@ int main(void)
     if (earth->transformations == NULL || earth->transformationsNum == 0)
         return 1;
 
-    Mesh *moon = meshFactory->create_textured_mesh(4, 4);
+    Material *moonMat=materialFactory->create_textured_mat(4, 0.0f, 0.0f, false);
+    Mesh *moon = meshFactory->create_mesh(moonMat, 4);
     if (moon == NULL)
         return 1;
 
@@ -231,8 +252,9 @@ int main(void)
 
     lightFactory = get_lightFactory();
     EUZEBIA3D_REQUIRE_POINTER(lightFactory, "get_lightFactory");
-    PointLight *pointLight = lightFactory->create_point_light(-10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
-    if (pointLight == NULL)
+    Light *light = lightFactory->create_point_light(-10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
+    //Light* light = lightFactory->create_directional_light(10.0f, -3.0f, -15.0f, 15.0f, 0xffff);
+    if (light == NULL)
         return 1;
 
     cameraFactory = get_cameraFactory();
@@ -241,7 +263,7 @@ int main(void)
     if (camera == NULL)
         return 1;
     // Camera transformation is unused while update_camera() is disabled in the main loop.
-    //  camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_TRANSLATE);
+      camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_TRANSLATE);
      camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_ROTATE);
 
     painter->clear_buffer(0x0000);
@@ -291,7 +313,7 @@ int main(void)
     while (running)
     {
         euzebia_debug_frame = t;
-        euzebia_debug_stage = 100;
+        EUZEBIA3D_SET_DEBUG_STAGE(100);
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
         uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
 #endif
@@ -306,7 +328,7 @@ int main(void)
         (void)qt;
         // modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
         // modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
-        euzebia_debug_stage = 110;
+        EUZEBIA3D_SET_DEBUG_STAGE(110);
         modify_mesh_transformation(bug->transformations, 0.2f, 0.0f, -10.0f, 0.0f, 1);
         modify_mesh_transformation(earth->transformations, t * 0.001f, 0.0f, -10.0f, 0.0f, 1);
         //modify_mesh_transformation(moon->transformations, t * 0.0001f, 0.0f, -10.0f, 10.0f, 2);
@@ -314,17 +336,17 @@ int main(void)
         //update_camera(camera);
         modify_camera_transformation(camera->transformations, 0.0f, 10.0f, 10.0f, 10.0f, 0);
         modify_camera_transformation(camera->transformations, 0.0f, 0.1f, 0.1f, 0.1f, 1);
-        euzebia_debug_stage = 120;
+        EUZEBIA3D_SET_DEBUG_STAGE(120);
         renderer->clean_scene();
-        // renderer->add_model_to_scene(room, camera, pointLight);
-        // renderer->add_model_to_scene(mug, camera, pointLight);
-        euzebia_debug_stage = 130;
-        renderer->add_model_to_scene(bug, camera, pointLight);
-        renderer->add_model_to_scene(earth, camera, pointLight);
-        renderer->add_model_to_scene(moon, camera, pointLight);
-        euzebia_debug_stage = 140;
-        renderer->render_scene(pointLight);
-        euzebia_debug_stage = 145;
+        // renderer->add_model_to_scene(room, camera, light);
+        // renderer->add_model_to_scene(mug, camera, light);
+        EUZEBIA3D_SET_DEBUG_STAGE(130);
+        renderer->add_model_to_scene(bug, camera, light);
+        renderer->add_model_to_scene(earth, camera, light);
+        renderer->add_model_to_scene(moon, camera, light);
+        EUZEBIA3D_SET_DEBUG_STAGE(140);
+        renderer->render_scene(light);
+        EUZEBIA3D_SET_DEBUG_STAGE(145);
         // puppeteer->perform(pogodynka, t);
 
         /*painter->draw_plasma(
@@ -342,25 +364,25 @@ int main(void)
         painter->draw_line(&lineStart, &lineEnd, 0xfafa);*/
 
 #if defined(EUZEBIA3D_DEBUG_MODE)
-        euzebia_debug_stage = 150;
+        EUZEBIA3D_SET_DEBUG_STAGE(150);
         debugMode->show_info();
         snprintf(t_char, sizeof(t_char), "%lu", (unsigned long)t);
         painter->print(t_char, 0, 220, 1, 0xffff);
         debugMode->begin_draw_buffer();
 #endif
-        euzebia_debug_stage = 160;
+        EUZEBIA3D_SET_DEBUG_STAGE(160);
         painter->draw_buffer();
-        euzebia_debug_stage = 165;
+        EUZEBIA3D_SET_DEBUG_STAGE(165);
 #if defined(EUZEBIA3D_DEBUG_MODE)
         debugMode->end_draw_buffer();
 #endif
         t++;
-        euzebia_debug_stage = 170;
+        EUZEBIA3D_SET_DEBUG_STAGE(170);
         painter->clear_buffer(0);
 #if defined(EUZEBIA3D_DEBUG_MODE)
         debugMode->end_frame();
 #endif
-        euzebia_debug_stage = 200;
+        EUZEBIA3D_SET_DEBUG_STAGE(200);
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
         cap_window_frame_rate(frame_begin_ticks);

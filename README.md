@@ -119,6 +119,9 @@ Current default in `CMakeLists.txt` is `PICO`.
 
 Use separate build directories per platform to avoid cache conflicts.
 
+Useful build flags:
+- `EUZEBIA3D_DEBUG_STAGE_ENABLED=OFF` compiles out the volatile `*_debug_stage` variables and writes to them.
+
 ### Build for Windows
 
 Configure:

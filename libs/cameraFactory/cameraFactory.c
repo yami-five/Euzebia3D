@@ -51,11 +51,11 @@ Camera *create_camera(float camX, float camY, float camZ, float targetX, float t
     return cam;
 }
 
-static ICameraFactory camera = {
+static ICameraFactory cameraFactory = {
     .create_camera = create_camera
 };
 
 const ICameraFactory *get_cameraFactory(void)
 {
-    return &camera;
+    return &cameraFactory;
 }

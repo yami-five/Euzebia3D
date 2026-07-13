@@ -45,7 +45,16 @@ static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 
+#if EUZEBIA3D_DEBUG_STAGE_ENABLED
 volatile uint32_t painter_debug_stage = 0;
+#define PAINTER_SET_DEBUG_STAGE(stage) \
+    do                                 \
+    {                                  \
+        painter_debug_stage = (stage); \
+    } while (0)
+#else
+#define PAINTER_SET_DEBUG_STAGE(stage) ((void)0)
+#endif
 volatile uint32_t painter_debug_line = 0;
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -224,11 +233,11 @@ void init_painter(const IDisplay *display, const IHardware *hardware, const ISto
 
 void draw_buffer(void)
 {
-    painter_debug_stage = 100;
+    PAINTER_SET_DEBUG_STAGE(100);
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     if (!ensure_sdl_backend())
     {
-        painter_debug_stage = 101;
+        PAINTER_SET_DEBUG_STAGE(101);
         return;
     }
 
@@ -241,7 +250,7 @@ void draw_buffer(void)
             mirrored_buffer[dst_row_start + x] = buffer[src_row_start + x];
     }
 
-    painter_debug_stage = 110;
+    PAINTER_SET_DEBUG_STAGE(110);
     SDL_UpdateTexture(
         sdl_texture,
         NULL,
@@ -249,36 +258,36 @@ void draw_buffer(void)
         DISPLAY_WIDTH * (int32_t)sizeof(uint16_t));
     SDL_RenderClear(sdl_renderer);
     SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
-    painter_debug_stage = 120;
+    PAINTER_SET_DEBUG_STAGE(120);
     SDL_RenderPresent(sdl_renderer);
 #else
-    painter_debug_stage = 110;
+    PAINTER_SET_DEBUG_STAGE(110);
     spi_inst_t *spi_port = _hardware->get_spi_port();
     spin_lock_t *spi_spinlock = _hardware->get_spinlock();
     (void)spi_spinlock;
 
-    painter_debug_stage = 120;
+    PAINTER_SET_DEBUG_STAGE(120);
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     _hardware->write(LCD_DC_PIN, 0);
     _hardware->spi_write_byte(0x2C);
     _hardware->write(LCD_DC_PIN, 1);
     spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
-    painter_debug_stage = 130;
+    PAINTER_SET_DEBUG_STAGE(130);
     dma_channel_set_trans_count(dma_channel, BUFFER_SIZE_HALF, false);
     dma_channel_set_read_addr(dma_channel, buffer, true);
-    painter_debug_stage = 140;
+    PAINTER_SET_DEBUG_STAGE(140);
     dma_channel_wait_for_finish_blocking(dma_channel);
 
-    painter_debug_stage = 150;
+    PAINTER_SET_DEBUG_STAGE(150);
     while (spi_is_busy(spi_port))
     {
     }
 
-    painter_debug_stage = 160;
+    PAINTER_SET_DEBUG_STAGE(160);
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 #endif
-    painter_debug_stage = 200;
+    PAINTER_SET_DEBUG_STAGE(200);
 }
 
 void clear_buffer(uint16_t color)

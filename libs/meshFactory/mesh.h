@@ -7,16 +7,7 @@
 #include "fpa.h"
 #include "../storage/gfx.h"
 #include "transformations.h"
-
-typedef struct
-{
-    uint16_t diffuse;
-    const uint16_t *texture;
-    int textureSize;
-    int textureWidth;
-    int textureHeight;
-    uint8_t isSkyBox;
-} Material;
+#include "material.h"
 
 typedef struct
 {

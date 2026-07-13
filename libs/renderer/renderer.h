@@ -5,6 +5,7 @@
 #include "fpa.h"
 #include "camera.h"
 #include "light.h"
+#include "material.h"
 #include "mesh.h"
 #include "string.h"
 

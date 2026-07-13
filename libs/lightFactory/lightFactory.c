@@ -5,9 +5,9 @@
 #include "../storage/gfx.h"
 #include <stdlib.h>
 
-PointLight* create_point_light(float x, float y, float z, float intensity, uint16_t color)
+Light* create_point_light(float x, float y, float z, float intensity, uint16_t color)
 {
-    PointLight *light = (PointLight *)malloc(sizeof(PointLight));
+    Light *light = (Light *)malloc(sizeof(Light));
     if (light == NULL)
         return NULL;
 
@@ -16,14 +16,31 @@ PointLight* create_point_light(float x, float y, float z, float intensity, uint1
     light->position.z = float_to_fixed(z);
     light->intensity = float_to_fixed(intensity);
     light->color = color;
+    light->lightType = POINT_LIGHT;
     return light;
 }
 
-static ILightFactory light = {
+Light* create_directional_light(float x, float y, float z, float intensity, uint16_t color)
+{
+    Light *light = (Light *)malloc(sizeof(Light));
+    if (light == NULL)
+        return NULL;
+
+    light->position.x = -float_to_fixed(x);
+    light->position.y = -float_to_fixed(y);
+    light->position.z = -float_to_fixed(z);
+    light->intensity = float_to_fixed(intensity);
+    light->color = color;
+    light->lightType = DIRECTIONAL_LIGHT;
+    return light;
+}
+
+static ILightFactory lightFactory = {
     .create_point_light = create_point_light,
+    .create_directional_light = create_directional_light,
 };
 
 const ILightFactory *get_lightFactory(void)
 {
-    return &light;
+    return &lightFactory;
 }

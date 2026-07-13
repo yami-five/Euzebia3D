@@ -11,9 +11,9 @@
 typedef struct
 {
     void (*init_renderer)(const IHardware * hardware, const IPainter * painter);
-    void (*add_model_to_scene)(Mesh *mesh, Camera *camera, PointLight *pLight);
+    void (*add_model_to_scene)(Mesh *mesh, Camera *camera, Light *light);
     void (*clean_scene)();
-    void (*render_scene)(PointLight *pLight);
+    void (*render_scene)(Light *light);
     void (*set_scale)(uint8_t scale);
 } IRenderer;
 

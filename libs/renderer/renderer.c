@@ -5,6 +5,7 @@
 #endif
 #include <limits.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 static const IHardware *_hardware = NULL;
 static const IPainter *_painter = NULL;
@@ -93,7 +94,16 @@ static inline int32_t texture_dimension_shift(int32_t size)
     return shift;
 }
 
+#if EUZEBIA3D_DEBUG_STAGE_ENABLED
 volatile uint32_t renderer_debug_stage = 0;
+#define RENDERER_SET_DEBUG_STAGE(stage) \
+    do                                  \
+    {                                   \
+        renderer_debug_stage = (stage); \
+    } while (0)
+#else
+#define RENDERER_SET_DEBUG_STAGE(stage) ((void)0)
+#endif
 volatile uint32_t renderer_debug_vertex_index = 0;
 volatile uint32_t renderer_debug_face_index = 0;
 volatile uint32_t renderer_debug_scene_counter = 0;
@@ -347,6 +357,41 @@ static inline void write_vector_triplet(int32_t *vectors, uint16_t vectorIndex, 
     vectors[base + 2u] = value->z;
 }
 
+static inline void zero_vector(Vector3 *value)
+{
+    value->x = 0;
+    value->y = 0;
+    value->z = 0;
+}
+
+static inline void make_light_direction(Vector3 *out, const Light *light, const int32_t *vertices, size_t vertexBase)
+{
+    if (light->lightType == DIRECTIONAL_LIGHT)
+    {
+        out->x = light->position.x;
+        out->y = light->position.y;
+        out->z = light->position.z;
+    }
+    else
+    {
+        out->x = light->position.x - vertices[vertexBase];
+        out->y = light->position.y - vertices[vertexBase + 1u];
+        out->z = light->position.z - vertices[vertexBase + 2u];
+    }
+
+    if (!norm_vector_safe(out))
+        zero_vector(out);
+}
+
+static inline int32_t clamp_light_distance(int32_t lightDistance)
+{
+    if (lightDistance < 0)
+        return 0;
+    if (lightDistance > SCALE_FACTOR)
+        return SCALE_FACTOR;
+    return lightDistance;
+}
+
 static void configure_render_dimensions(void)
 {
     if (render_scale == 0)
@@ -386,20 +431,20 @@ void triangle_center(Triangle3D *triangle, int32_t *center)
 
 void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
-    renderer_debug_stage = 600;
+    RENDERER_SET_DEBUG_STAGE(600);
     renderer_debug_scene_counter = verticesCounter;
     renderer_debug_pointer = (uintptr_t)vector;
 
     if (vertices == NULL || vector == NULL)
     {
-        renderer_debug_stage = 601;
+        RENDERER_SET_DEBUG_STAGE(601);
         return;
     }
 
     int32_t qt_rad = fixed_mul(vector->w, PI2);
     int32_t c = fast_cos(qt_rad >> 1);
     int32_t s = fast_sin(qt_rad >> 1);
-    renderer_debug_stage = 610;
+    RENDERER_SET_DEBUG_STAGE(610);
 
     Vector3 qVec = {
         .x = vector->x,
@@ -410,12 +455,12 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         .vec = &qVec};
     if (!norm_vector_safe(q.vec))
     {
-        renderer_debug_stage = 611;
+        RENDERER_SET_DEBUG_STAGE(611);
         return;
     }
 
     mul_vec_scalar(q.vec, s);
-    renderer_debug_stage = 620;
+    RENDERER_SET_DEBUG_STAGE(620);
 
     Vector3 qVecInv = {
         .x = -q.vec->x,
@@ -426,7 +471,7 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         .vec = &qVecInv};
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
-        renderer_debug_stage = 630;
+        RENDERER_SET_DEBUG_STAGE(630);
         renderer_debug_vertex_index = i;
         Vector3 vec_vertex =
             {
@@ -451,18 +496,18 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         vertices[i * 3 + 2] = result2.vec->z;
     }
 
-    renderer_debug_stage = 690;
+    RENDERER_SET_DEBUG_STAGE(690);
 }
 
 void translate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
-    renderer_debug_stage = 700;
+    RENDERER_SET_DEBUG_STAGE(700);
     renderer_debug_scene_counter = verticesCounter;
     renderer_debug_pointer = (uintptr_t)vector;
 
     if (vertices == NULL || vector == NULL)
     {
-        renderer_debug_stage = 701;
+        RENDERER_SET_DEBUG_STAGE(701);
         return;
     }
 
@@ -474,18 +519,18 @@ void translate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vec
         vertices[i * 3 + 2] += vector->z;
     }
 
-    renderer_debug_stage = 790;
+    RENDERER_SET_DEBUG_STAGE(790);
 }
 
 void scale(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
-    renderer_debug_stage = 800;
+    RENDERER_SET_DEBUG_STAGE(800);
     renderer_debug_scene_counter = verticesCounter;
     renderer_debug_pointer = (uintptr_t)vector;
 
     if (vertices == NULL || vector == NULL)
     {
-        renderer_debug_stage = 801;
+        RENDERER_SET_DEBUG_STAGE(801);
         return;
     }
 
@@ -497,22 +542,22 @@ void scale(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
         vertices[i * 3 + 2] = fixed_mul(vertices[i * 3 + 2], vector->z);
     }
 
-    renderer_debug_stage = 890;
+    RENDERER_SET_DEBUG_STAGE(890);
 }
 
 void transform(int32_t *vertices, uint16_t verticesCounter, TransformInfo *transformInfo)
 {
-    renderer_debug_stage = 900;
+    RENDERER_SET_DEBUG_STAGE(900);
     renderer_debug_scene_counter = verticesCounter;
     renderer_debug_pointer = (uintptr_t)transformInfo;
 
     if (vertices == NULL || transformInfo == NULL || transformInfo->transformVector == NULL)
     {
-        renderer_debug_stage = 901;
+        RENDERER_SET_DEBUG_STAGE(901);
         return;
     }
 
-    renderer_debug_stage = 910 + transformInfo->transformType;
+    RENDERER_SET_DEBUG_STAGE(910 + transformInfo->transformType);
     if (transformInfo->transformType == MODEL_TRANSFORM_ROTATE)
         rotate(vertices, verticesCounter, transformInfo->transformVector);
     if (transformInfo->transformType == MODEL_TRANSFORM_TRANSLATE)
@@ -520,7 +565,7 @@ void transform(int32_t *vertices, uint16_t verticesCounter, TransformInfo *trans
     if (transformInfo->transformType == MODEL_TRANSFORM_SCALE)
         scale(vertices, verticesCounter, transformInfo->transformVector);
 
-    renderer_debug_stage = 990;
+    RENDERER_SET_DEBUG_STAGE(990);
 }
 
 void inf(float *x, float *y, float qt)
@@ -646,7 +691,7 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
     return outCount;
 }
 
-void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
+void shading(uint16_t *color, Light *light, int32_t lightDistance)
 {
     if (*color == TEXTURE_TRANSPARENT_COLOR)
         return;
@@ -718,29 +763,32 @@ static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g, ui
     *count += 1u;
 }
 
-static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0, int32_t row1, int32_t x0, int32_t x1)
+static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0, int32_t row1, int32_t x0, int32_t x1, bool transparent)
 {
     uint16_t c00 = texture[row0 + x0];
     uint16_t c10 = texture[row0 + x1];
     uint16_t c01 = texture[row1 + x0];
     uint16_t c11 = texture[row1 + x1];
 
-    if (c00 == TEXTURE_TRANSPARENT_COLOR)
-        return TEXTURE_TRANSPARENT_COLOR;
-
-    if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR || c11 == TEXTURE_TRANSPARENT_COLOR)
+    if (transparent)
     {
-        uint32_t r = 0;
-        uint32_t g = 0;
-        uint32_t b = 0;
-        uint32_t count = 0;
-        add_opaque_texel(c00, &r, &g, &b, &count);
-        add_opaque_texel(c10, &r, &g, &b, &count);
-        add_opaque_texel(c01, &r, &g, &b, &count);
-        add_opaque_texel(c11, &r, &g, &b, &count);
-        if (count == 0)
+        if (c00 == TEXTURE_TRANSPARENT_COLOR)
             return TEXTURE_TRANSPARENT_COLOR;
-        return ((r / count) << 11) | ((g / count) << 5) | (b / count);
+
+        if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR || c11 == TEXTURE_TRANSPARENT_COLOR)
+        {
+            uint32_t r = 0;
+            uint32_t g = 0;
+            uint32_t b = 0;
+            uint32_t count = 0;
+            add_opaque_texel(c00, &r, &g, &b, &count);
+            add_opaque_texel(c10, &r, &g, &b, &count);
+            add_opaque_texel(c01, &r, &g, &b, &count);
+            add_opaque_texel(c11, &r, &g, &b, &count);
+            if (count == 0)
+                return TEXTURE_TRANSPARENT_COLOR;
+            return ((r / count) << 11) | ((g / count) << 5) | (b / count);
+        }
     }
 
     uint32_t r00 = (c00 >> 11) & 0x1f;
@@ -798,7 +846,7 @@ static inline void clamp_texel_coords(int32_t textureWidth, int32_t textureHeigh
         *tex_y = maxY;
 }
 
-static inline uint16_t texturing_power_of_two(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t textureWidthShift, int32_t textureHeightShift, int32_t U, int32_t V, int32_t Z)
+static inline uint16_t texturing_power_of_two(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t textureWidthShift, int32_t textureHeightShift, int32_t U, int32_t V, int32_t Z, bool transparent)
 {
     if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
         return TEXTURE_TRANSPARENT_COLOR;
@@ -818,10 +866,10 @@ static inline uint16_t texturing_power_of_two(const uint16_t *texture, int32_t t
     int32_t row0 = y0 << textureWidthShift;
     int32_t row1 = y1 << textureWidthShift;
 
-    return sample_texture_2x2(texture, row0, row1, x0, x1);
+    return sample_texture_2x2(texture, row0, row1, x0, x1, transparent);
 }
 
-static inline uint16_t texturing_generic(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t U, int32_t V, int32_t Z)
+static inline uint16_t texturing_generic(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t U, int32_t V, int32_t Z, bool transparent)
 {
     if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
         return TEXTURE_TRANSPARENT_COLOR;
@@ -841,7 +889,7 @@ static inline uint16_t texturing_generic(const uint16_t *texture, int32_t textur
     int32_t row0 = y0 * textureWidth;
     int32_t row1 = y1 * textureWidth;
 
-    return sample_texture_2x2(texture, row0, row1, x0, x1);
+    return sample_texture_2x2(texture, row0, row1, x0, x1, transparent);
 }
 
 static void draw_masked_span(uint16_t x, uint16_t y, const uint16_t *span, uint16_t length)
@@ -869,12 +917,12 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
 
 static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t U, int32_t dUdx, int32_t V, int32_t dVdx, int32_t Z, int32_t dZdx)
 {
-    (void)mat;
     const uint16_t *texture = activeTextureData;
     int32_t textureWidth = activeTextureWidth;
     int32_t textureHeight = activeTextureHeight;
     int32_t textureWidthShift = activeTextureWidthShift;
     int32_t textureHeightShift = activeTextureHeightShift;
+    bool transparent = mat->transparent;
     uint8_t usePowerOfTwo = (textureWidthShift >= 0 &&
                              textureHeightShift >= 0 &&
                              textureWidthShift <= SHIFT_FACTOR &&
@@ -892,7 +940,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
             int32_t Ucur = Uacc >> UV_LERP_SHIFT;
             int32_t Vcur = Vacc >> UV_LERP_SHIFT;
             int32_t Zcur = Zacc;
-            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur);
+            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur, transparent);
             Uacc += dUdx;
             Vacc += dVdx;
             Zacc += dZdx;
@@ -905,7 +953,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
             int32_t Ucur = Uacc >> UV_LERP_SHIFT;
             int32_t Vcur = Vacc >> UV_LERP_SHIFT;
             int32_t Zcur = Zacc;
-            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur);
+            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur, transparent);
             Uacc += dUdx;
             Vacc += dVdx;
             Zacc += dZdx;
@@ -923,7 +971,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
             int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
             int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
             int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur);
+            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur, transparent);
             interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
             interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
             interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
@@ -936,7 +984,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
             int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
             int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
             int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur);
+            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur, transparent);
             interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
             interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
             interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
@@ -945,7 +993,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
 #endif
 }
 
-static void shade_span(uint16_t *dst, uint16_t length, PointLight *light, int32_t L, int32_t dLdx)
+static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L, int32_t dLdx)
 {
     if (length <= MAX_SHADING_SPAN_LEN)
     {
@@ -1018,7 +1066,7 @@ static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start, int32_t x
     return state;
 }
 
-static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, PointLight *light, uint8_t apply_shading, const SpanLerpState *lerp)
+static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, Light *light, const SpanLerpState *lerp)
 {
     if (length == 0)
         return;
@@ -1028,8 +1076,9 @@ static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, P
     else
         texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->Z, lerp->dZdx);
 
-    if (apply_shading)
-        shade_span(dst, length, light, lerp->L, lerp->dLdx);
+#ifdef SHADING_ENABLED
+    shade_span(dst, length, light, lerp->L, lerp->dLdx);
+#endif
 }
 
 inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1, int32_t z2, int32_t z3)
@@ -1038,13 +1087,13 @@ inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1, 
     return inverse(z);
 }
 
-void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *light, int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0, int32_t V1, int32_t Z0, int32_t Z1)
+void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, Light *light, int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0, int32_t V1, int32_t Z0, int32_t Z1)
 {
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
         return;
 
-    renderer_debug_stage = 500;
+    RENDERER_SET_DEBUG_STAGE(500);
     renderer_debug_vertex_index = (uint32_t)y;
 
     int32_t n = (y & 1) >> 1;
@@ -1080,7 +1129,6 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
         x1 = render_width;
     if (x1 <= x0)
         return;
-    uint8_t applyShading = (mat->isSkyBox == 0) && SHADING_ENABLED;
     uint16_t spanX0 = x0 * output_scale;
     uint16_t spanY = y * output_scale;
 
@@ -1100,8 +1148,8 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
     };
     SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
 
-    renderer_debug_stage = 510;
-    build_material_span(span_buffer, span_length, mat, light, applyShading, &lerp);
+    RENDERER_SET_DEBUG_STAGE(510);
+    build_material_span(span_buffer, span_length, mat, light, &lerp);
 
     if (span_length > 0)
     {
@@ -1128,13 +1176,16 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
 
         for (uint8_t dy = 0; dy < output_scale; dy++)
         {
-            renderer_debug_stage = 520;
+            RENDERER_SET_DEBUG_STAGE(520);
             renderer_debug_scene_counter = span_to_draw_length;
-            draw_masked_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
+            if (mat->transparent)
+                draw_masked_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
+            else
+                _painter->draw_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
         }
     }
 
-    renderer_debug_stage = 590;
+    RENDERER_SET_DEBUG_STAGE(590);
 }
 
 inline void swap_int32(int32_t *x, int32_t *y)
@@ -1144,11 +1195,11 @@ inline void swap_int32(int32_t *x, int32_t *y)
     *y = temp;
 }
 
-void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
+void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Light *light)
 {
-    renderer_debug_stage = 400;
+    RENDERER_SET_DEBUG_STAGE(400);
     prepare_texture_cache(mat);
-    renderer_debug_stage = 401;
+    RENDERER_SET_DEBUG_STAGE(401);
 
     int32_t x, y, Lx, Ux, Vx, Zx;
     if (triangle->a.y > triangle->b.y)
@@ -1186,11 +1237,11 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     }
     if (triangle->c.y < 0 || triangle->a.y >= render_height)
     {
-        renderer_debug_stage = 402;
+        RENDERER_SET_DEBUG_STAGE(402);
         return;
     }
 
-    renderer_debug_stage = 410;
+    RENDERER_SET_DEBUG_STAGE(410);
     y = triangle->a.y;
     int32_t xx = x = triangle->a.x;
     int32_t Lxx = Lx = ((int32_t)lightDistances[0]) << LIGHT_LERP_SHIFT;
@@ -1228,15 +1279,15 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
     if (triangle->a.y < triangle->b.y)
     {
-        renderer_debug_stage = 430;
+        RENDERER_SET_DEBUG_STAGE(430);
         int32_t q = 0;
         int32_t xd = 1 - ((dx01 < 0) << 1);
         while (y <= triangle->b.y && y < render_height)
         {
-            renderer_debug_stage = 431;
+            RENDERER_SET_DEBUG_STAGE(431);
             renderer_debug_vertex_index = (uint32_t)y;
             rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
-            renderer_debug_stage = 432;
+            RENDERER_SET_DEBUG_STAGE(432);
             y += 1;
             q += dx01;
             q2 += dx02;
@@ -1248,13 +1299,13 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Vxx += dV02;
             Zx += dZ01;
             Zxx += dZ02;
-            renderer_debug_stage = 433;
+            RENDERER_SET_DEBUG_STAGE(433);
             while (xd * q >= dy01)
             {
                 q -= xd * dy01;
                 x += xd;
             }
-            renderer_debug_stage = 434;
+            RENDERER_SET_DEBUG_STAGE(434);
             while (xxd * q2 >= dy02)
             {
                 q2 -= xxd * dy02;
@@ -1265,7 +1316,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
     if (triangle->b.y < triangle->c.y)
     {
-        renderer_debug_stage = 440;
+        RENDERER_SET_DEBUG_STAGE(440);
         int32_t q = 0;
         x = triangle->b.x;
         Lx = ((int32_t)lightDistances[1]) << LIGHT_LERP_SHIFT;
@@ -1276,10 +1327,10 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
         while (y <= triangle->c.y && y < render_height)
         {
-            renderer_debug_stage = 441;
+            RENDERER_SET_DEBUG_STAGE(441);
             renderer_debug_vertex_index = (uint32_t)y;
             rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
-            renderer_debug_stage = 442;
+            RENDERER_SET_DEBUG_STAGE(442);
             y += 1;
             q += dx12;
             q2 += dx02;
@@ -1291,13 +1342,13 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Vxx += dV02;
             Zx += dZ12;
             Zxx += dZ02;
-            renderer_debug_stage = 443;
+            RENDERER_SET_DEBUG_STAGE(443);
             while (xd * q > dy12)
             {
                 q -= xd * dy12;
                 x += xd;
             }
-            renderer_debug_stage = 444;
+            RENDERER_SET_DEBUG_STAGE(444);
             while (xxd * q2 > dy02)
             {
                 q2 -= xxd * dy02;
@@ -1306,7 +1357,7 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
         }
     }
 
-    renderer_debug_stage = 490;
+    RENDERER_SET_DEBUG_STAGE(490);
 }
 
 typedef struct
@@ -1327,18 +1378,18 @@ static int compare_scene_depth_desc(const void *a, const void *b)
     return 0;
 }
 
-void render_scene(PointLight *pLight)
+void render_scene(Light *pLight)
 {
-    renderer_debug_stage = 300;
+    RENDERER_SET_DEBUG_STAGE(300);
     renderer_debug_scene_counter = sceneCounter;
 
     if (sceneCounter == 0)
     {
-        renderer_debug_stage = 301;
+        RENDERER_SET_DEBUG_STAGE(301);
         return;
     }
 
-    renderer_debug_stage = 310;
+    RENDERER_SET_DEBUG_STAGE(310);
     for (uint16_t i = 0; i < sceneCounter; i++)
     {
         renderer_debug_vertex_index = i;
@@ -1347,21 +1398,21 @@ void render_scene(PointLight *pLight)
         drawItems[i].depth = (triScene->TriangleOnScreen.a.z + triScene->TriangleOnScreen.b.z + triScene->TriangleOnScreen.c.z) / 3;
     }
 
-    renderer_debug_stage = 320;
+    RENDERER_SET_DEBUG_STAGE(320);
     if (sceneCounter > 1)
         qsort(drawItems, sceneCounter, sizeof(SceneDrawItem), compare_scene_depth_desc);
 
-    renderer_debug_stage = 330;
+    RENDERER_SET_DEBUG_STAGE(330);
     for (uint16_t i = 0; i < sceneCounter; i++)
     {
-        renderer_debug_stage = 331;
+        RENDERER_SET_DEBUG_STAGE(331);
         renderer_debug_vertex_index = i;
         renderer_debug_face_index = drawItems[i].index;
         const TriangleInScene *triScene = &scene[drawItems[i].index];
         if (triScene->TriangleOnScreen.a.z < NEAR_CLIP_Z || triScene->TriangleOnScreen.b.z < NEAR_CLIP_Z || triScene->TriangleOnScreen.c.z < NEAR_CLIP_Z)
             continue;
 
-        renderer_debug_stage = 340;
+        RENDERER_SET_DEBUG_STAGE(340);
         int32_t aW = inverse(triScene->TriangleOnScreen.a.z);
         int32_t bW = inverse(triScene->TriangleOnScreen.b.z);
         int32_t cW = inverse(triScene->TriangleOnScreen.c.z);
@@ -1401,31 +1452,28 @@ void render_scene(PointLight *pLight)
 
         int32_t lightDistances[3] = {0, 0, 0};
 #ifdef SHADING_ENABLED
-        if (triScene->mat->isSkyBox == 0)
-        {
-            lightDistances[0] = triScene->LightDistances[0];
-            lightDistances[1] = triScene->LightDistances[1];
-            lightDistances[2] = triScene->LightDistances[2];
-        }
+        lightDistances[0] = triScene->LightDistances[0];
+        lightDistances[1] = triScene->LightDistances[1];
+        lightDistances[2] = triScene->LightDistances[2];
 #endif
 
-        renderer_debug_stage = 350;
+        RENDERER_SET_DEBUG_STAGE(350);
         tri(&triangle, triScene->mat, lightDistances, pLight);
     }
 
-    renderer_debug_stage = 390;
+    RENDERER_SET_DEBUG_STAGE(390);
 }
 
-void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
+void add_model_to_scene(Mesh *mesh, Camera *camera, Light *pLight)
 {
-    renderer_debug_stage = 100;
+    RENDERER_SET_DEBUG_STAGE(100);
     renderer_debug_vertex_index = 0;
     renderer_debug_face_index = 0;
     renderer_debug_scene_counter = sceneCounter;
 
     if (mesh == NULL || camera == NULL || pLight == NULL || mesh->mat == NULL)
     {
-        renderer_debug_stage = 101;
+        RENDERER_SET_DEBUG_STAGE(101);
         return;
     }
 
@@ -1438,37 +1486,37 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
 
     if (mesh->vertices == NULL || mesh->faces == NULL || mesh->textureCoords == NULL || mesh->uv == NULL)
     {
-        renderer_debug_stage = 102;
+        RENDERER_SET_DEBUG_STAGE(102);
         return;
     }
 
     if (verticesCounter == 0 || mesh->facesCounter == 0 || textureCoordsCounter == 0)
     {
-        renderer_debug_stage = 103;
+        RENDERER_SET_DEBUG_STAGE(103);
         return;
     }
 
-    if (mesh->mat->isSkyBox == 0 && (mesh->vn == NULL || mesh->normals == NULL || vnCounter == 0))
+    if (mesh->vn == NULL || mesh->normals == NULL || vnCounter == 0)
     {
-        renderer_debug_stage = 104;
+        RENDERER_SET_DEBUG_STAGE(104);
         return;
     }
 
     if (transformationsNum > 0 && mesh->transformations == NULL)
     {
-        renderer_debug_stage = 106;
+        RENDERER_SET_DEBUG_STAGE(106);
         return;
     }
 
     if (transformationsNum > MAX_MODEL_TRANSFORMATIONS)
     {
-        renderer_debug_stage = 107;
+        RENDERER_SET_DEBUG_STAGE(107);
         return;
     }
 
     if (!ensure_model_scratch_capacity(verticesCounter, vnCounter))
     {
-        renderer_debug_stage = 105;
+        RENDERER_SET_DEBUG_STAGE(105);
         return;
     }
 
@@ -1476,29 +1524,28 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
     int32_t *verticesClip = modelScratchVerticesClip;
     int32_t *normalsModified = modelScratchNormalsModified;
 
-    renderer_debug_stage = 110;
+    RENDERER_SET_DEBUG_STAGE(110);
     memcpy(verticesModified, mesh->vertices, verticesCounter * 3 * sizeof(int32_t));
-    if (mesh->mat->isSkyBox == 0)
-        memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int32_t));
+    memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int32_t));
 
-    renderer_debug_stage = 120;
+    RENDERER_SET_DEBUG_STAGE(120);
     for (uint32_t i = 0; i < transformationsNum; i++)
     {
         renderer_debug_vertex_index = i;
         renderer_debug_pointer = (uintptr_t)&mesh->transformations[i];
-        renderer_debug_stage = 121;
+        RENDERER_SET_DEBUG_STAGE(121);
         transform(verticesModified, verticesCounter, &mesh->transformations[i]);
-        renderer_debug_stage = 122;
-        if (mesh->mat->isSkyBox == 0 && mesh->transformations[i].transformType != MODEL_TRANSFORM_TRANSLATE)
+        RENDERER_SET_DEBUG_STAGE(122);
+        if (mesh->transformations[i].transformType != MODEL_TRANSFORM_TRANSLATE)
         {
-            renderer_debug_stage = 123;
+            RENDERER_SET_DEBUG_STAGE(123);
             // Normals are directions; translation must not affect them.
             transform(normalsModified, vnCounter, &mesh->transformations[i]);
-            renderer_debug_stage = 124;
+            RENDERER_SET_DEBUG_STAGE(124);
         }
     }
 
-    renderer_debug_stage = 130;
+    RENDERER_SET_DEBUG_STAGE(130);
     for (uint16_t i = 0; i < verticesCounter * 3; i += 3)
     {
         renderer_debug_vertex_index = (uint32_t)i / 3u;
@@ -1515,47 +1562,34 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
         verticesClip[clipBase + 3] = w;
     }
 
-    if (mesh->mat->isSkyBox == 0)
+    RENDERER_SET_DEBUG_STAGE(135);
+    for (uint16_t i = 0; i < vnCounter; i++)
     {
-        renderer_debug_stage = 135;
-        for (uint16_t i = 0; i < vnCounter; i++)
+        renderer_debug_vertex_index = i;
+        size_t base = (size_t)i * 3u;
+        Vector3 normal = {
+            .x = normalsModified[base],
+            .y = normalsModified[base + 1u],
+            .z = normalsModified[base + 2u],
+        };
+
+        if (!norm_vector_safe(&normal))
         {
-            renderer_debug_vertex_index = i;
-            size_t base = (size_t)i * 3u;
-            Vector3 normal = {
-                .x = normalsModified[base],
-                .y = normalsModified[base + 1u],
-                .z = normalsModified[base + 2u],
-            };
-
-            if (!norm_vector_safe(&normal))
-            {
-                normal.x = 0;
-                normal.y = 0;
-                normal.z = 0;
-            }
-            write_vector_triplet(normalsModified, i, &normal);
+            normal.x = 0;
+            normal.y = 0;
+            normal.z = 0;
         }
+        write_vector_triplet(normalsModified, i, &normal);
+    }
 
-        renderer_debug_stage = 136;
-        for (uint16_t i = 0; i < verticesCounter; i++)
-        {
-            renderer_debug_vertex_index = i;
-            size_t base = (size_t)i * 3u;
-            Vector3 lightDirection = {
-                .x = pLight->position.x - verticesModified[base],
-                .y = pLight->position.y - verticesModified[base + 1u],
-                .z = pLight->position.z - verticesModified[base + 2u],
-            };
-
-            if (!norm_vector_safe(&lightDirection))
-            {
-                lightDirection.x = 0;
-                lightDirection.y = 0;
-                lightDirection.z = 0;
-            }
-            write_vector_triplet(verticesModified, i, &lightDirection);
-        }
+    RENDERER_SET_DEBUG_STAGE(136);
+    for (uint16_t i = 0; i < verticesCounter; i++)
+    {
+        renderer_debug_vertex_index = i;
+        size_t base = (size_t)i * 3u;
+        Vector3 lightDirection;
+        make_light_direction(&lightDirection, pLight, verticesModified, base);
+        write_vector_triplet(verticesModified, i, &lightDirection);
     }
 
     Vector3 normalVectorA;
@@ -1565,11 +1599,11 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
     Vector3 lightDirectionB;
     Vector3 lightDirectionC;
 
-    renderer_debug_stage = 140;
+    RENDERER_SET_DEBUG_STAGE(140);
     uint32_t faceIndexCount = (uint32_t)mesh->facesCounter * 3u;
     for (uint32_t i = 0; i < faceIndexCount; i += 3u)
     {
-        renderer_debug_stage = 150;
+        RENDERER_SET_DEBUG_STAGE(150);
         renderer_debug_face_index = i / 3u;
         renderer_debug_scene_counter = sceneCounter;
 
@@ -1582,68 +1616,50 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
 
         if (a >= verticesCounter || b >= verticesCounter || c >= verticesCounter)
         {
-            renderer_debug_stage = 151;
+            RENDERER_SET_DEBUG_STAGE(151);
             continue;
         }
 
         if (uvA >= textureCoordsCounter || uvB >= textureCoordsCounter || uvC >= textureCoordsCounter)
         {
-            renderer_debug_stage = 152;
+            RENDERER_SET_DEBUG_STAGE(152);
             continue;
         }
 
-        if (mesh->mat->isSkyBox == 0 &&
-            (mesh->normals[i] >= vnCounter || mesh->normals[i + 1] >= vnCounter || mesh->normals[i + 2] >= vnCounter))
+        if (mesh->normals[i] >= vnCounter || mesh->normals[i + 1] >= vnCounter || mesh->normals[i + 2] >= vnCounter)
         {
-            renderer_debug_stage = 153;
+            RENDERER_SET_DEBUG_STAGE(153);
             continue;
         }
 
         int32_t lightDistances[3] = {0, 0, 0};
-        if (mesh->mat->isSkyBox == 0)
+        RENDERER_SET_DEBUG_STAGE(160);
+        renderer_debug_vertex_index = mesh->normals[i];
+        if (!read_normal_vector(&normalVectorA, normalsModified, vnCounter, mesh->normals[i]) ||
+            !read_normal_vector(&normalVectorB, normalsModified, vnCounter, mesh->normals[i + 1]) ||
+            !read_normal_vector(&normalVectorC, normalsModified, vnCounter, mesh->normals[i + 2]))
         {
-            renderer_debug_stage = 160;
-            renderer_debug_vertex_index = mesh->normals[i];
-            if (!read_normal_vector(&normalVectorA, normalsModified, vnCounter, mesh->normals[i]) ||
-                !read_normal_vector(&normalVectorB, normalsModified, vnCounter, mesh->normals[i + 1]) ||
-                !read_normal_vector(&normalVectorC, normalsModified, vnCounter, mesh->normals[i + 2]))
-            {
-                lightDistances[0] = 0;
-                lightDistances[1] = 0;
-                lightDistances[2] = 0;
-            }
-            else
-            {
-                renderer_debug_stage = 163;
-                lightDirectionA.x = verticesModified[a * 3];
-                lightDirectionA.y = verticesModified[a * 3 + 1];
-                lightDirectionA.z = verticesModified[a * 3 + 2];
-                lightDirectionB.x = verticesModified[b * 3];
-                lightDirectionB.y = verticesModified[b * 3 + 1];
-                lightDirectionB.z = verticesModified[b * 3 + 2];
-                lightDirectionC.x = verticesModified[c * 3];
-                lightDirectionC.y = verticesModified[c * 3 + 1];
-                lightDirectionC.z = verticesModified[c * 3 + 2];
+            lightDistances[0] = 0;
+            lightDistances[1] = 0;
+            lightDistances[2] = 0;
+        }
+        else
+        {
+            RENDERER_SET_DEBUG_STAGE(163);
+            lightDirectionA.x = verticesModified[a * 3];
+            lightDirectionA.y = verticesModified[a * 3 + 1];
+            lightDirectionA.z = verticesModified[a * 3 + 2];
+            lightDirectionB.x = verticesModified[b * 3];
+            lightDirectionB.y = verticesModified[b * 3 + 1];
+            lightDirectionB.z = verticesModified[b * 3 + 2];
+            lightDirectionC.x = verticesModified[c * 3];
+            lightDirectionC.y = verticesModified[c * 3 + 1];
+            lightDirectionC.z = verticesModified[c * 3 + 2];
 
-                renderer_debug_stage = 165;
-                lightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
-                if (lightDistances[0] < 0)
-                    lightDistances[0] = 0;
-                if (lightDistances[0] > SCALE_FACTOR)
-                    lightDistances[0] = SCALE_FACTOR;
-
-                lightDistances[1] = dot_product(&normalVectorB, &lightDirectionB);
-                if (lightDistances[1] < 0)
-                    lightDistances[1] = 0;
-                if (lightDistances[1] > SCALE_FACTOR)
-                    lightDistances[1] = SCALE_FACTOR;
-
-                lightDistances[2] = dot_product(&normalVectorC, &lightDirectionC);
-                if (lightDistances[2] < 0)
-                    lightDistances[2] = 0;
-                if (lightDistances[2] > SCALE_FACTOR)
-                    lightDistances[2] = SCALE_FACTOR;
-            }
+            RENDERER_SET_DEBUG_STAGE(165);
+            lightDistances[0] = clamp_light_distance(dot_product(&normalVectorA, &lightDirectionA));
+            lightDistances[1] = clamp_light_distance(dot_product(&normalVectorB, &lightDirectionB));
+            lightDistances[2] = clamp_light_distance(dot_product(&normalVectorC, &lightDirectionC));
         }
 
         ClipVertex triangleIn[3] = {
@@ -1675,7 +1691,7 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
                 .light = lightDistances[2],
             }};
 
-        renderer_debug_stage = 170;
+        RENDERER_SET_DEBUG_STAGE(170);
         ClipVertex clipped[4];
         uint8_t clippedCount = clip_triangle_against_near_plane(triangleIn, clipped);
         if (clippedCount < 3)
@@ -1690,7 +1706,7 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
             if (va.w <= 0 || vb.w <= 0 || vc.w <= 0)
                 continue;
 
-            renderer_debug_stage = 180;
+            RENDERER_SET_DEBUG_STAGE(180);
             int32_t ax = fixed_div(va.x, va.w) + render_width_half;
             int32_t ay = fixed_div(va.y, va.w) + render_height_half;
             int32_t bx = fixed_div(vb.x, vb.w) + render_width_half;
@@ -1715,11 +1731,11 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
 
             if (sceneCounter >= MAX_TRIANGLES_IN_SCENE)
             {
-                renderer_debug_stage = 190;
+                RENDERER_SET_DEBUG_STAGE(190);
                 return;
             }
 
-            renderer_debug_stage = 191;
+            RENDERER_SET_DEBUG_STAGE(191);
             TriangleInScene *outTriangle = &scene[sceneCounter++];
             outTriangle->TriangleOnScreen.a.x = ax;
             outTriangle->TriangleOnScreen.a.y = ay;
@@ -1745,7 +1761,7 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
         }
     }
 
-    renderer_debug_stage = 200;
+    RENDERER_SET_DEBUG_STAGE(200);
     renderer_debug_scene_counter = sceneCounter;
 }
 
@@ -1765,4 +1781,3 @@ const IRenderer *get_renderer(void)
 {
     return &renderer;
 }
-

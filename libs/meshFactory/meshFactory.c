@@ -13,7 +13,7 @@ void init_mesh_factory(const IStorage *storage)
 }
 
 
-Mesh *createMesh(Material *mat, uint8_t meshIndex)
+Mesh *create_mesh(Material *mat, uint8_t meshIndex)
 {
     if (_storage == NULL || mat == NULL)
     {
@@ -90,95 +90,12 @@ Mesh *createMesh(Material *mat, uint8_t meshIndex)
     return mesh;
 }
 
-Mesh *create_colored_mesh(uint16_t color, uint8_t meshIndex)
-{
-    if (_storage == NULL)
-        return NULL;
-
-    Material *material = (Material *)malloc(sizeof(Material));
-    if (material == NULL)
-        return NULL;
-    material->diffuse = color;
-    material->texture = 0;
-    material->textureSize = 0;
-    material->textureWidth = 0;
-    material->textureHeight = 0;
-    material->isSkyBox = 0;
-    return createMesh(material, meshIndex);
-}
-
-Mesh *create_textured_mesh(uint8_t imageIndex, uint8_t meshIndex)
-{
-    if (_storage == NULL)
-        return NULL;
-
-    Material *material = (Material *)malloc(sizeof(Material));
-    if (material == NULL)
-        return NULL;
-    const Image *image = _storage->get_image(imageIndex);
-    if (image == NULL)
-    {
-        free(material);
-        return NULL;
-    }
-    material->diffuse = 0;
-    material->texture = image->image;
-    material->textureSize = image->heigth;
-    material->textureWidth = image->width;
-    material->textureHeight = image->heigth;
-    material->isSkyBox = 0;
-    return createMesh(material, meshIndex);
-}
-
-Mesh *create_colored_skybox(uint16_t color)
-{
-    if (_storage == NULL)
-        return NULL;
-
-    Material *material = (Material *)malloc(sizeof(Material));
-    if (material == NULL)
-        return NULL;
-    material->diffuse = color;
-    material->texture = 0;
-    material->textureSize = 0;
-    material->textureWidth = 0;
-    material->textureHeight = 0;
-    material->isSkyBox = 1;
-    return createMesh(material, 0);
-}
-
-Mesh *create_textured_skybox(uint8_t imageIndex)
-{
-    if (_storage == NULL)
-        return NULL;
-
-    Material *material = (Material *)malloc(sizeof(Material));
-    if (material == NULL)
-        return NULL;
-    const Image *image = _storage->get_image(imageIndex);
-    if (image == NULL)
-    {
-        free(material);
-        return NULL;
-    }
-    material->diffuse = 0;
-    material->texture = image->image;
-    material->textureSize = image->heigth;
-    material->textureWidth = image->width;
-    material->textureHeight = image->heigth;
-    material->isSkyBox = 1;
-    return createMesh(material, 0);
-}
-
-static IMeshFactory renderer = {
+static IMeshFactory meshFactory = {
     .init_mesh_factory = init_mesh_factory,
-    .create_colored_mesh = create_colored_mesh,
-    .create_textured_mesh = create_textured_mesh,
-    .create_colored_skybox = create_colored_skybox,
-    .create_textured_skybox = create_textured_skybox,
+    .create_mesh = create_mesh,
 };
 
 const IMeshFactory *get_meshFactory(void)
 {
-    return &renderer;
+    return &meshFactory;
 }

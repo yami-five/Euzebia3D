@@ -10,6 +10,10 @@ if(NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO" AND NOT EUZEBIA3D_PLATFORM_
     message(FATAL_ERROR "Unsupported EUZEBIA3D_PLATFORM_NORMALIZED='${EUZEBIA3D_PLATFORM_NORMALIZED}'")
 endif()
 
+if(NOT DEFINED EUZEBIA3D_DEBUG_STAGE_ENABLED)
+    set(EUZEBIA3D_DEBUG_STAGE_ENABLED ON)
+endif()
+
 set(EUZEBIA3D_IS_WINDOWS OFF)
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     set(EUZEBIA3D_IS_WINDOWS ON)
@@ -23,6 +27,9 @@ else()
 endif()
 if(EUZEBIA3D_USE_PSRAM)
     target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_USE_PSRAM=1)
+endif()
+if(EUZEBIA3D_DEBUG_STAGE_ENABLED)
+    target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_DEBUG_STAGE_ENABLED=1)
 endif()
 
 add_library(Euzebia3D_PicoDeps INTERFACE)
@@ -164,6 +171,18 @@ target_include_directories(
 target_link_libraries(Euzebia3D_LightFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
 add_library(
+    Euzebia3D_MaterialFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory/material.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory/materialFactory.c
+)
+target_include_directories(
+    Euzebia3D_MaterialFactory
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory
+)
+target_link_libraries(Euzebia3D_MaterialFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage)
+
+add_library(
     Euzebia3D_MeshFactory
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/mesh.c
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/meshFactory.c
@@ -173,7 +192,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
 )
-target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations)
+target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations Euzebia3D_MaterialFactory)
 
 add_library(
     Euzebia3D_Painter
@@ -266,6 +285,7 @@ target_link_libraries(
     Euzebia3D_PicoDeps
     Euzebia3D_Arithmetics
     Euzebia3D_Transformations
+    Euzebia3D_MaterialFactory
     Euzebia3D_MeshFactory
     Euzebia3D_LightFactory
     Euzebia3D_Painter
@@ -300,6 +320,7 @@ target_link_libraries(
     Euzebia3D_AudioPlayer
     Euzebia3D_Hardware
     Euzebia3D_LightFactory
+    Euzebia3D_MaterialFactory
     Euzebia3D_MeshFactory
     Euzebia3D_Painter
     Euzebia3D_Puppeteer
@@ -317,6 +338,7 @@ add_library(Euzebia3D_DisplayInterface INTERFACE)
 add_library(Euzebia3D_AudioPlayerInterface INTERFACE)
 add_library(Euzebia3D_HardwareInterface INTERFACE)
 add_library(Euzebia3D_LightFactoryInterface INTERFACE)
+add_library(Euzebia3D_MaterialFactoryInterface INTERFACE)
 add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
 add_library(Euzebia3D_PuppeteerInterface INTERFACE)
@@ -331,6 +353,7 @@ target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
 target_link_libraries(Euzebia3D_AudioPlayerInterface INTERFACE Euzebia3D_AudioPlayer)
 target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)
 target_link_libraries(Euzebia3D_LightFactoryInterface INTERFACE Euzebia3D_LightFactory)
+target_link_libraries(Euzebia3D_MaterialFactoryInterface INTERFACE Euzebia3D_MaterialFactory)
 target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFactory)
 target_link_libraries(Euzebia3D_PainterInterface INTERFACE Euzebia3D_Painter)
 target_link_libraries(Euzebia3D_PuppeteerInterface INTERFACE Euzebia3D_Puppeteer)
