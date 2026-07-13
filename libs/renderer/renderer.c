@@ -26,7 +26,6 @@ static uint16_t render_height_half = 60;
 
 #define MAX_TRIANGLES_IN_SCENE 1500
 #define SPAN_BUFFER_MAX 320
-#define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 8
 #define UV_PERSPECTIVE_SHIFT 6
@@ -36,6 +35,19 @@ static uint16_t render_height_half = 60;
 #define MAX_MODEL_TRANSFORMATIONS 8
 #define TEXTURE_TRANSPARENT_COLOR 0xf81fu
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
+
+#ifndef EUZEBIA3D_RENDERER_SHADING_ENABLED
+#define EUZEBIA3D_RENDERER_SHADING_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED
+#define EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
+#define EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
+#define EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED 1
+#endif
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
 static uint16_t sceneCounter = 0;
@@ -68,16 +80,26 @@ static inline int32_t shifted_delta_i32(int32_t a, int32_t b, int32_t shift, int
 
 static inline int32_t make_perspective_uv(int32_t uv, int32_t invZ)
 {
+#if EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
     int64_t value = (int64_t)uv * (int64_t)invZ;
     value >>= (SHIFT_FACTOR - UV_PERSPECTIVE_SHIFT);
     return clamp_i64_to_i32(value);
+#else
+    (void)invZ;
+    return shift_left_clamped_i32(uv, UV_PERSPECTIVE_SHIFT);
+#endif
 }
 
 static inline int32_t restore_perspective_uv(int32_t uvOverZ, int32_t z)
 {
+#if EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
     int64_t value = (int64_t)uvOverZ * (int64_t)z;
     value >>= (SHIFT_FACTOR + UV_PERSPECTIVE_SHIFT);
     return clamp_i64_to_i32(value);
+#else
+    (void)z;
+    return uvOverZ >> UV_PERSPECTIVE_SHIFT;
+#endif
 }
 
 static inline int32_t texture_dimension_shift(int32_t size)
@@ -691,10 +713,40 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
     return outCount;
 }
 
-void shading(uint16_t *color, Light *light, int32_t lightDistance)
+typedef struct
 {
-    if (*color == TEXTURE_TRANSPARENT_COLOR)
-        return;
+    int32_t intensity;
+    uint32_t rLightScale;
+    uint32_t gLightScale;
+    uint32_t bLightScale;
+} ShadingContext;
+
+static inline ShadingContext make_shading_context(const Light *light)
+{
+    int32_t intensity = light->intensity;
+    if (intensity < 0)
+        intensity = 0;
+    const int32_t INTENSITY_MAX = SCALE_FACTOR * 6;
+    if (intensity > INTENSITY_MAX)
+        intensity = INTENSITY_MAX;
+
+    uint32_t rLight = (light->color >> 11) & 0x1f;
+    uint32_t gLight = (light->color >> 5) & 0x3f;
+    uint32_t bLight = light->color & 0x1f;
+
+    ShadingContext context = {
+        .intensity = intensity,
+        .rLightScale = rLight * 33u,
+        .gLightScale = gLight * 16u,
+        .bLightScale = bLight * 33u,
+    };
+    return context;
+}
+
+static inline uint16_t shade_color(uint16_t color, const ShadingContext *context, int32_t lightDistance)
+{
+    if (color == TEXTURE_TRANSPARENT_COLOR)
+        return color;
 
     // Clamp minimum light to keep pixels from going fully dark on edges
     const int32_t AMBIENT_MIN = SCALE_FACTOR >> 5;
@@ -703,40 +755,21 @@ void shading(uint16_t *color, Light *light, int32_t lightDistance)
     if (lightDistance > SCALE_FACTOR)
         lightDistance = SCALE_FACTOR;
 
-    uint8_t rMesh = (*color >> 11) & 0x1f;
-    uint8_t gMesh = (*color >> 5) & 0x3f;
-    uint8_t bMesh = *color & 0x1f;
-
-    uint8_t rLight = (light->color >> 11) & 0x1f;
-    uint8_t gLight = (light->color >> 5) & 0x3f;
-    uint8_t bLight = light->color & 0x1f;
-
-    uint32_t fixedR = (rMesh * rLight) << SHIFT_FACTOR;
-    uint32_t fixedG = (gMesh * gLight) << SHIFT_FACTOR;
-    uint32_t fixedB = (bMesh * bLight) << SHIFT_FACTOR;
-
-    fixedR = fixed_mul(fixedR, 33);
-    fixedG = fixed_mul(fixedG, 16);
-    fixedB = fixed_mul(fixedB, 33);
-
-    int32_t intensity = light->intensity;
-    if (intensity < 0)
-        intensity = 0;
-    const int32_t INTENSITY_MAX = SCALE_FACTOR * 6;
-    if (intensity > INTENSITY_MAX)
-        intensity = INTENSITY_MAX;
-
     // LightColor * MaterialColor scaled by light factor
-    int32_t lightFactor = fixed_mul(lightDistance, intensity);
+    int32_t lightFactor = (int32_t)(((int64_t)lightDistance * context->intensity) >> SHIFT_FACTOR);
     if (lightFactor < 0)
         lightFactor = 0;
     const int32_t MAX_LIGHT_FACTOR = SCALE_FACTOR * 4;
     if (lightFactor > MAX_LIGHT_FACTOR)
         lightFactor = MAX_LIGHT_FACTOR;
 
-    uint32_t rTmp = (uint32_t)(fixed_mul(fixedR, lightFactor) >> SHIFT_FACTOR);
-    uint32_t gTmp = (uint32_t)(fixed_mul(fixedG, lightFactor) >> SHIFT_FACTOR);
-    uint32_t bTmp = (uint32_t)(fixed_mul(fixedB, lightFactor) >> SHIFT_FACTOR);
+    uint32_t rMesh = (color >> 11) & 0x1f;
+    uint32_t gMesh = (color >> 5) & 0x3f;
+    uint32_t bMesh = color & 0x1f;
+
+    uint32_t rTmp = (uint32_t)(((uint64_t)(rMesh * context->rLightScale) * (uint32_t)lightFactor) >> (SHIFT_FACTOR * 2));
+    uint32_t gTmp = (uint32_t)(((uint64_t)(gMesh * context->gLightScale) * (uint32_t)lightFactor) >> (SHIFT_FACTOR * 2));
+    uint32_t bTmp = (uint32_t)(((uint64_t)(bMesh * context->bLightScale) * (uint32_t)lightFactor) >> (SHIFT_FACTOR * 2));
 
     if (rTmp > 31)
         rTmp = 31;
@@ -749,7 +782,13 @@ void shading(uint16_t *color, Light *light, int32_t lightDistance)
     uint8_t g = (uint8_t)gTmp;
     uint8_t b = (uint8_t)bTmp;
 
-    *color = (r << 11) | (g << 5) | b;
+    return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+void shading(uint16_t *color, Light *light, int32_t lightDistance)
+{
+    ShadingContext context = make_shading_context(light);
+    *color = shade_color(*color, &context, lightDistance);
 }
 
 static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *count)
@@ -766,6 +805,12 @@ static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g, ui
 static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0, int32_t row1, int32_t x0, int32_t x1, bool transparent)
 {
     uint16_t c00 = texture[row0 + x0];
+#if !EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED
+    (void)row1;
+    (void)x1;
+    (void)transparent;
+    return c00;
+#else
     uint16_t c10 = texture[row0 + x1];
     uint16_t c01 = texture[row1 + x0];
     uint16_t c11 = texture[row1 + x1];
@@ -816,6 +861,7 @@ static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0,
     uint32_t b = (bTop + bBot) >> 1;
 
     return (r << 11) | (g << 5) | b;
+#endif
 }
 
 static inline void clamp_uv_fixed(int32_t *uv_x, int32_t *uv_y)
@@ -995,6 +1041,7 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
 
 static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L, int32_t dLdx)
 {
+    ShadingContext context = make_shading_context(light);
     if (length <= MAX_SHADING_SPAN_LEN)
     {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -1002,7 +1049,7 @@ static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L, 
         for (uint16_t i = 0; i < length; i++)
         {
             int32_t Lcur = Lacc >> LIGHT_LERP_SHIFT;
-            shading(&dst[i], light, Lcur);
+            dst[i] = shade_color(dst[i], &context, Lcur);
             Lacc += dLdx;
         }
 #else
@@ -1011,7 +1058,7 @@ static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L, 
         for (uint16_t i = 0; i < length; i++)
         {
             int32_t Lcur = ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
-            shading(&dst[i], light, Lcur);
+            dst[i] = shade_color(dst[i], &context, Lcur);
             interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
         }
 #endif
@@ -1019,7 +1066,7 @@ static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L, 
     else
     {
         int32_t firstPixelLight = L >> LIGHT_LERP_SHIFT;
-        shading(&dst[0], light, firstPixelLight);
+        dst[0] = shade_color(dst[0], &context, firstPixelLight);
     }
 }
 
@@ -1076,7 +1123,7 @@ static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, L
     else
         texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->Z, lerp->dZdx);
 
-#ifdef SHADING_ENABLED
+#if EUZEBIA3D_RENDERER_SHADING_ENABLED
     shade_span(dst, length, light, lerp->L, lerp->dLdx);
 #endif
 }
@@ -1367,16 +1414,27 @@ typedef struct
 } SceneDrawItem;
 static SceneDrawItem drawItems[MAX_TRIANGLES_IN_SCENE];
 
-static int compare_scene_depth_desc(const void *a, const void *b)
+#if EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
+static void sort_scene_draw_items(uint16_t count)
 {
-    const SceneDrawItem *ta = (const SceneDrawItem *)a;
-    const SceneDrawItem *tb = (const SceneDrawItem *)b;
-    if (ta->depth < tb->depth)
-        return 1;
-    if (ta->depth > tb->depth)
-        return -1;
-    return 0;
+    uint16_t gap = count >> 1;
+    while (gap > 0)
+    {
+        for (uint16_t i = gap; i < count; i++)
+        {
+            SceneDrawItem item = drawItems[i];
+            uint16_t j = i;
+            while (j >= gap && drawItems[j - gap].depth < item.depth)
+            {
+                drawItems[j] = drawItems[j - gap];
+                j = (uint16_t)(j - gap);
+            }
+            drawItems[j] = item;
+        }
+        gap >>= 1;
+    }
 }
+#endif
 
 void render_scene(Light *pLight)
 {
@@ -1395,12 +1453,19 @@ void render_scene(Light *pLight)
         renderer_debug_vertex_index = i;
         const TriangleInScene *triScene = &scene[i];
         drawItems[i].index = i;
+#if EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
         drawItems[i].depth = (triScene->TriangleOnScreen.a.z + triScene->TriangleOnScreen.b.z + triScene->TriangleOnScreen.c.z) / 3;
+#else
+        (void)triScene;
+        drawItems[i].depth = 0;
+#endif
     }
 
     RENDERER_SET_DEBUG_STAGE(320);
+#if EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
     if (sceneCounter > 1)
-        qsort(drawItems, sceneCounter, sizeof(SceneDrawItem), compare_scene_depth_desc);
+        sort_scene_draw_items(sceneCounter);
+#endif
 
     RENDERER_SET_DEBUG_STAGE(330);
     for (uint16_t i = 0; i < sceneCounter; i++)
@@ -1451,7 +1516,7 @@ void render_scene(Light *pLight)
             };
 
         int32_t lightDistances[3] = {0, 0, 0};
-#ifdef SHADING_ENABLED
+#if EUZEBIA3D_RENDERER_SHADING_ENABLED
         lightDistances[0] = triScene->LightDistances[0];
         lightDistances[1] = triScene->LightDistances[1];
         lightDistances[2] = triScene->LightDistances[2];

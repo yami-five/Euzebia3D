@@ -121,6 +121,10 @@ Use separate build directories per platform to avoid cache conflicts.
 
 Useful build flags:
 - `EUZEBIA3D_DEBUG_STAGE_ENABLED=OFF` compiles out the volatile `*_debug_stage` variables and writes to them.
+- `EUZEBIA3D_RENDERER_SHADING_ENABLED=OFF` disables per-pixel lighting/shading.
+- `EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED=OFF` switches texture sampling from 2x2 filtering to nearest texel.
+- `EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED=OFF` uses affine UV interpolation instead of perspective-correct UVs.
+- `EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED=OFF` skips scene triangle depth sorting.
 
 ### Build for Windows
 

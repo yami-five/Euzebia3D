@@ -22,6 +22,10 @@ option(EUZEBIA3D_TEXTURE_CACHE_ENABLED "Enable renderer texture cache for small 
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH "Allow renderer texture cache for textures stored in flash/XIP" OFF)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM "Allow renderer texture cache for textures stored in PSRAM/XIP" ON)
 option(EUZEBIA3D_DEBUG_STAGE_ENABLED "Enable volatile *_debug_stage markers for debugger tracing" OFF)
+option(EUZEBIA3D_RENDERER_SHADING_ENABLED "Enable renderer per-pixel lighting/shading" ON)
+option(EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED "Enable renderer 2x2 texture filtering" OFF)
+option(EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED "Enable perspective-correct texture coordinates" OFF)
+option(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED "Enable scene triangle depth sorting before rasterization" ON)
 option(DEBUG_MODE "Show metrics on the display" ON)
 
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
