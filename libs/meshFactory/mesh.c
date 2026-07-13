@@ -5,14 +5,23 @@ TransformInfo *add_transformation(TransformInfo *currentTransformations, uint32_
     if (transformationType > MODEL_TRANSFORM_SCALE)
         return currentTransformations;
 
-    *currentTransformationsNum += 1;
-    TransformInfo *newTransformations = (TransformInfo *)realloc(currentTransformations, *currentTransformationsNum * sizeof(TransformInfo));
-    newTransformations[*currentTransformationsNum - 1].transformVector = (TransformVector *)malloc(sizeof(TransformVector));
-    newTransformations[*currentTransformationsNum - 1].transformType = transformationType;
-    newTransformations[*currentTransformationsNum - 1].transformVector->w = float_to_fixed(w);
-    newTransformations[*currentTransformationsNum - 1].transformVector->x = float_to_fixed(x);
-    newTransformations[*currentTransformationsNum - 1].transformVector->y = float_to_fixed(y);
-    newTransformations[*currentTransformationsNum - 1].transformVector->z = float_to_fixed(z);
+    uint32_t oldTransformationsNum = *currentTransformationsNum;
+    uint32_t newTransformationsNum = oldTransformationsNum + 1u;
+    TransformInfo *newTransformations = (TransformInfo *)realloc(currentTransformations, newTransformationsNum * sizeof(TransformInfo));
+    if (newTransformations == NULL)
+        return currentTransformations;
+
+    TransformVector *newVector = (TransformVector *)malloc(sizeof(TransformVector));
+    if (newVector == NULL)
+        return newTransformations;
+
+    newTransformations[oldTransformationsNum].transformVector = newVector;
+    newTransformations[oldTransformationsNum].transformType = transformationType;
+    newTransformations[oldTransformationsNum].transformVector->w = float_to_fixed(w);
+    newTransformations[oldTransformationsNum].transformVector->x = float_to_fixed(x);
+    newTransformations[oldTransformationsNum].transformVector->y = float_to_fixed(y);
+    newTransformations[oldTransformationsNum].transformVector->z = float_to_fixed(z);
+    *currentTransformationsNum = newTransformationsNum;
 
     return newTransformations;
 }

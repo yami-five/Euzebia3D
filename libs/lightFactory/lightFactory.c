@@ -8,6 +8,9 @@
 PointLight* create_point_light(float x, float y, float z, float intensity, uint16_t color)
 {
     PointLight *light = (PointLight *)malloc(sizeof(PointLight));
+    if (light == NULL)
+        return NULL;
+
     light->position.x = float_to_fixed(x);
     light->position.y = float_to_fixed(y);
     light->position.z = float_to_fixed(z);

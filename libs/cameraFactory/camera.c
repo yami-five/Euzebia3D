@@ -66,22 +66,29 @@ void calculatePerspectiveMatrix(Camera *camera)
 
 TransformInfo *add_camera_transformation(TransformInfo *currentTransformations, uint32_t *currentTransformationsNum, float w, float x, float y, float z, uint8_t transformationType)
 {
+    if (currentTransformationsNum == NULL)
+        return currentTransformations;
+
     if (transformationType > CAMERA_TRANSFORM_ROTATE_TARGET)
         return currentTransformations;
 
-    *currentTransformationsNum += 1;
-    TransformInfo *newTransformations = (TransformInfo *)realloc(currentTransformations, *currentTransformationsNum * sizeof(TransformInfo));
+    uint32_t oldTransformationsNum = *currentTransformationsNum;
+    uint32_t newTransformationsNum = oldTransformationsNum + 1u;
+    TransformInfo *newTransformations = (TransformInfo *)realloc(currentTransformations, newTransformationsNum * sizeof(TransformInfo));
     if (newTransformations == NULL)
-    {
-        *currentTransformationsNum -= 1;
         return currentTransformations;
-    }
-    newTransformations[*currentTransformationsNum - 1].transformVector = (TransformVector *)malloc(sizeof(TransformVector));
-    newTransformations[*currentTransformationsNum - 1].transformType = transformationType;
-    newTransformations[*currentTransformationsNum - 1].transformVector->w = float_to_fixed(w);
-    newTransformations[*currentTransformationsNum - 1].transformVector->x = float_to_fixed(x);
-    newTransformations[*currentTransformationsNum - 1].transformVector->y = float_to_fixed(y);
-    newTransformations[*currentTransformationsNum - 1].transformVector->z = float_to_fixed(z);
+
+    TransformVector *newVector = (TransformVector *)malloc(sizeof(TransformVector));
+    if (newVector == NULL)
+        return newTransformations;
+
+    newTransformations[oldTransformationsNum].transformVector = newVector;
+    newTransformations[oldTransformationsNum].transformType = transformationType;
+    newTransformations[oldTransformationsNum].transformVector->w = float_to_fixed(w);
+    newTransformations[oldTransformationsNum].transformVector->x = float_to_fixed(x);
+    newTransformations[oldTransformationsNum].transformVector->y = float_to_fixed(y);
+    newTransformations[oldTransformationsNum].transformVector->z = float_to_fixed(z);
+    *currentTransformationsNum = newTransformationsNum;
 
     return newTransformations;
 }

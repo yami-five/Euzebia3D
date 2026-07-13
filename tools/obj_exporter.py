@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_PATH = SCRIPT_DIR / "obj_converted.txt"
+MAX_UINT16 = 0xFFFF
 
 
 @dataclass
@@ -18,6 +19,78 @@ class ObjData:
     uv: list[int]
     vn: list[str]
     normals: list[int]
+
+
+def _component_count(values: list[object], components: int, name: str) -> int:
+    if len(values) % components != 0:
+        raise ValueError(f"{name} array length must be divisible by {components}.")
+    return len(values) // components
+
+
+def _max_index(values: list[int]) -> int:
+    return max(values) if values else -1
+
+
+def validate_obj_data(obj_data: ObjData) -> None:
+    vertices_count = _component_count(obj_data.vertices, 3, "Vertices")
+    faces_count = _component_count(obj_data.faces, 3, "Faces")
+    texture_coords_count = _component_count(obj_data.texture_coords, 2, "Texture coordinates")
+    vn_count = _component_count(obj_data.vn, 3, "Normals")
+
+    if vertices_count == 0:
+        raise ValueError("OBJ contains no vertices.")
+    if faces_count == 0:
+        raise ValueError("OBJ contains no faces.")
+    if texture_coords_count == 0:
+        raise ValueError("OBJ contains no texture coordinates.")
+    if vn_count == 0:
+        raise ValueError("OBJ contains no normals.")
+
+    if len(obj_data.uv) != len(obj_data.faces):
+        raise ValueError("UV index count must match face vertex count.")
+    if len(obj_data.normals) != len(obj_data.faces):
+        raise ValueError("Normal index count must match face vertex count.")
+
+    max_vertex_index = _max_index(obj_data.faces)
+    max_uv_index = _max_index(obj_data.uv)
+    max_normal_index = _max_index(obj_data.normals)
+
+    if max_vertex_index >= vertices_count:
+        raise ValueError(
+            f"Face vertex index {max_vertex_index} exceeds vertices count {vertices_count}."
+        )
+    if max_uv_index >= texture_coords_count:
+        raise ValueError(
+            f"UV index {max_uv_index} exceeds texture coordinate count {texture_coords_count}."
+        )
+    if max_normal_index >= vn_count:
+        raise ValueError(f"Normal index {max_normal_index} exceeds normal count {vn_count}.")
+
+    for name, count in (
+        ("verticesCounter", vertices_count),
+        ("facesCounter", faces_count),
+        ("textureCoordsCounter", texture_coords_count),
+        ("vnCounter", vn_count),
+    ):
+        if count > MAX_UINT16:
+            raise ValueError(f"{name}={count} does not fit in uint16_t.")
+
+
+def build_summary_text(obj_data: ObjData) -> str:
+    vertices_count = _component_count(obj_data.vertices, 3, "Vertices")
+    faces_count = _component_count(obj_data.faces, 3, "Faces")
+    texture_coords_count = _component_count(obj_data.texture_coords, 2, "Texture coordinates")
+    vn_count = _component_count(obj_data.vn, 3, "Normals")
+    return (
+        "Summary: "
+        f"vertices={vertices_count}, "
+        f"faces={faces_count}, "
+        f"vt={texture_coords_count}, "
+        f"vn={vn_count}, "
+        f"max_v={_max_index(obj_data.faces)}, "
+        f"max_vt={_max_index(obj_data.uv)}, "
+        f"max_vn={_max_index(obj_data.normals)}"
+    )
 
 
 def to_c_identifier(value: str) -> str:
@@ -147,6 +220,20 @@ def parse_obj_file(input_path: Path) -> ObjData:
 
 
 def build_output_text(model_name: str, obj_data: ObjData) -> str:
+    validate_obj_data(obj_data)
+
+    vertices_count = _component_count(obj_data.vertices, 3, "Vertices")
+    faces_count = _component_count(obj_data.faces, 3, "Faces")
+    texture_coords_count = _component_count(obj_data.texture_coords, 2, "Texture coordinates")
+    vn_count = _component_count(obj_data.vn, 3, "Normals")
+
+    vertices_name = f"{model_name}Vertices"
+    faces_name = f"{model_name}Faces"
+    texture_coords_name = f"{model_name}TextureCoords"
+    uv_name = f"{model_name}UV"
+    vn_name = f"{model_name}VN"
+    normals_name = f"{model_name}Normals"
+
     vertices_text = ",".join(obj_data.vertices)
     faces_text = ",".join(str(value) for value in obj_data.faces)
     texture_coords_text = ",".join(obj_data.texture_coords)
@@ -155,25 +242,31 @@ def build_output_text(model_name: str, obj_data: ObjData) -> str:
     normals_text = ",".join(str(value) for value in obj_data.normals)
 
     lines = [
-        model_name,
-        f"const float {model_name}Vertices[{len(obj_data.vertices)}]={{{vertices_text}}};",
-        f"const uint16_t {model_name}Faces[{len(obj_data.faces)}] = {{{faces_text}}};",
-        f"const float {model_name}TextureCoords[{len(obj_data.texture_coords)}] = {{{texture_coords_text}}};",
-        f"const uint16_t {model_name}UV[{len(obj_data.faces)}] = {{{uv_text}}};",
-        f"const float {model_name}VN[{len(obj_data.vn)}] = {{{vn_text}}};",
-        f"const uint16_t {model_name}Normals[{len(obj_data.faces)}] = {{{normals_text}}};",
+        f"/* {model_name} */",
+        f"const float {vertices_name}[{len(obj_data.vertices)}] = {{{vertices_text}}};",
+        f"const uint16_t {faces_name}[{len(obj_data.faces)}] = {{{faces_text}}};",
+        f"const float {texture_coords_name}[{len(obj_data.texture_coords)}] = {{{texture_coords_text}}};",
+        f"const uint16_t {uv_name}[{len(obj_data.faces)}] = {{{uv_text}}};",
+        f"const float {vn_name}[{len(obj_data.vn)}] = {{{vn_text}}};",
+        f"const uint16_t {normals_name}[{len(obj_data.faces)}] = {{{normals_text}}};",
+        f"_Static_assert((sizeof({vertices_name}) / sizeof({vertices_name}[0])) % 3u == 0u, \"{vertices_name} must contain xyz triplets.\");",
+        f"_Static_assert((sizeof({faces_name}) / sizeof({faces_name}[0])) % 3u == 0u, \"{faces_name} must contain triangle triplets.\");",
+        f"_Static_assert((sizeof({texture_coords_name}) / sizeof({texture_coords_name}[0])) % 2u == 0u, \"{texture_coords_name} must contain uv pairs.\");",
+        f"_Static_assert((sizeof({vn_name}) / sizeof({vn_name}[0])) % 3u == 0u, \"{vn_name} must contain xyz triplets.\");",
+        f"_Static_assert(sizeof({uv_name}) / sizeof({uv_name}[0]) == sizeof({faces_name}) / sizeof({faces_name}[0]), \"{uv_name} count must match {faces_name} count.\");",
+        f"_Static_assert(sizeof({normals_name}) / sizeof({normals_name}[0]) == sizeof({faces_name}) / sizeof({faces_name}[0]), \"{normals_name} count must match {faces_name} count.\");",
         "",
         "{",
-        f"    .vertices = {model_name}Vertices,",
-        f"    .faces = {model_name}Faces,",
-        f"    .textureCoords = {model_name}TextureCoords,",
-        f"    .uv = {model_name}UV,",
-        f"    .normals = {model_name}Normals,",
-        f"    .vn = {model_name}VN,",
-        f"    .verticesCounter = {len(obj_data.vertices) // 3},",
-        f"    .facesCounter = {len(obj_data.faces) // 3},",
-        f"    .textureCoordsCounter = {len(obj_data.texture_coords) // 2},",
-        f"    .vnCounter = {len(obj_data.vn) // 3},",
+        f"    .vertices = {vertices_name},",
+        f"    .faces = {faces_name},",
+        f"    .textureCoords = {texture_coords_name},",
+        f"    .uv = {uv_name},",
+        f"    .normals = {normals_name},",
+        f"    .vn = {vn_name},",
+        f"    .verticesCounter = {vertices_count},",
+        f"    .facesCounter = {faces_count},",
+        f"    .textureCoordsCounter = {texture_coords_count},",
+        f"    .vnCounter = {vn_count},",
         "},",
     ]
     return "\n".join(lines)
@@ -321,13 +414,7 @@ def run_gui() -> int:
             self.preview_edit.setPlainText(exported_text)
             self.copy_button.setEnabled(True)
             self.status_label.setText(f"Saved output to {output_path}")
-            self.summary_label.setText(
-                "Summary: "
-                f"vertices={len(obj_data.vertices)//3}, "
-                f"faces={len(obj_data.faces)//3}, "
-                f"vtn={len(obj_data.texture_coords)//2}, "
-                f"nn={len(obj_data.vn)//3}"
-            )
+            self.summary_label.setText(build_summary_text(obj_data))
 
         def copy_output(self) -> None:
             if not self.last_output:
@@ -404,13 +491,7 @@ def main() -> int:
 
     print(f"Model: {model_name}")
     print(f"Output: {args.output}")
-    print(
-        "Summary: "
-        f"vertices={len(obj_data.vertices)//3}, "
-        f"faces={len(obj_data.faces)//3}, "
-        f"vtn={len(obj_data.texture_coords)//2}, "
-        f"nn={len(obj_data.vn)//3}"
-    )
+    print(build_summary_text(obj_data))
 
     if args.stdout:
         print(output_text)

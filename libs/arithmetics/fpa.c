@@ -1,5 +1,6 @@
 #include "fpa.h"
 #include "lookup_tables.h"
+#include <limits.h>
 
 int32_t float_to_fixed(float value)
 {
@@ -34,7 +35,14 @@ int64_t fixed_mul(int32_t a, int32_t b)
 
 int32_t fixed_div(int32_t a, int32_t b)
 {
+    if (b == 0)
+        return 0;
+
     int64_t result = ((int64_t)a << SHIFT_FACTOR) / b;
+    if (result > INT32_MAX)
+        return INT32_MAX;
+    if (result < INT32_MIN)
+        return INT32_MIN;
     return (int32_t)result;
 }
 
@@ -81,16 +89,40 @@ int32_t fast_inv_sqrt(int32_t value)
     return y;
 }
 
+static uint64_t isqrt_u64(uint64_t value)
+{
+    uint64_t result = 0;
+    uint64_t bit = 1ull << 62;
+
+    while (bit > value)
+        bit >>= 2;
+
+    while (bit != 0)
+    {
+        if (value >= result + bit)
+        {
+            value -= result + bit;
+            result = (result >> 1) + bit;
+        }
+        else
+        {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+
+    return result;
+}
+
 int32_t fast_sqrt(int64_t value)
 {
     if (value <= 0)
         return 0;
-    int64_t x = value;
-    for (uint8_t i = 0; i < 5; i++)
-    {
-        x = (x + fixed_div(value, x)) >> 1;
-    }
-    return x;
+
+    uint64_t result = isqrt_u64((uint64_t)value << SHIFT_FACTOR);
+    if (result > INT32_MAX)
+        return INT32_MAX;
+    return (int32_t)result;
 }
 
 int32_t radian_to_index(int32_t radian)

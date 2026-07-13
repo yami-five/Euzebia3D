@@ -44,7 +44,10 @@ static const IHardware *_hardware = NULL;
 static const IDisplay *_display = NULL;
 static const IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
-static uint16_t temp_buffer[BUFFER_SIZE_HALF];
+
+volatile uint32_t painter_debug_stage = 0;
+volatile uint32_t painter_debug_line = 0;
+
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 static uint16_t mirrored_buffer[BUFFER_SIZE_HALF];
 static SDL_Window *sdl_window = NULL;
@@ -145,6 +148,7 @@ static int ensure_sdl_backend(void)
         destroy_sdl_backend();
         return 0;
     }
+    SDL_SetDefaultTextureScaleMode(sdl_renderer, SDL_SCALEMODE_LINEAR);
 
     sdl_texture = SDL_CreateTexture(
         sdl_renderer,
@@ -158,6 +162,7 @@ static int ensure_sdl_backend(void)
         destroy_sdl_backend();
         return 0;
     }
+    SDL_SetTextureScaleMode(sdl_texture, SDL_SCALEMODE_LINEAR);
 
     SDL_SetRenderLogicalPresentation(
         sdl_renderer,
@@ -219,18 +224,24 @@ void init_painter(const IDisplay *display, const IHardware *hardware, const ISto
 
 void draw_buffer(void)
 {
+    painter_debug_stage = 100;
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     if (!ensure_sdl_backend())
+    {
+        painter_debug_stage = 101;
         return;
+    }
 
     for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++)
     {
+        painter_debug_line = y;
         uint32_t dst_row_start = (uint32_t)y * DISPLAY_WIDTH;
         uint32_t src_row_start = (uint32_t)(DISPLAY_HEIGHT - 1 - y) * DISPLAY_WIDTH;
         for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
             mirrored_buffer[dst_row_start + x] = buffer[src_row_start + x];
     }
 
+    painter_debug_stage = 110;
     SDL_UpdateTexture(
         sdl_texture,
         NULL,
@@ -238,28 +249,36 @@ void draw_buffer(void)
         DISPLAY_WIDTH * (int32_t)sizeof(uint16_t));
     SDL_RenderClear(sdl_renderer);
     SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
+    painter_debug_stage = 120;
     SDL_RenderPresent(sdl_renderer);
 #else
+    painter_debug_stage = 110;
     spi_inst_t *spi_port = _hardware->get_spi_port();
     spin_lock_t *spi_spinlock = _hardware->get_spinlock();
     (void)spi_spinlock;
 
+    painter_debug_stage = 120;
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     _hardware->write(LCD_DC_PIN, 0);
     _hardware->spi_write_byte(0x2C);
     _hardware->write(LCD_DC_PIN, 1);
     spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
+    painter_debug_stage = 130;
     dma_channel_set_trans_count(dma_channel, BUFFER_SIZE_HALF, false);
     dma_channel_set_read_addr(dma_channel, buffer, true);
+    painter_debug_stage = 140;
     dma_channel_wait_for_finish_blocking(dma_channel);
 
+    painter_debug_stage = 150;
     while (spi_is_busy(spi_port))
     {
     }
 
+    painter_debug_stage = 160;
     spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 #endif
+    painter_debug_stage = 200;
 }
 
 void clear_buffer(uint16_t color)
@@ -445,37 +464,6 @@ void blue_only()
     }
 }
 
-void broken_chromatic_abberration()
-{
-    for (int y = 0; y < DISPLAY_HEIGHT; y++)
-    {
-        uint16_t yr = (y > 0) ? y - 2 : y;
-        uint16_t yg = (y < DISPLAY_HEIGHT - 1) ? y + 2 : y;
-        for (int x = 0; x < DISPLAY_WIDTH; x++)
-        {
-            uint32_t i = y * DISPLAY_WIDTH + x;
-
-            uint16_t xr = (x > 0) ? x - 5 : x;
-            uint16_t xg = (x < DISPLAY_WIDTH - 1) ? x + 5 : x;
-
-            uint16_t ir = yr * DISPLAY_WIDTH + xr;
-            uint16_t ig = yg * DISPLAY_WIDTH + xg;
-
-            uint16_t c_r = buffer[ir];
-            uint16_t c_g = buffer[ig];
-            uint16_t c_b = buffer[i];
-
-            uint8_t r = get_r(c_r);
-            uint8_t g = get_g(c_g);
-            uint8_t b = get_b(c_b);
-            uint16_t result = make_rgb565(r, g, b);
-
-            temp_buffer[i] = result;
-        }
-    }
-    memcpy(buffer, temp_buffer, BUFFER_SIZE);
-}
-
 void apply_post_process_effect(uint8_t effect_index, uint16_t *params)
 {
     switch (effect_index)
@@ -489,9 +477,6 @@ void apply_post_process_effect(uint8_t effect_index, uint16_t *params)
         break;
     case 2:
         blue_only();
-        break;
-    case 3:
-        broken_chromatic_abberration();
         break;
     default:
         return;
@@ -728,16 +713,6 @@ static void print(const char *text, int16_t x, int16_t y, uint8_t fontIndex, uin
     }
 };
 
-void override_buffer(uint8_t mode, uint16_t lines)
-{
-    if (lines > DISPLAY_HEIGHT)
-        lines = DISPLAY_HEIGHT;
-    if (mode == 0)
-        memcpy(buffer, temp_buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
-    else if (mode == 1)
-        memcpy(temp_buffer, buffer, lines * DISPLAY_WIDTH * sizeof(uint16_t));
-}
-
 void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame)
 {
     if (currentFrame < startFrame)
@@ -803,50 +778,6 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t st
         uint32_t lineAddr2 = (uint32_t)(y + i * 2 + 1) * DISPLAY_WIDTH + x;
         memcpy(buffer + lineAddr1, lineBuffer, (size_t)lineBufferLen * sizeof(uint16_t));
         memcpy(buffer + lineAddr2, lineBuffer, (size_t)lineBufferLen * sizeof(uint16_t));
-    }
-    free(lineBuffer);
-}
-
-void fade(uint8_t mode, uint32_t startFrame, uint32_t currentFrame, uint16_t y, uint16_t x, uint16_t width, uint16_t height)
-{
-    if (currentFrame < startFrame)
-        return;
-    uint8_t patternIndex = currentFrame - startFrame;
-    if (patternIndex > 8)
-        return;
-    if ((patternIndex == 8 && mode == 0))
-        return;
-    uint8_t pattern[16];
-
-    if (mode == 0) // fade out
-    {
-        memcpy(pattern, fadeOutPatterns[patternIndex], 16);
-    }
-    else // fade in
-    {
-        memcpy(pattern, fadeInPatterns[patternIndex], 16);
-    }
-
-    uint16_t lineBufferSize = width * sizeof(uint16_t);
-    uint16_t *lineBuffer = (uint16_t *)malloc(lineBufferSize);
-    if (lineBuffer == NULL)
-        return;
-
-    for (uint8_t i = 0; i < height; i += 1)
-    {
-        uint32_t lineAddr = (uint32_t)(i + x) * DISPLAY_WIDTH;
-        uint8_t patternAddr = (i & 3) << 2;
-        for (uint8_t j = 0; j < width; j += 1)
-        {
-            uint32_t currentLineAddr = lineAddr + (y + j);
-            uint8_t yMod4 = j & 3;
-            if (pattern[patternAddr + yMod4] == 1)
-                lineBuffer[j] = buffer[currentLineAddr];
-            else
-                lineBuffer[j] = temp_buffer[currentLineAddr];
-        }
-        lineAddr += y;
-        memcpy(buffer + lineAddr, lineBuffer, lineBufferSize);
     }
     free(lineBuffer);
 }
@@ -1111,10 +1042,8 @@ static IPainter painter = {
     .draw_background = draw_background,
     .print = print,
     .draw_gradient = draw_gradient,
-    .override_buffer = override_buffer,
     .fade_fullscreen = fade_fullscreen,
     .draw_scroller = draw_scroller,
-    .fade = fade,
     .draw_plasma = draw_plasma,
     .draw_rectangle = draw_rectangle,
     .draw_line = draw_line,

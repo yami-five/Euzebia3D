@@ -3,6 +3,7 @@
 #if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include "hardware/interp.h"
 #endif
+#include <limits.h>
 #include <stdlib.h>
 
 static const IHardware *_hardware = NULL;
@@ -27,7 +28,12 @@ static uint16_t render_height_half = 60;
 #define SHADING_ENABLED 1
 #define LIGHT_LERP_SHIFT 8
 #define UV_LERP_SHIFT 8
+#define UV_PERSPECTIVE_SHIFT 6
 #define MAX_SHADING_SPAN_LEN 320
+#define SCREEN_COORD_GUARD 1024
+#define NEAR_CLIP_Z 1
+#define MAX_MODEL_TRANSFORMATIONS 8
+#define TEXTURE_TRANSPARENT_COLOR 0xf81fu
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD in painter.
 
 static TriangleInScene scene[MAX_TRIANGLES_IN_SCENE];
@@ -35,6 +41,64 @@ static uint16_t sceneCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
+
+static inline int32_t clamp_i64_to_i32(int64_t value)
+{
+    if (value > INT32_MAX)
+        return INT32_MAX;
+    if (value < INT32_MIN)
+        return INT32_MIN;
+    return (int32_t)value;
+}
+
+static inline int32_t shift_left_clamped_i32(int32_t value, uint8_t shift)
+{
+    return clamp_i64_to_i32((int64_t)value << shift);
+}
+
+static inline int32_t shifted_delta_i32(int32_t a, int32_t b, int32_t shift, int32_t divisor)
+{
+    if (divisor == 0)
+        return 0;
+
+    int64_t value = ((int64_t)b - (int64_t)a) << shift;
+    return clamp_i64_to_i32(value / divisor);
+}
+
+static inline int32_t make_perspective_uv(int32_t uv, int32_t invZ)
+{
+    int64_t value = (int64_t)uv * (int64_t)invZ;
+    value >>= (SHIFT_FACTOR - UV_PERSPECTIVE_SHIFT);
+    return clamp_i64_to_i32(value);
+}
+
+static inline int32_t restore_perspective_uv(int32_t uvOverZ, int32_t z)
+{
+    int64_t value = (int64_t)uvOverZ * (int64_t)z;
+    value >>= (SHIFT_FACTOR + UV_PERSPECTIVE_SHIFT);
+    return clamp_i64_to_i32(value);
+}
+
+static inline int32_t texture_dimension_shift(int32_t size)
+{
+    if (size <= 0 || (size & (size - 1)) != 0)
+        return -1;
+
+    int32_t shift = 0;
+    while (size > 1)
+    {
+        size >>= 1;
+        shift++;
+    }
+    return shift;
+}
+
+volatile uint32_t renderer_debug_stage = 0;
+volatile uint32_t renderer_debug_vertex_index = 0;
+volatile uint32_t renderer_debug_face_index = 0;
+volatile uint32_t renderer_debug_scene_counter = 0;
+volatile uint32_t renderer_debug_transform_count = 0;
+volatile uintptr_t renderer_debug_pointer = 0;
 
 // Build-time knobs injected from CMake (with safe fallbacks).
 #ifndef EUZEBIA3D_TEXTURE_CACHE_ENABLED
@@ -70,7 +134,8 @@ static uint16_t span_length = 0;
 typedef struct
 {
     const uint16_t *source;
-    int32_t size;
+    int32_t width;
+    int32_t height;
     uint8_t valid;
     uint16_t pixels[TEXTURE_CACHE_PIXELS];
 } TextureCacheSlot;
@@ -114,18 +179,28 @@ static inline uint8_t texture_cache_source_enabled(TextureSource source)
 #endif
 
 static const uint16_t *activeTextureData = NULL;
-static int32_t activeTextureSize = 0;
+static int32_t activeTextureWidth = 0;
+static int32_t activeTextureHeight = 0;
+static int32_t activeTextureWidthShift = -1;
+static int32_t activeTextureHeightShift = -1;
+
+static inline void set_active_texture_data(const uint16_t *texture, int32_t width, int32_t height)
+{
+    activeTextureData = texture;
+    activeTextureWidth = width;
+    activeTextureHeight = height;
+    activeTextureWidthShift = texture_dimension_shift(width);
+    activeTextureHeightShift = texture_dimension_shift(height);
+}
 
 static inline void set_active_texture_direct(Material *mat)
 {
     if (mat == NULL)
     {
-        activeTextureData = NULL;
-        activeTextureSize = 0;
+        set_active_texture_data(NULL, 0, 0);
         return;
     }
-    activeTextureData = mat->texture;
-    activeTextureSize = mat->textureSize;
+    set_active_texture_data(mat->texture, mat->textureWidth, mat->textureHeight);
 }
 
 static void prepare_texture_cache(Material *mat)
@@ -133,10 +208,14 @@ static void prepare_texture_cache(Material *mat)
     set_active_texture_direct(mat);
 
 #if EUZEBIA3D_TEXTURE_CACHE_ENABLED
-    if (mat == NULL || mat->texture == NULL || mat->textureSize <= 0)
+    if (mat == NULL || mat->texture == NULL || mat->textureWidth <= 0 || mat->textureHeight <= 0)
         return;
 
-    if (mat->textureSize > TEXTURE_CACHE_SIZE)
+    if (mat->textureWidth > TEXTURE_CACHE_SIZE || mat->textureHeight > TEXTURE_CACHE_SIZE)
+        return;
+
+    size_t texelCount = (size_t)mat->textureWidth * (size_t)mat->textureHeight;
+    if (texelCount > TEXTURE_CACHE_PIXELS)
         return;
 
     if (!texture_cache_source_enabled(detect_texture_source(mat->texture)))
@@ -144,10 +223,12 @@ static void prepare_texture_cache(Material *mat)
 
     for (uint8_t i = 0; i < TEXTURE_CACHE_SLOTS; i++)
     {
-        if (textureCache[i].valid && textureCache[i].source == mat->texture && textureCache[i].size == mat->textureSize)
+        if (textureCache[i].valid &&
+            textureCache[i].source == mat->texture &&
+            textureCache[i].width == mat->textureWidth &&
+            textureCache[i].height == mat->textureHeight)
         {
-            activeTextureData = textureCache[i].pixels;
-            activeTextureSize = textureCache[i].size;
+            set_active_texture_data(textureCache[i].pixels, textureCache[i].width, textureCache[i].height);
             return;
         }
     }
@@ -157,14 +238,13 @@ static void prepare_texture_cache(Material *mat)
     if (textureCacheNextSlot >= TEXTURE_CACHE_SLOTS)
         textureCacheNextSlot = 0;
 
-    size_t texelCount = (size_t)mat->textureSize * (size_t)mat->textureSize;
     memcpy(slot->pixels, mat->texture, texelCount * sizeof(uint16_t));
     slot->source = mat->texture;
-    slot->size = mat->textureSize;
+    slot->width = mat->textureWidth;
+    slot->height = mat->textureHeight;
     slot->valid = 1;
 
-    activeTextureData = slot->pixels;
-    activeTextureSize = slot->size;
+    set_active_texture_data(slot->pixels, slot->width, slot->height);
 #endif
 }
 
@@ -247,6 +327,26 @@ static inline uint8_t norm_vector_safe(Vector3 *vec)
     return 1;
 }
 
+static inline uint8_t read_normal_vector(Vector3 *out, const int32_t *normals, uint16_t normalsCounter, uint16_t normalIndex)
+{
+    if (normalIndex >= normalsCounter)
+        return 0;
+
+    size_t base = (size_t)normalIndex * 3u;
+    out->x = normals[base];
+    out->y = normals[base + 1u];
+    out->z = normals[base + 2u];
+    return 1;
+}
+
+static inline void write_vector_triplet(int32_t *vectors, uint16_t vectorIndex, const Vector3 *value)
+{
+    size_t base = (size_t)vectorIndex * 3u;
+    vectors[base] = value->x;
+    vectors[base + 1u] = value->y;
+    vectors[base + 2u] = value->z;
+}
+
 static void configure_render_dimensions(void)
 {
     if (render_scale == 0)
@@ -286,9 +386,21 @@ void triangle_center(Triangle3D *triangle, int32_t *center)
 
 void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
+    renderer_debug_stage = 600;
+    renderer_debug_scene_counter = verticesCounter;
+    renderer_debug_pointer = (uintptr_t)vector;
+
+    if (vertices == NULL || vector == NULL)
+    {
+        renderer_debug_stage = 601;
+        return;
+    }
+
     int32_t qt_rad = fixed_mul(vector->w, PI2);
     int32_t c = fast_cos(qt_rad >> 1);
     int32_t s = fast_sin(qt_rad >> 1);
+    renderer_debug_stage = 610;
+
     Vector3 qVec = {
         .x = vector->x,
         .y = vector->y,
@@ -296,8 +408,15 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
     Quaternion q = {
         .w = c,
         .vec = &qVec};
-    norm_vector(q.vec);
+    if (!norm_vector_safe(q.vec))
+    {
+        renderer_debug_stage = 611;
+        return;
+    }
+
     mul_vec_scalar(q.vec, s);
+    renderer_debug_stage = 620;
+
     Vector3 qVecInv = {
         .x = -q.vec->x,
         .y = -q.vec->y,
@@ -307,6 +426,8 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         .vec = &qVecInv};
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
+        renderer_debug_stage = 630;
+        renderer_debug_vertex_index = i;
         Vector3 vec_vertex =
             {
                 .x = vertices[i * 3],
@@ -329,36 +450,77 @@ void rotate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector
         vertices[i * 3 + 1] = result2.vec->y;
         vertices[i * 3 + 2] = result2.vec->z;
     }
+
+    renderer_debug_stage = 690;
 }
 
 void translate(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
+    renderer_debug_stage = 700;
+    renderer_debug_scene_counter = verticesCounter;
+    renderer_debug_pointer = (uintptr_t)vector;
+
+    if (vertices == NULL || vector == NULL)
+    {
+        renderer_debug_stage = 701;
+        return;
+    }
+
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
+        renderer_debug_vertex_index = i;
         vertices[i * 3] += vector->x;
         vertices[i * 3 + 1] += vector->y;
         vertices[i * 3 + 2] += vector->z;
     }
+
+    renderer_debug_stage = 790;
 }
 
 void scale(int32_t *vertices, uint16_t verticesCounter, TransformVector *vector)
 {
+    renderer_debug_stage = 800;
+    renderer_debug_scene_counter = verticesCounter;
+    renderer_debug_pointer = (uintptr_t)vector;
+
+    if (vertices == NULL || vector == NULL)
+    {
+        renderer_debug_stage = 801;
+        return;
+    }
+
     for (uint16_t i = 0; i < verticesCounter; i++)
     {
+        renderer_debug_vertex_index = i;
         vertices[i * 3] = fixed_mul(vertices[i * 3], vector->x);
         vertices[i * 3 + 1] = fixed_mul(vertices[i * 3 + 1], vector->y);
         vertices[i * 3 + 2] = fixed_mul(vertices[i * 3 + 2], vector->z);
     }
+
+    renderer_debug_stage = 890;
 }
 
 void transform(int32_t *vertices, uint16_t verticesCounter, TransformInfo *transformInfo)
 {
+    renderer_debug_stage = 900;
+    renderer_debug_scene_counter = verticesCounter;
+    renderer_debug_pointer = (uintptr_t)transformInfo;
+
+    if (vertices == NULL || transformInfo == NULL || transformInfo->transformVector == NULL)
+    {
+        renderer_debug_stage = 901;
+        return;
+    }
+
+    renderer_debug_stage = 910 + transformInfo->transformType;
     if (transformInfo->transformType == MODEL_TRANSFORM_ROTATE)
         rotate(vertices, verticesCounter, transformInfo->transformVector);
     if (transformInfo->transformType == MODEL_TRANSFORM_TRANSLATE)
         translate(vertices, verticesCounter, transformInfo->transformVector);
     if (transformInfo->transformType == MODEL_TRANSFORM_SCALE)
         scale(vertices, verticesCounter, transformInfo->transformVector);
+
+    renderer_debug_stage = 990;
 }
 
 void inf(float *x, float *y, float qt)
@@ -375,7 +537,36 @@ int32_t check_if_triangle_visible(Triangle2D *triangle)
     int32_t e2x = triangle->c.x - triangle->a.x;
     int32_t e2y = triangle->c.y - triangle->a.y;
 
-    return (e1x * e2y - e1y * e2x) >= 0;
+    return ((int64_t)e1x * e2y - (int64_t)e1y * e2x) >= 0;
+}
+
+static uint8_t triangle_outside_render_area(int32_t ax, int32_t ay, int32_t bx, int32_t by, int32_t cx, int32_t cy)
+{
+    if (ax < 0 && bx < 0 && cx < 0)
+        return 1;
+    if (ay < 0 && by < 0 && cy < 0)
+        return 1;
+    if (ax >= render_width && bx >= render_width && cx >= render_width)
+        return 1;
+    if (ay >= render_height && by >= render_height && cy >= render_height)
+        return 1;
+    return 0;
+}
+
+static uint8_t triangle_outside_raster_guard(int32_t ax, int32_t ay, int32_t bx, int32_t by, int32_t cx, int32_t cy)
+{
+    int32_t minX = -SCREEN_COORD_GUARD;
+    int32_t minY = -SCREEN_COORD_GUARD;
+    int32_t maxX = (int32_t)render_width - 1 + SCREEN_COORD_GUARD;
+    int32_t maxY = (int32_t)render_height - 1 + SCREEN_COORD_GUARD;
+
+    if (ax < minX || ax > maxX || ay < minY || ay > maxY)
+        return 1;
+    if (bx < minX || bx > maxX || by < minY || by > maxY)
+        return 1;
+    if (cx < minX || cx > maxX || cy < minY || cy > maxY)
+        return 1;
+    return 0;
 }
 
 typedef struct
@@ -391,7 +582,7 @@ typedef struct
 
 static inline uint8_t is_inside_near_plane(const ClipVertex *v)
 {
-    return v->z > 0;
+    return v->z >= NEAR_CLIP_Z;
 }
 
 static inline int32_t interpolate_fixed(int32_t a, int32_t b, int32_t t)
@@ -401,7 +592,6 @@ static inline int32_t interpolate_fixed(int32_t a, int32_t b, int32_t t)
 
 static ClipVertex intersect_near_plane(const ClipVertex *a, const ClipVertex *b)
 {
-    const int32_t NEAR_CLIP_Z = 1;
     ClipVertex out = *a;
     int32_t dz = b->z - a->z;
     if (dz == 0)
@@ -458,6 +648,9 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3], ClipVert
 
 void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
 {
+    if (*color == TEXTURE_TRANSPARENT_COLOR)
+        return;
+
     // Clamp minimum light to keep pixels from going fully dark on edges
     const int32_t AMBIENT_MIN = SCALE_FACTOR >> 5;
     if (lightDistance < AMBIENT_MIN)
@@ -514,29 +707,41 @@ void shading(uint16_t *color, PointLight *light, int32_t lightDistance)
     *color = (r << 11) | (g << 5) | b;
 }
 
-uint16_t texturing(const uint16_t *texture, int32_t textureSize, int32_t U, int32_t V, int32_t Z)
+static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *count)
 {
-    int32_t uv_x = (int32_t)fixed_mul(U, Z);
-    int32_t uv_y = (int32_t)fixed_mul(V, Z);
-    uv_x = uv_x * textureSize >> SHIFT_FACTOR;
-    uv_y = uv_y * textureSize >> SHIFT_FACTOR;
-    if (uv_x < 1)
-        uv_x = 1;
-    if (uv_y < 1)
-        uv_y = 1;
-    if (uv_x > textureSize - 2)
-        uv_x = textureSize - 2;
-    if (uv_y > textureSize - 2)
-        uv_y = textureSize - 2;
-    int32_t x0 = uv_x;
-    int32_t y0 = uv_y;
-    int32_t x1 = x0 + 1;
-    int32_t y1 = y0 + 1;
+    if (color == TEXTURE_TRANSPARENT_COLOR)
+        return;
 
-    uint16_t c00 = texture[y0 * textureSize + x0];
-    uint16_t c10 = texture[y0 * textureSize + x1];
-    uint16_t c01 = texture[y1 * textureSize + x0];
-    uint16_t c11 = texture[y1 * textureSize + x1];
+    *r += (color >> 11) & 0x1f;
+    *g += (color >> 5) & 0x3f;
+    *b += color & 0x1f;
+    *count += 1u;
+}
+
+static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0, int32_t row1, int32_t x0, int32_t x1)
+{
+    uint16_t c00 = texture[row0 + x0];
+    uint16_t c10 = texture[row0 + x1];
+    uint16_t c01 = texture[row1 + x0];
+    uint16_t c11 = texture[row1 + x1];
+
+    if (c00 == TEXTURE_TRANSPARENT_COLOR)
+        return TEXTURE_TRANSPARENT_COLOR;
+
+    if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR || c11 == TEXTURE_TRANSPARENT_COLOR)
+    {
+        uint32_t r = 0;
+        uint32_t g = 0;
+        uint32_t b = 0;
+        uint32_t count = 0;
+        add_opaque_texel(c00, &r, &g, &b, &count);
+        add_opaque_texel(c10, &r, &g, &b, &count);
+        add_opaque_texel(c01, &r, &g, &b, &count);
+        add_opaque_texel(c11, &r, &g, &b, &count);
+        if (count == 0)
+            return TEXTURE_TRANSPARENT_COLOR;
+        return ((r / count) << 11) | ((g / count) << 5) | (b / count);
+    }
 
     uint32_t r00 = (c00 >> 11) & 0x1f;
     uint32_t g00 = (c00 >> 5) & 0x3f;
@@ -565,6 +770,97 @@ uint16_t texturing(const uint16_t *texture, int32_t textureSize, int32_t U, int3
     return (r << 11) | (g << 5) | b;
 }
 
+static inline void clamp_uv_fixed(int32_t *uv_x, int32_t *uv_y)
+{
+    if (*uv_x < 0)
+        *uv_x = 0;
+    if (*uv_y < 0)
+        *uv_y = 0;
+    if (*uv_x > SCALE_FACTOR)
+        *uv_x = SCALE_FACTOR;
+    if (*uv_y > SCALE_FACTOR)
+        *uv_y = SCALE_FACTOR;
+}
+
+static inline void clamp_texel_coords(int32_t textureWidth, int32_t textureHeight, int32_t *tex_x, int32_t *tex_y)
+{
+    int32_t minX = textureWidth > 2 ? 1 : 0;
+    int32_t minY = textureHeight > 2 ? 1 : 0;
+    int32_t maxX = textureWidth > 2 ? textureWidth - 2 : textureWidth - 1;
+    int32_t maxY = textureHeight > 2 ? textureHeight - 2 : textureHeight - 1;
+    if (*tex_x < minX)
+        *tex_x = minX;
+    if (*tex_y < minY)
+        *tex_y = minY;
+    if (*tex_x > maxX)
+        *tex_x = maxX;
+    if (*tex_y > maxY)
+        *tex_y = maxY;
+}
+
+static inline uint16_t texturing_power_of_two(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t textureWidthShift, int32_t textureHeightShift, int32_t U, int32_t V, int32_t Z)
+{
+    if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
+        return TEXTURE_TRANSPARENT_COLOR;
+
+    int32_t uv_x = restore_perspective_uv(U, Z);
+    int32_t uv_y = restore_perspective_uv(V, Z);
+    clamp_uv_fixed(&uv_x, &uv_y);
+
+    int32_t tex_x = uv_x >> (SHIFT_FACTOR - textureWidthShift);
+    int32_t tex_y = uv_y >> (SHIFT_FACTOR - textureHeightShift);
+    clamp_texel_coords(textureWidth, textureHeight, &tex_x, &tex_y);
+
+    int32_t x0 = tex_x;
+    int32_t y0 = tex_y;
+    int32_t x1 = x0 + 1 < textureWidth ? x0 + 1 : x0;
+    int32_t y1 = y0 + 1 < textureHeight ? y0 + 1 : y0;
+    int32_t row0 = y0 << textureWidthShift;
+    int32_t row1 = y1 << textureWidthShift;
+
+    return sample_texture_2x2(texture, row0, row1, x0, x1);
+}
+
+static inline uint16_t texturing_generic(const uint16_t *texture, int32_t textureWidth, int32_t textureHeight, int32_t U, int32_t V, int32_t Z)
+{
+    if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
+        return TEXTURE_TRANSPARENT_COLOR;
+
+    int32_t uv_x = restore_perspective_uv(U, Z);
+    int32_t uv_y = restore_perspective_uv(V, Z);
+    clamp_uv_fixed(&uv_x, &uv_y);
+
+    int32_t tex_x = (uv_x * textureWidth) >> SHIFT_FACTOR;
+    int32_t tex_y = (uv_y * textureHeight) >> SHIFT_FACTOR;
+    clamp_texel_coords(textureWidth, textureHeight, &tex_x, &tex_y);
+
+    int32_t x0 = tex_x;
+    int32_t y0 = tex_y;
+    int32_t x1 = x0 + 1 < textureWidth ? x0 + 1 : x0;
+    int32_t y1 = y0 + 1 < textureHeight ? y0 + 1 : y0;
+    int32_t row0 = y0 * textureWidth;
+    int32_t row1 = y1 * textureWidth;
+
+    return sample_texture_2x2(texture, row0, row1, x0, x1);
+}
+
+static void draw_masked_span(uint16_t x, uint16_t y, const uint16_t *span, uint16_t length)
+{
+    uint16_t i = 0;
+    while (i < length)
+    {
+        while (i < length && span[i] == TEXTURE_TRANSPARENT_COLOR)
+            i++;
+
+        uint16_t start = i;
+        while (i < length && span[i] != TEXTURE_TRANSPARENT_COLOR)
+            i++;
+
+        if (i > start)
+            _painter->draw_span(x + start, y, span + start, i - start);
+    }
+}
+
 static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color)
 {
     for (uint16_t i = 0; i < length; i++)
@@ -575,37 +871,76 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat, int32_t 
 {
     (void)mat;
     const uint16_t *texture = activeTextureData;
-    int32_t textureSize = activeTextureSize;
+    int32_t textureWidth = activeTextureWidth;
+    int32_t textureHeight = activeTextureHeight;
+    int32_t textureWidthShift = activeTextureWidthShift;
+    int32_t textureHeightShift = activeTextureHeightShift;
+    uint8_t usePowerOfTwo = (textureWidthShift >= 0 &&
+                             textureHeightShift >= 0 &&
+                             textureWidthShift <= SHIFT_FACTOR &&
+                             textureHeightShift <= SHIFT_FACTOR);
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int32_t Uacc = U;
     int32_t Vacc = V;
     int32_t Zacc = Z;
 
-    for (uint16_t i = 0; i < length; i++)
+    if (usePowerOfTwo)
     {
-        int32_t Ucur = Uacc >> UV_LERP_SHIFT;
-        int32_t Vcur = Vacc >> UV_LERP_SHIFT;
-        int32_t Zcur = Zacc;
-        dst[i] = texturing(texture, textureSize, Ucur, Vcur, Zcur);
-        Uacc += dUdx;
-        Vacc += dVdx;
-        Zacc += dZdx;
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Ucur = Uacc >> UV_LERP_SHIFT;
+            int32_t Vcur = Vacc >> UV_LERP_SHIFT;
+            int32_t Zcur = Zacc;
+            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur);
+            Uacc += dUdx;
+            Vacc += dVdx;
+            Zacc += dZdx;
+        }
+    }
+    else
+    {
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Ucur = Uacc >> UV_LERP_SHIFT;
+            int32_t Vcur = Vacc >> UV_LERP_SHIFT;
+            int32_t Zcur = Zacc;
+            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur);
+            Uacc += dUdx;
+            Vacc += dVdx;
+            Zacc += dZdx;
+        }
     }
 #else
     interp_set_accumulator(interp0, 0, (uint32_t)U);
     interp_set_accumulator(interp0, 1, (uint32_t)V);
     interp_set_accumulator(interp1, 0, (uint32_t)Z);
 
-    for (uint16_t i = 0; i < length; i++)
+    if (usePowerOfTwo)
     {
-        int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
-        int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
-        int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-        dst[i] = texturing(texture, textureSize, Ucur, Vcur, Zcur);
-        interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
-        interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
-        interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
+            int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
+            int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
+            dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight, textureWidthShift, textureHeightShift, Ucur, Vcur, Zcur);
+            interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
+            interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
+            interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
+        }
+    }
+    else
+    {
+        for (uint16_t i = 0; i < length; i++)
+        {
+            int32_t Ucur = ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
+            int32_t Vcur = ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
+            int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
+            dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur, Vcur, Zcur);
+            interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
+            interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
+            interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
+        }
     }
 #endif
 }
@@ -688,7 +1023,7 @@ static void build_material_span(uint16_t *dst, uint16_t length, Material *mat, P
     if (length == 0)
         return;
 
-    if (mat->textureSize == 0)
+    if (mat->texture == NULL || mat->textureWidth <= 0 || mat->textureHeight <= 0)
         fill_span(dst, length, mat->diffuse);
     else
         texture_span(dst, length, mat, lerp->U, lerp->dUdx, lerp->V, lerp->dVdx, lerp->Z, lerp->dZdx);
@@ -708,6 +1043,10 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
     // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
     if (y < 0 || y >= render_height)
         return;
+
+    renderer_debug_stage = 500;
+    renderer_debug_vertex_index = (uint32_t)y;
+
     int32_t n = (y & 1) >> 1;
     x0 += n;
     x1 += n;
@@ -761,6 +1100,7 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
     };
     SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
 
+    renderer_debug_stage = 510;
     build_material_span(span_buffer, span_length, mat, light, applyShading, &lerp);
 
     if (span_length > 0)
@@ -787,8 +1127,14 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, PointLight *lig
         }
 
         for (uint8_t dy = 0; dy < output_scale; dy++)
-            _painter->draw_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
+        {
+            renderer_debug_stage = 520;
+            renderer_debug_scene_counter = span_to_draw_length;
+            draw_masked_span(spanX0, spanY + dy, span_to_draw, span_to_draw_length);
+        }
     }
+
+    renderer_debug_stage = 590;
 }
 
 inline void swap_int32(int32_t *x, int32_t *y)
@@ -800,7 +1146,9 @@ inline void swap_int32(int32_t *x, int32_t *y)
 
 void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], PointLight *light)
 {
+    renderer_debug_stage = 400;
     prepare_texture_cache(mat);
+    renderer_debug_stage = 401;
 
     int32_t x, y, Lx, Ux, Vx, Zx;
     if (triangle->a.y > triangle->b.y)
@@ -836,13 +1184,18 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
         swap_int32(&lightDistances[1], &lightDistances[2]);
     }
-    if (triangle->c.y < 0 || triangle->a.y > render_height)
+    if (triangle->c.y < 0 || triangle->a.y >= render_height)
+    {
+        renderer_debug_stage = 402;
         return;
+    }
+
+    renderer_debug_stage = 410;
     y = triangle->a.y;
     int32_t xx = x = triangle->a.x;
     int32_t Lxx = Lx = ((int32_t)lightDistances[0]) << LIGHT_LERP_SHIFT;
-    int32_t Uxx = Ux = triangle->uvA.x << UV_LERP_SHIFT;
-    int32_t Vxx = Vx = triangle->uvA.y << UV_LERP_SHIFT;
+    int32_t Uxx = Ux = shift_left_clamped_i32(triangle->uvA.x, UV_LERP_SHIFT);
+    int32_t Vxx = Vx = shift_left_clamped_i32(triangle->uvA.y, UV_LERP_SHIFT);
     int32_t Zxx = Zx = triangle->a.z;
 
     int32_t dx01 = triangle->b.x - triangle->a.x;
@@ -858,12 +1211,12 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
     int32_t dL02 = dy02 ? ((lightDistances[2] - lightDistances[0]) << LIGHT_LERP_SHIFT) / dy02 : 0;
     int32_t dL12 = dy12 ? ((lightDistances[2] - lightDistances[1]) << LIGHT_LERP_SHIFT) / dy12 : 0;
 
-    int32_t dU01 = dy01 ? ((triangle->uvB.x - triangle->uvA.x) << UV_LERP_SHIFT) / dy01 : 0;
-    int32_t dV01 = dy01 ? ((triangle->uvB.y - triangle->uvA.y) << UV_LERP_SHIFT) / dy01 : 0;
-    int32_t dU02 = dy02 ? ((triangle->uvC.x - triangle->uvA.x) << UV_LERP_SHIFT) / dy02 : 0;
-    int32_t dV02 = dy02 ? ((triangle->uvC.y - triangle->uvA.y) << UV_LERP_SHIFT) / dy02 : 0;
-    int32_t dU12 = dy12 ? ((triangle->uvC.x - triangle->uvB.x) << UV_LERP_SHIFT) / dy12 : 0;
-    int32_t dV12 = dy12 ? ((triangle->uvC.y - triangle->uvB.y) << UV_LERP_SHIFT) / dy12 : 0;
+    int32_t dU01 = shifted_delta_i32(triangle->uvA.x, triangle->uvB.x, UV_LERP_SHIFT, dy01);
+    int32_t dV01 = shifted_delta_i32(triangle->uvA.y, triangle->uvB.y, UV_LERP_SHIFT, dy01);
+    int32_t dU02 = shifted_delta_i32(triangle->uvA.x, triangle->uvC.x, UV_LERP_SHIFT, dy02);
+    int32_t dV02 = shifted_delta_i32(triangle->uvA.y, triangle->uvC.y, UV_LERP_SHIFT, dy02);
+    int32_t dU12 = shifted_delta_i32(triangle->uvB.x, triangle->uvC.x, UV_LERP_SHIFT, dy12);
+    int32_t dV12 = shifted_delta_i32(triangle->uvB.y, triangle->uvC.y, UV_LERP_SHIFT, dy12);
 
     int32_t dZ01 = dy01 ? (triangle->b.z - triangle->a.z) / dy01 : 0;
     int32_t dZ02 = dy02 ? (triangle->c.z - triangle->a.z) / dy02 : 0;
@@ -875,11 +1228,15 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
     if (triangle->a.y < triangle->b.y)
     {
+        renderer_debug_stage = 430;
         int32_t q = 0;
         int32_t xd = 1 - ((dx01 < 0) << 1);
-        while (y <= triangle->b.y)
+        while (y <= triangle->b.y && y < render_height)
         {
+            renderer_debug_stage = 431;
+            renderer_debug_vertex_index = (uint32_t)y;
             rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
+            renderer_debug_stage = 432;
             y += 1;
             q += dx01;
             q2 += dx02;
@@ -891,11 +1248,13 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Vxx += dV02;
             Zx += dZ01;
             Zxx += dZ02;
+            renderer_debug_stage = 433;
             while (xd * q >= dy01)
             {
                 q -= xd * dy01;
                 x += xd;
             }
+            renderer_debug_stage = 434;
             while (xxd * q2 >= dy02)
             {
                 q2 -= xxd * dy02;
@@ -906,17 +1265,21 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
 
     if (triangle->b.y < triangle->c.y)
     {
+        renderer_debug_stage = 440;
         int32_t q = 0;
         x = triangle->b.x;
         Lx = ((int32_t)lightDistances[1]) << LIGHT_LERP_SHIFT;
-        Ux = triangle->uvB.x << UV_LERP_SHIFT;
-        Vx = triangle->uvB.y << UV_LERP_SHIFT;
+        Ux = shift_left_clamped_i32(triangle->uvB.x, UV_LERP_SHIFT);
+        Vx = shift_left_clamped_i32(triangle->uvB.y, UV_LERP_SHIFT);
         Zx = triangle->b.z;
         int32_t xd = 1 - ((dx12 < 0) << 1);
 
         while (y <= triangle->c.y && y < render_height)
         {
+            renderer_debug_stage = 441;
+            renderer_debug_vertex_index = (uint32_t)y;
             rasterize(y, x, xx, mat, light, Lx, Lxx, Ux, Uxx, Vx, Vxx, Zx, Zxx);
+            renderer_debug_stage = 442;
             y += 1;
             q += dx12;
             q2 += dx02;
@@ -928,11 +1291,13 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             Vxx += dV02;
             Zx += dZ12;
             Zxx += dZ02;
+            renderer_debug_stage = 443;
             while (xd * q > dy12)
             {
                 q -= xd * dy12;
                 x += xd;
             }
+            renderer_debug_stage = 444;
             while (xxd * q2 > dy02)
             {
                 q2 -= xxd * dy02;
@@ -940,6 +1305,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[], Po
             }
         }
     }
+
+    renderer_debug_stage = 490;
 }
 
 typedef struct
@@ -962,22 +1329,39 @@ static int compare_scene_depth_desc(const void *a, const void *b)
 
 void render_scene(PointLight *pLight)
 {
-    if (sceneCounter == 0)
-        return;
+    renderer_debug_stage = 300;
+    renderer_debug_scene_counter = sceneCounter;
 
+    if (sceneCounter == 0)
+    {
+        renderer_debug_stage = 301;
+        return;
+    }
+
+    renderer_debug_stage = 310;
     for (uint16_t i = 0; i < sceneCounter; i++)
     {
+        renderer_debug_vertex_index = i;
         const TriangleInScene *triScene = &scene[i];
         drawItems[i].index = i;
         drawItems[i].depth = (triScene->TriangleOnScreen.a.z + triScene->TriangleOnScreen.b.z + triScene->TriangleOnScreen.c.z) / 3;
     }
 
+    renderer_debug_stage = 320;
     if (sceneCounter > 1)
         qsort(drawItems, sceneCounter, sizeof(SceneDrawItem), compare_scene_depth_desc);
 
+    renderer_debug_stage = 330;
     for (uint16_t i = 0; i < sceneCounter; i++)
     {
+        renderer_debug_stage = 331;
+        renderer_debug_vertex_index = i;
+        renderer_debug_face_index = drawItems[i].index;
         const TriangleInScene *triScene = &scene[drawItems[i].index];
+        if (triScene->TriangleOnScreen.a.z < NEAR_CLIP_Z || triScene->TriangleOnScreen.b.z < NEAR_CLIP_Z || triScene->TriangleOnScreen.c.z < NEAR_CLIP_Z)
+            continue;
+
+        renderer_debug_stage = 340;
         int32_t aW = inverse(triScene->TriangleOnScreen.a.z);
         int32_t bW = inverse(triScene->TriangleOnScreen.b.z);
         int32_t cW = inverse(triScene->TriangleOnScreen.c.z);
@@ -1002,16 +1386,16 @@ void render_scene(PointLight *pLight)
                     cW,
                 },
                 {
-                    fixed_mul(triScene->UV.a.x, aW),
-                    fixed_mul(triScene->UV.a.y, aW),
+                    make_perspective_uv(triScene->UV.a.x, aW),
+                    make_perspective_uv(triScene->UV.a.y, aW),
                 },
                 {
-                    fixed_mul(triScene->UV.b.x, bW),
-                    fixed_mul(triScene->UV.b.y, bW),
+                    make_perspective_uv(triScene->UV.b.x, bW),
+                    make_perspective_uv(triScene->UV.b.y, bW),
                 },
                 {
-                    fixed_mul(triScene->UV.c.x, cW),
-                    fixed_mul(triScene->UV.c.y, cW),
+                    make_perspective_uv(triScene->UV.c.x, cW),
+                    make_perspective_uv(triScene->UV.c.y, cW),
                 },
             };
 
@@ -1025,32 +1409,99 @@ void render_scene(PointLight *pLight)
         }
 #endif
 
+        renderer_debug_stage = 350;
         tri(&triangle, triScene->mat, lightDistances, pLight);
     }
+
+    renderer_debug_stage = 390;
 }
 
 void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
 {
+    renderer_debug_stage = 100;
+    renderer_debug_vertex_index = 0;
+    renderer_debug_face_index = 0;
+    renderer_debug_scene_counter = sceneCounter;
+
+    if (mesh == NULL || camera == NULL || pLight == NULL || mesh->mat == NULL)
+    {
+        renderer_debug_stage = 101;
+        return;
+    }
+
     uint16_t verticesCounter = mesh->verticesCounter;
+    uint16_t textureCoordsCounter = mesh->textureCoordsCounter;
     uint16_t vnCounter = mesh->vnCounter;
+    uint32_t transformationsNum = mesh->transformationsNum;
+    renderer_debug_transform_count = transformationsNum;
+    renderer_debug_pointer = (uintptr_t)mesh->transformations;
+
+    if (mesh->vertices == NULL || mesh->faces == NULL || mesh->textureCoords == NULL || mesh->uv == NULL)
+    {
+        renderer_debug_stage = 102;
+        return;
+    }
+
+    if (verticesCounter == 0 || mesh->facesCounter == 0 || textureCoordsCounter == 0)
+    {
+        renderer_debug_stage = 103;
+        return;
+    }
+
+    if (mesh->mat->isSkyBox == 0 && (mesh->vn == NULL || mesh->normals == NULL || vnCounter == 0))
+    {
+        renderer_debug_stage = 104;
+        return;
+    }
+
+    if (transformationsNum > 0 && mesh->transformations == NULL)
+    {
+        renderer_debug_stage = 106;
+        return;
+    }
+
+    if (transformationsNum > MAX_MODEL_TRANSFORMATIONS)
+    {
+        renderer_debug_stage = 107;
+        return;
+    }
 
     if (!ensure_model_scratch_capacity(verticesCounter, vnCounter))
+    {
+        renderer_debug_stage = 105;
         return;
+    }
 
     int32_t *verticesModified = modelScratchVerticesModified;
     int32_t *verticesClip = modelScratchVerticesClip;
     int32_t *normalsModified = modelScratchNormalsModified;
 
+    renderer_debug_stage = 110;
     memcpy(verticesModified, mesh->vertices, verticesCounter * 3 * sizeof(int32_t));
-    memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int32_t));
-    for (uint32_t i = 0; i < mesh->transformationsNum; i++)
+    if (mesh->mat->isSkyBox == 0)
+        memcpy(normalsModified, mesh->vn, vnCounter * 3 * sizeof(int32_t));
+
+    renderer_debug_stage = 120;
+    for (uint32_t i = 0; i < transformationsNum; i++)
     {
+        renderer_debug_vertex_index = i;
+        renderer_debug_pointer = (uintptr_t)&mesh->transformations[i];
+        renderer_debug_stage = 121;
         transform(verticesModified, verticesCounter, &mesh->transformations[i]);
-        transform(normalsModified, vnCounter, &mesh->transformations[i]);
+        renderer_debug_stage = 122;
+        if (mesh->mat->isSkyBox == 0 && mesh->transformations[i].transformType != MODEL_TRANSFORM_TRANSLATE)
+        {
+            renderer_debug_stage = 123;
+            // Normals are directions; translation must not affect them.
+            transform(normalsModified, vnCounter, &mesh->transformations[i]);
+            renderer_debug_stage = 124;
+        }
     }
 
+    renderer_debug_stage = 130;
     for (uint16_t i = 0; i < verticesCounter * 3; i += 3)
     {
+        renderer_debug_vertex_index = (uint32_t)i / 3u;
         int32_t x = verticesModified[i];
         int32_t y = verticesModified[i + 1];
         int32_t z = verticesModified[i + 2];
@@ -1064,6 +1515,49 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
         verticesClip[clipBase + 3] = w;
     }
 
+    if (mesh->mat->isSkyBox == 0)
+    {
+        renderer_debug_stage = 135;
+        for (uint16_t i = 0; i < vnCounter; i++)
+        {
+            renderer_debug_vertex_index = i;
+            size_t base = (size_t)i * 3u;
+            Vector3 normal = {
+                .x = normalsModified[base],
+                .y = normalsModified[base + 1u],
+                .z = normalsModified[base + 2u],
+            };
+
+            if (!norm_vector_safe(&normal))
+            {
+                normal.x = 0;
+                normal.y = 0;
+                normal.z = 0;
+            }
+            write_vector_triplet(normalsModified, i, &normal);
+        }
+
+        renderer_debug_stage = 136;
+        for (uint16_t i = 0; i < verticesCounter; i++)
+        {
+            renderer_debug_vertex_index = i;
+            size_t base = (size_t)i * 3u;
+            Vector3 lightDirection = {
+                .x = pLight->position.x - verticesModified[base],
+                .y = pLight->position.y - verticesModified[base + 1u],
+                .z = pLight->position.z - verticesModified[base + 2u],
+            };
+
+            if (!norm_vector_safe(&lightDirection))
+            {
+                lightDirection.x = 0;
+                lightDirection.y = 0;
+                lightDirection.z = 0;
+            }
+            write_vector_triplet(verticesModified, i, &lightDirection);
+        }
+    }
+
     Vector3 normalVectorA;
     Vector3 normalVectorB;
     Vector3 normalVectorC;
@@ -1071,8 +1565,14 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
     Vector3 lightDirectionB;
     Vector3 lightDirectionC;
 
-    for (uint16_t i = 0; i < mesh->facesCounter * 3; i += 3)
+    renderer_debug_stage = 140;
+    uint32_t faceIndexCount = (uint32_t)mesh->facesCounter * 3u;
+    for (uint32_t i = 0; i < faceIndexCount; i += 3u)
     {
+        renderer_debug_stage = 150;
+        renderer_debug_face_index = i / 3u;
+        renderer_debug_scene_counter = sceneCounter;
+
         uint16_t a = mesh->faces[i];
         uint16_t b = mesh->faces[i + 1];
         uint16_t c = mesh->faces[i + 2];
@@ -1080,20 +1580,33 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
         uint16_t uvB = mesh->uv[i + 1];
         uint16_t uvC = mesh->uv[i + 2];
 
+        if (a >= verticesCounter || b >= verticesCounter || c >= verticesCounter)
+        {
+            renderer_debug_stage = 151;
+            continue;
+        }
+
+        if (uvA >= textureCoordsCounter || uvB >= textureCoordsCounter || uvC >= textureCoordsCounter)
+        {
+            renderer_debug_stage = 152;
+            continue;
+        }
+
+        if (mesh->mat->isSkyBox == 0 &&
+            (mesh->normals[i] >= vnCounter || mesh->normals[i + 1] >= vnCounter || mesh->normals[i + 2] >= vnCounter))
+        {
+            renderer_debug_stage = 153;
+            continue;
+        }
+
         int32_t lightDistances[3] = {0, 0, 0};
         if (mesh->mat->isSkyBox == 0)
         {
-            normalVectorA.x = normalsModified[mesh->normals[i] * 3];
-            normalVectorA.y = normalsModified[mesh->normals[i] * 3 + 1];
-            normalVectorA.z = normalsModified[mesh->normals[i] * 3 + 2];
-            normalVectorB.x = normalsModified[mesh->normals[i + 1] * 3];
-            normalVectorB.y = normalsModified[mesh->normals[i + 1] * 3 + 1];
-            normalVectorB.z = normalsModified[mesh->normals[i + 1] * 3 + 2];
-            normalVectorC.x = normalsModified[mesh->normals[i + 2] * 3];
-            normalVectorC.y = normalsModified[mesh->normals[i + 2] * 3 + 1];
-            normalVectorC.z = normalsModified[mesh->normals[i + 2] * 3 + 2];
-
-            if (!norm_vector_safe(&normalVectorA) || !norm_vector_safe(&normalVectorB) || !norm_vector_safe(&normalVectorC))
+            renderer_debug_stage = 160;
+            renderer_debug_vertex_index = mesh->normals[i];
+            if (!read_normal_vector(&normalVectorA, normalsModified, vnCounter, mesh->normals[i]) ||
+                !read_normal_vector(&normalVectorB, normalsModified, vnCounter, mesh->normals[i + 1]) ||
+                !read_normal_vector(&normalVectorC, normalsModified, vnCounter, mesh->normals[i + 2]))
             {
                 lightDistances[0] = 0;
                 lightDistances[1] = 0;
@@ -1101,42 +1614,35 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
             }
             else
             {
-                lightDirectionA.x = pLight->position.x - verticesModified[a * 3];
-                lightDirectionA.y = pLight->position.y - verticesModified[a * 3 + 1];
-                lightDirectionA.z = pLight->position.z - verticesModified[a * 3 + 2];
-                lightDirectionB.x = pLight->position.x - verticesModified[b * 3];
-                lightDirectionB.y = pLight->position.y - verticesModified[b * 3 + 1];
-                lightDirectionB.z = pLight->position.z - verticesModified[b * 3 + 2];
-                lightDirectionC.x = pLight->position.x - verticesModified[c * 3];
-                lightDirectionC.y = pLight->position.y - verticesModified[c * 3 + 1];
-                lightDirectionC.z = pLight->position.z - verticesModified[c * 3 + 2];
+                renderer_debug_stage = 163;
+                lightDirectionA.x = verticesModified[a * 3];
+                lightDirectionA.y = verticesModified[a * 3 + 1];
+                lightDirectionA.z = verticesModified[a * 3 + 2];
+                lightDirectionB.x = verticesModified[b * 3];
+                lightDirectionB.y = verticesModified[b * 3 + 1];
+                lightDirectionB.z = verticesModified[b * 3 + 2];
+                lightDirectionC.x = verticesModified[c * 3];
+                lightDirectionC.y = verticesModified[c * 3 + 1];
+                lightDirectionC.z = verticesModified[c * 3 + 2];
 
-                if (!norm_vector_safe(&lightDirectionA) || !norm_vector_safe(&lightDirectionB) || !norm_vector_safe(&lightDirectionC))
-                {
+                renderer_debug_stage = 165;
+                lightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
+                if (lightDistances[0] < 0)
                     lightDistances[0] = 0;
+                if (lightDistances[0] > SCALE_FACTOR)
+                    lightDistances[0] = SCALE_FACTOR;
+
+                lightDistances[1] = dot_product(&normalVectorB, &lightDirectionB);
+                if (lightDistances[1] < 0)
                     lightDistances[1] = 0;
+                if (lightDistances[1] > SCALE_FACTOR)
+                    lightDistances[1] = SCALE_FACTOR;
+
+                lightDistances[2] = dot_product(&normalVectorC, &lightDirectionC);
+                if (lightDistances[2] < 0)
                     lightDistances[2] = 0;
-                }
-                else
-                {
-                    lightDistances[0] = dot_product(&normalVectorA, &lightDirectionA);
-                    if (lightDistances[0] < 0)
-                        lightDistances[0] = 0;
-                    if (lightDistances[0] > SCALE_FACTOR)
-                        lightDistances[0] = SCALE_FACTOR;
-
-                    lightDistances[1] = dot_product(&normalVectorB, &lightDirectionB);
-                    if (lightDistances[1] < 0)
-                        lightDistances[1] = 0;
-                    if (lightDistances[1] > SCALE_FACTOR)
-                        lightDistances[1] = SCALE_FACTOR;
-
-                    lightDistances[2] = dot_product(&normalVectorC, &lightDirectionC);
-                    if (lightDistances[2] < 0)
-                        lightDistances[2] = 0;
-                    if (lightDistances[2] > SCALE_FACTOR)
-                        lightDistances[2] = SCALE_FACTOR;
-                }
+                if (lightDistances[2] > SCALE_FACTOR)
+                    lightDistances[2] = SCALE_FACTOR;
             }
         }
 
@@ -1169,6 +1675,7 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
                 .light = lightDistances[2],
             }};
 
+        renderer_debug_stage = 170;
         ClipVertex clipped[4];
         uint8_t clippedCount = clip_triangle_against_near_plane(triangleIn, clipped);
         if (clippedCount < 3)
@@ -1180,15 +1687,22 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
             ClipVertex vb = clipped[t];
             ClipVertex vc = clipped[t + 1];
 
-            if (va.w == 0 || vb.w == 0 || vc.w == 0)
+            if (va.w <= 0 || vb.w <= 0 || vc.w <= 0)
                 continue;
 
+            renderer_debug_stage = 180;
             int32_t ax = fixed_div(va.x, va.w) + render_width_half;
             int32_t ay = fixed_div(va.y, va.w) + render_height_half;
             int32_t bx = fixed_div(vb.x, vb.w) + render_width_half;
             int32_t by = fixed_div(vb.y, vb.w) + render_height_half;
             int32_t cx = fixed_div(vc.x, vc.w) + render_width_half;
             int32_t cy = fixed_div(vc.y, vc.w) + render_height_half;
+
+            if (triangle_outside_render_area(ax, ay, bx, by, cx, cy))
+                continue;
+
+            if (triangle_outside_raster_guard(ax, ay, bx, by, cx, cy))
+                continue;
 
             Triangle2D triangle = {
                 {ax, ay},
@@ -1200,8 +1714,12 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
                 continue;
 
             if (sceneCounter >= MAX_TRIANGLES_IN_SCENE)
+            {
+                renderer_debug_stage = 190;
                 return;
+            }
 
+            renderer_debug_stage = 191;
             TriangleInScene *outTriangle = &scene[sceneCounter++];
             outTriangle->TriangleOnScreen.a.x = ax;
             outTriangle->TriangleOnScreen.a.y = ay;
@@ -1226,6 +1744,9 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, PointLight *pLight)
             outTriangle->mat = mesh->mat;
         }
     }
+
+    renderer_debug_stage = 200;
+    renderer_debug_scene_counter = sceneCounter;
 }
 
 void clean_scene()

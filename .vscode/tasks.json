@@ -2,35 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Configure Project (PSRAM ON)",
-            "type": "process",
-            "command": "${userHome}/.pico-sdk/cmake/v4.3.2/bin/cmake",
-            "args": [
-                "-S",
-                "${workspaceFolder}",
-                "-B",
-                "${workspaceFolder}/build",
-                "-DEUZEBIA3D_PLATFORM=PICO",
-                "-DEUZEBIA3D_USE_PSRAM=ON",
-                "-DPICO_BOARD=pico2"
-            ],
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated"
-            },
-            "problemMatcher": [],
-            "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/cmake/v4.3.2/bin/cmake.exe"
-            }
-        },
-        {
             "label": "Compile Project",
             "type": "process",
             "isBuildCommand": true,
-            "dependsOn": [
-                "Configure Project (PSRAM ON)"
-            ],
-            "dependsOrder": "sequence",
             "command": "${userHome}/.pico-sdk/ninja/v1.13.2/ninja",
             "args": ["-C", "${workspaceFolder}/build"],
             "group": "build",
@@ -46,7 +20,7 @@
         {
             "label": "Run Project",
             "type": "process",
-            "command": "${env:HOME}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool",
+            "command": "${env:HOME}/.pico-sdk/picotool/2.3.0/picotool/picotool",
             "args": [
                 "load",
                 "${command:raspberry-pi-pico.launchTargetPath}",
@@ -58,7 +32,7 @@
             },
             "problemMatcher": [],
             "windows": {
-                "command": "${env:USERPROFILE}/.pico-sdk/picotool/2.2.0-a4/picotool/picotool.exe"
+                "command": "${env:USERPROFILE}/.pico-sdk/picotool/2.3.0/picotool/picotool.exe"
             }
         },
         {
