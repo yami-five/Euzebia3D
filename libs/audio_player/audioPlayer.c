@@ -1,9 +1,20 @@
-#include "IFileReader.h"
-#include "fileReader.h"
+#include "IAudioPlayer.h"
+#include "audioPlayer.h"
+
+#include <stddef.h>
 
 static const IHardware *_hardware = NULL;
 
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+static void audio_player_init(void)
+{
+}
+
+static void play_wave_file(char *file_name)
+{
+    (void)file_name;
+}
+#elif defined(EUZEBIA3D_PLATFORM_PICO)
 #include "fatfs/ff.h"
 #include "stdio.h"
 #include "../storage/pins.h"
@@ -18,7 +29,7 @@ static const IHardware *_hardware = NULL;
 static FRESULT f_res;
 static FATFS microSDFatFs;
 
-static void sd_init(void)
+static void audio_player_init(void)
 {
     _hardware->write(SD_CS_PIN, 1);
     _hardware->write(LCD_CS_PIN, 1);
@@ -31,13 +42,9 @@ static void sd_init(void)
     else
         printf("SD card mount file system success!! \r\n");
 }
-#endif
 
 static void play_wave_file(char *file_name)
 {
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    (void)file_name;
-#else
     FIL file;
     uint8_t header[44];
     UINT br;
@@ -82,23 +89,23 @@ static void play_wave_file(char *file_name)
     }
 
     f_close(&file);
-#endif
 }
+#else
+#error "Unsupported Euzebia3D audio player platform"
+#endif
 
-static void init_fileReader(const IHardware *hardware)
+static void init_audio_player(const IHardware *hardware)
 {
     _hardware = hardware;
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    sd_init();
-#endif
+    audio_player_init();
 }
 
-static IFileReader fileReader = {
-    .init_fileReader = init_fileReader,
+static IAudioPlayer audioPlayer = {
+    .init_audio_player = init_audio_player,
     .play_wave_file = play_wave_file,
 };
 
-const IFileReader *get_fileReader(void)
+const IAudioPlayer *get_audioPlayer(void)
 {
-    return &fileReader;
+    return &audioPlayer;
 }

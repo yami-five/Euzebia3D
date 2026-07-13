@@ -54,16 +54,16 @@ endif()
 
 set(EUZEBIA3D_STORAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../storage")
 
-set(EUZEBIA3D_FILEREADER_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
+set(EUZEBIA3D_AUDIO_PLAYER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/audioPlayer.c
 )
 if(NOT EUZEBIA3D_IS_WINDOWS)
-    list(APPEND EUZEBIA3D_FILEREADER_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
+    list(APPEND EUZEBIA3D_AUDIO_PLAYER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ff.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/diskio.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffsystem.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffunicode.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver/sd_driver.c
     )
 endif()
 
@@ -104,17 +104,17 @@ target_include_directories(
 target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps Euzebia3D_Hardware)
 
 add_library(
-    Euzebia3D_FileReader
-    ${EUZEBIA3D_FILEREADER_SOURCES}
+    Euzebia3D_AudioPlayer
+    ${EUZEBIA3D_AUDIO_PLAYER_SOURCES}
 )
 target_include_directories(
-    Euzebia3D_FileReader
+    Euzebia3D_AudioPlayer
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver
 )
-target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
+target_link_libraries(Euzebia3D_AudioPlayer PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
 
 add_library(
     Euzebia3D_Hardware
@@ -288,7 +288,7 @@ target_link_libraries(
     Euzebia3D_Arithmetics
     Euzebia3D_CameraFactory
     Euzebia3D_Display
-    Euzebia3D_FileReader
+    Euzebia3D_AudioPlayer
     Euzebia3D_Hardware
     Euzebia3D_LightFactory
     Euzebia3D_MeshFactory
@@ -305,7 +305,7 @@ endif()
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)
 add_library(Euzebia3D_DebugModeInterface INTERFACE)
 add_library(Euzebia3D_DisplayInterface INTERFACE)
-add_library(Euzebia3D_FileReaderInterface INTERFACE)
+add_library(Euzebia3D_AudioPlayerInterface INTERFACE)
 add_library(Euzebia3D_HardwareInterface INTERFACE)
 add_library(Euzebia3D_LightFactoryInterface INTERFACE)
 add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
@@ -319,7 +319,7 @@ if(DEBUG_MODE)
     target_link_libraries(Euzebia3D_DebugModeInterface INTERFACE Euzebia3D_DebugMode)
 endif()
 target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
-target_link_libraries(Euzebia3D_FileReaderInterface INTERFACE Euzebia3D_FileReader)
+target_link_libraries(Euzebia3D_AudioPlayerInterface INTERFACE Euzebia3D_AudioPlayer)
 target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)
 target_link_libraries(Euzebia3D_LightFactoryInterface INTERFACE Euzebia3D_LightFactory)
 target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFactory)

@@ -31,7 +31,7 @@ What is implemented now in `libs/renderer/renderer.c`:
 - `libs/meshFactory`, `libs/cameraFactory`, `libs/lightFactory`, `libs/puppetFactory`: object/factory modules for scene and animation elements.
 - `libs/arithmetics`: fixed-point arithmetic, vectors/quaternions, trig lookup helpers.
 - `libs/hardware`, `libs/display`: low-level board and LCD control.
-- `libs/file_reader`: SD/FAT + WAV playback support (present in codebase; not used in current `main` loop).
+- `libs/audio_player`: SD/FAT + WAV playback support (Pico implementation, Windows no-op stubs; not used in current `main` loop).
 - `storage`: embedded assets and storage API (models/textures/fonts/sprites/post-processing data, `get_storage()` access).
 - `assets`: source assets (e.g. OBJ) used for conversion.
 - `tools`: Python converters/exporters used to generate embedded asset data.
@@ -167,3 +167,9 @@ Notes:
 - The painter uses a full framebuffer (`BUFFER_SIZE = 153600` bytes) and streams it via DMA in chunks.
 - Triangles crossing the near plane are clipped before perspective divide; geometry fully behind camera is rejected.
 - With triangle sorting, intersecting geometry can still produce painter-order artifacts in edge cases.
+
+## Third-Party Code
+
+`libs/audio_player/fatfs` contains FatFS R0.15a by ChaN. FatFS is redistributed under the license notice included in its source files.
+
+When redistributing FatFS source, keep the copyright notice, redistribution condition, and warranty/liability disclaimer from the FatFS files.
