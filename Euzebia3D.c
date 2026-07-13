@@ -237,7 +237,7 @@ int main(void)
 
     cameraFactory = get_cameraFactory();
     EUZEBIA3D_REQUIRE_POINTER(cameraFactory, "get_cameraFactory");
-    Camera *camera = cameraFactory->create_camera(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    Camera *camera = cameraFactory->create_camera(0.0f, 75.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     if (camera == NULL)
         return 1;
     // Camera transformation is unused while update_camera() is disabled in the main loop.

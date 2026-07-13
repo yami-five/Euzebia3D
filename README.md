@@ -31,7 +31,7 @@ What is implemented now in `libs/renderer/renderer.c`:
 - `libs/meshFactory`, `libs/cameraFactory`, `libs/lightFactory`, `libs/puppetFactory`: object/factory modules for scene and animation elements.
 - `libs/arithmetics`: fixed-point arithmetic, vectors/quaternions, trig lookup helpers.
 - `libs/hardware`, `libs/display`: low-level board and LCD control.
-- `libs/audio_player`: SD/FAT + WAV playback support (Pico implementation, Windows no-op stubs; not used in current `main` loop).
+- `libs/audio_player`: SD/FAT + WAV playback support on Pico and miniaudio-backed WAV playback on Windows; not used in current `main` loop.
 - `storage`: embedded assets and storage API (models/textures/fonts/sprites/post-processing data, `get_storage()` access).
 - `assets`: source assets (e.g. OBJ) used for conversion.
 - `tools`: Python converters/exporters used to generate embedded asset data.
@@ -107,7 +107,7 @@ Requirements:
 - CMake
 - C compiler toolchain for selected platform
 - for `PICO`: Raspberry Pi Pico SDK `2.2.0` + Pico toolchain for RP2350
-- for `WINDOWS`: SDL3 development package (for example via `vcpkg`)
+- for `WINDOWS`: SDL3 development package and miniaudio header (for example via `vcpkg`)
 
 ### Select Platform
 
@@ -131,6 +131,12 @@ If SDL3 is installed via `vcpkg`, configure with toolchain:
 
 ```bash
 cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+```
+
+With `vcpkg`, install the Windows dependencies first:
+
+```bash
+vcpkg install sdl3:x64-windows miniaudio:x64-windows
 ```
 
 Build:

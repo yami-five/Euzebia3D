@@ -6,7 +6,8 @@ param(
     [string]$VcpkgRoot = "",
     [string]$VcpkgTriplet = "x64-windows",
     [string]$CMakeToolchainFile = "",
-    [string]$Sdl3Dir = ""
+    [string]$Sdl3Dir = "",
+    [string]$MiniaudioIncludeDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -169,17 +170,22 @@ Write-Host ("Using CMake: {0} (v{1})" -f $cmakeExeResolved, $cmakeVersion)
 $cmakeHelp = (& $cmakeExeResolved --help) -join "`n"
 $vcpkgToolchain = Resolve-VcpkgToolchain -ExplicitToolchain $CMakeToolchainFile -ExplicitRoot $VcpkgRoot -RepositoryRoot $repoRoot
 $sdl3DirResolved = Resolve-OptionalPath $Sdl3Dir
+$miniaudioIncludeDirResolved = Resolve-OptionalPath $MiniaudioIncludeDir
 
 if (-not [string]::IsNullOrWhiteSpace($vcpkgToolchain)) {
     Write-Host ("Using vcpkg toolchain: {0}" -f $vcpkgToolchain)
     Write-Host ("Using vcpkg triplet: {0}" -f $VcpkgTriplet)
 }
 elseif ([string]::IsNullOrWhiteSpace($sdl3DirResolved)) {
-    Write-Host "No vcpkg toolchain auto-detected. If SDL3 is not on CMAKE_PREFIX_PATH, pass -VcpkgRoot, -CMakeToolchainFile, or -Sdl3Dir."
+    Write-Host "No vcpkg toolchain auto-detected. If SDL3/miniaudio are not on CMAKE_PREFIX_PATH, pass -VcpkgRoot, -CMakeToolchainFile, -Sdl3Dir, or -MiniaudioIncludeDir."
 }
 
 if (-not [string]::IsNullOrWhiteSpace($sdl3DirResolved)) {
     Write-Host ("Using SDL3_DIR: {0}" -f $sdl3DirResolved)
+}
+
+if (-not [string]::IsNullOrWhiteSpace($miniaudioIncludeDirResolved)) {
+    Write-Host ("Using miniaudio include dir: {0}" -f $miniaudioIncludeDirResolved)
 }
 
 if (Test-Path $buildPath) {
@@ -243,6 +249,10 @@ if (-not [string]::IsNullOrWhiteSpace($vcpkgToolchain)) {
 
 if (-not [string]::IsNullOrWhiteSpace($sdl3DirResolved)) {
     $configureArgs += "-DSDL3_DIR=$sdl3DirResolved"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($miniaudioIncludeDirResolved)) {
+    $configureArgs += "-DEUZEBIA3D_MINIAUDIO_INCLUDE_DIR=$miniaudioIncludeDirResolved"
 }
 
 if (-not [string]::IsNullOrWhiteSpace($Generator)) {

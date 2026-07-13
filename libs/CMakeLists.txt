@@ -66,6 +66,12 @@ if(NOT EUZEBIA3D_IS_WINDOWS)
         ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver/sd_driver.c
     )
 endif()
+if(EUZEBIA3D_IS_WINDOWS)
+    find_path(EUZEBIA3D_MINIAUDIO_INCLUDE_DIR NAMES miniaudio.h)
+    if(NOT EUZEBIA3D_MINIAUDIO_INCLUDE_DIR)
+        message(FATAL_ERROR "miniaudio.h not found. Install miniaudio or pass -DEUZEBIA3D_MINIAUDIO_INCLUDE_DIR=<directory containing miniaudio.h>.")
+    endif()
+endif()
 
 add_library(
     Euzebia3D_Arithmetics
@@ -114,6 +120,9 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs
     ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver
 )
+if(EUZEBIA3D_IS_WINDOWS)
+    target_include_directories(Euzebia3D_AudioPlayer PRIVATE ${EUZEBIA3D_MINIAUDIO_INCLUDE_DIR})
+endif()
 target_link_libraries(Euzebia3D_AudioPlayer PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
 
 add_library(
