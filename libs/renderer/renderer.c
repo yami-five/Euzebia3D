@@ -802,6 +802,20 @@ static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g, ui
     *count += 1u;
 }
 
+static inline uint16_t average_opaque_rgb565_pair(uint16_t a, uint16_t b)
+{
+    uint32_t rb = ((uint32_t)(a & 0xf81f) + (uint32_t)(b & 0xf81f)) >> 1;
+    uint32_t g = ((uint32_t)(a & 0x07e0) + (uint32_t)(b & 0x07e0)) >> 1;
+    return (uint16_t)((rb & 0xf81f) | (g & 0x07e0));
+}
+
+static inline uint16_t average_opaque_rgb565_2x2(uint16_t c00, uint16_t c10, uint16_t c01, uint16_t c11)
+{
+    uint16_t top = average_opaque_rgb565_pair(c00, c10);
+    uint16_t bottom = average_opaque_rgb565_pair(c01, c11);
+    return average_opaque_rgb565_pair(top, bottom);
+}
+
 static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0, int32_t row1, int32_t x0, int32_t x1, bool transparent)
 {
     uint16_t c00 = texture[row0 + x0];
@@ -815,52 +829,28 @@ static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0,
     uint16_t c01 = texture[row1 + x0];
     uint16_t c11 = texture[row1 + x1];
 
-    if (transparent)
-    {
-        if (c00 == TEXTURE_TRANSPARENT_COLOR)
-            return TEXTURE_TRANSPARENT_COLOR;
+    if (!transparent)
+        return average_opaque_rgb565_2x2(c00, c10, c01, c11);
 
-        if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR || c11 == TEXTURE_TRANSPARENT_COLOR)
-        {
-            uint32_t r = 0;
-            uint32_t g = 0;
-            uint32_t b = 0;
-            uint32_t count = 0;
-            add_opaque_texel(c00, &r, &g, &b, &count);
-            add_opaque_texel(c10, &r, &g, &b, &count);
-            add_opaque_texel(c01, &r, &g, &b, &count);
-            add_opaque_texel(c11, &r, &g, &b, &count);
-            if (count == 0)
-                return TEXTURE_TRANSPARENT_COLOR;
-            return ((r / count) << 11) | ((g / count) << 5) | (b / count);
-        }
+    if (c00 == TEXTURE_TRANSPARENT_COLOR)
+        return TEXTURE_TRANSPARENT_COLOR;
+
+    if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR || c11 == TEXTURE_TRANSPARENT_COLOR)
+    {
+        uint32_t r = 0;
+        uint32_t g = 0;
+        uint32_t b = 0;
+        uint32_t count = 0;
+        add_opaque_texel(c00, &r, &g, &b, &count);
+        add_opaque_texel(c10, &r, &g, &b, &count);
+        add_opaque_texel(c01, &r, &g, &b, &count);
+        add_opaque_texel(c11, &r, &g, &b, &count);
+        if (count == 0)
+            return TEXTURE_TRANSPARENT_COLOR;
+        return ((r / count) << 11) | ((g / count) << 5) | (b / count);
     }
 
-    uint32_t r00 = (c00 >> 11) & 0x1f;
-    uint32_t g00 = (c00 >> 5) & 0x3f;
-    uint32_t b00 = c00 & 0x1f;
-    uint32_t r10 = (c10 >> 11) & 0x1f;
-    uint32_t g10 = (c10 >> 5) & 0x3f;
-    uint32_t b10 = c10 & 0x1f;
-    uint32_t r01 = (c01 >> 11) & 0x1f;
-    uint32_t g01 = (c01 >> 5) & 0x3f;
-    uint32_t b01 = c01 & 0x1f;
-    uint32_t r11 = (c11 >> 11) & 0x1f;
-    uint32_t g11 = (c11 >> 5) & 0x3f;
-    uint32_t b11 = c11 & 0x1f;
-
-    uint32_t rTop = (r00 + r10) >> 1;
-    uint32_t gTop = (g00 + g10) >> 1;
-    uint32_t bTop = (b00 + b10) >> 1;
-    uint32_t rBot = (r01 + r11) >> 1;
-    uint32_t gBot = (g01 + g11) >> 1;
-    uint32_t bBot = (b01 + b11) >> 1;
-
-    uint32_t r = (rTop + rBot) >> 1;
-    uint32_t g = (gTop + gBot) >> 1;
-    uint32_t b = (bTop + bBot) >> 1;
-
-    return (r << 11) | (g << 5) | b;
+    return average_opaque_rgb565_2x2(c00, c10, c01, c11);
 #endif
 }
 
