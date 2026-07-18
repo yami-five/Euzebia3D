@@ -1,32 +1,40 @@
 #ifndef IPAINTER_h
 #define IPAINTER_h
 
-#include <stdint.h>
 #include "IDisplay.h"
 #include "IHardware.h"
 #include "IStorage.h"
-#include "puppet.h"
 #include "painter_types.h"
+#include "puppet.h"
+#include <stdint.h>
 
-typedef struct
-{
-    void (*init_painter)(const IDisplay *display, const IHardware *hardware, const IStorage *storage);
-    void (*draw_buffer)(void);
-    void (*clear_buffer)(uint16_t color);
-    void (*draw_pixel)(uint16_t x, uint16_t y, uint16_t color);
-    void (*draw_span)(uint16_t x, uint16_t y, const uint16_t *span, uint16_t span_length);
-    void (*draw_image)(uint8_t image_index);
-    void (*apply_post_process_effect)(uint8_t effect_index, uint16_t *params);
-    void (*draw_sprite)(const Sprite *sprite, int16_t pos_x, int16_t pos_y, int32_t angle, uint8_t scale);
-    void (*draw_puppet)(Puppet *puppet);
-    void (*draw_background)(Image *image);
-    void (*print)(const char *text, int16_t x, int16_t y, uint8_t fontIndex, uint16_t color);
-    void (*fade_fullscreen)(uint8_t mode, uint32_t startFrame, uint32_t currentFrame);
-    void (*draw_scroller)(const Scroller *scroller, uint16_t x, uint16_t y, uint32_t startFrame, uint32_t currentFrame);
-    void (*draw_plasma)(uint16_t *colors, uint16_t colorsNum, uint32_t t, uint8_t scale, int8_t facA, int8_t facB, int8_t facC, int8_t facD, Rectangle *rectangle);
-    void (*draw_rectangle)(Rectangle *rect, uint16_t color);
-    void (*draw_line)(Point *start, Point *end, uint16_t color);
-    void (*draw_gradient)(uint16_t colorA, uint16_t colorB, Rectangle *rectangle, uint8_t direction);
+typedef struct {
+  void (*init_painter)(const IDisplay *display, const IHardware *hardware,
+                       const IStorage *storage);
+  void (*draw_buffer)(void);
+  void (*clear_buffer)(uint16_t color);
+  void (*draw_pixel)(uint16_t x, uint16_t y, uint16_t color);
+  void (*draw_span)(uint16_t x, uint16_t y, const uint16_t *span,
+                    uint16_t span_length);
+  void (*draw_image)(uint8_t image_index);
+  void (*apply_post_process_effect)(uint8_t effect_index, uint16_t *params);
+  void (*draw_sprite)(const Sprite *sprite, int16_t pos_x, int16_t pos_y,
+                      int32_t angle, uint8_t scale);
+  void (*draw_puppet)(Puppet *puppet);
+  void (*draw_background)(Image *image);
+  void (*print)(const char *text, int16_t x, int16_t y, uint8_t fontIndex,
+                uint16_t color);
+  void (*fade_fullscreen)(uint8_t mode, uint32_t startFrame,
+                          uint32_t currentFrame);
+  void (*draw_scroller)(const Scroller *scroller, uint16_t x, uint16_t y,
+                        uint32_t startFrame, uint32_t currentFrame);
+  void (*draw_plasma)(uint16_t *colors, uint16_t colorsNum, uint32_t t,
+                      uint8_t scale, int8_t facA, int8_t facB, int8_t facC,
+                      int8_t facD, Rectangle *rectangle);
+  void (*draw_rectangle)(Rectangle *rect, uint16_t color);
+  void (*draw_line)(Point *start, Point *end, uint16_t color);
+  void (*draw_gradient)(uint16_t colorA, uint16_t colorB, Rectangle *rectangle,
+                        uint8_t direction);
 } IPainter;
 
 #endif

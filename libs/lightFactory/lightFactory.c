@@ -1,38 +1,38 @@
-#include "ILightFactory.h"
 #include "lightFactory.h"
-#include "light.h"
-#include "fpa.h"
 #include "../storage/gfx.h"
+#include "ILightFactory.h"
+#include "fpa.h"
+#include "light.h"
 #include <stdlib.h>
 
-Light* create_point_light(float x, float y, float z, float intensity, uint16_t color)
-{
-    Light *light = (Light *)malloc(sizeof(Light));
-    if (light == NULL)
-        return NULL;
+Light *create_point_light(float x, float y, float z, float intensity,
+                          uint16_t color) {
+  Light *light = (Light *)malloc(sizeof(Light));
+  if (light == NULL)
+    return NULL;
 
-    light->position.x = float_to_fixed(x);
-    light->position.y = float_to_fixed(y);
-    light->position.z = float_to_fixed(z);
-    light->intensity = float_to_fixed(intensity);
-    light->color = color;
-    light->lightType = POINT_LIGHT;
-    return light;
+  light->position.x = float_to_fixed(x);
+  light->position.y = float_to_fixed(y);
+  light->position.z = float_to_fixed(z);
+  light->intensity = float_to_fixed(intensity);
+  light->color = color;
+  light->lightType = POINT_LIGHT;
+  return light;
 }
 
-Light* create_directional_light(float x, float y, float z, float intensity, uint16_t color)
-{
-    Light *light = (Light *)malloc(sizeof(Light));
-    if (light == NULL)
-        return NULL;
+Light *create_directional_light(float x, float y, float z, float intensity,
+                                uint16_t color) {
+  Light *light = (Light *)malloc(sizeof(Light));
+  if (light == NULL)
+    return NULL;
 
-    light->position.x = -float_to_fixed(x);
-    light->position.y = -float_to_fixed(y);
-    light->position.z = -float_to_fixed(z);
-    light->intensity = float_to_fixed(intensity);
-    light->color = color;
-    light->lightType = DIRECTIONAL_LIGHT;
-    return light;
+  light->position.x = -float_to_fixed(x);
+  light->position.y = -float_to_fixed(y);
+  light->position.z = -float_to_fixed(z);
+  light->intensity = float_to_fixed(intensity);
+  light->color = color;
+  light->lightType = DIRECTIONAL_LIGHT;
+  return light;
 }
 
 static ILightFactory lightFactory = {
@@ -40,7 +40,4 @@ static ILightFactory lightFactory = {
     .create_directional_light = create_directional_light,
 };
 
-const ILightFactory *get_lightFactory(void)
-{
-    return &lightFactory;
-}
+const ILightFactory *get_lightFactory(void) { return &lightFactory; }

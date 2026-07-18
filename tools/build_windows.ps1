@@ -1,5 +1,5 @@
 param(
-    [string]$BuildDir = "build-clean-windows",
+    [string]$BuildDir = "build-windows",
     [string]$Config = "Release",
     [string]$Generator = "",
     [string]$CMakeExe = "",
@@ -7,7 +7,8 @@ param(
     [string]$VcpkgTriplet = "x64-windows",
     [string]$CMakeToolchainFile = "",
     [string]$Sdl3Dir = "",
-    [string]$MiniaudioIncludeDir = ""
+    [string]$MiniaudioIncludeDir = "",
+    [switch]$Clean
 )
 
 $ErrorActionPreference = "Stop"
@@ -188,7 +189,7 @@ if (-not [string]::IsNullOrWhiteSpace($miniaudioIncludeDirResolved)) {
     Write-Host ("Using miniaudio include dir: {0}" -f $miniaudioIncludeDirResolved)
 }
 
-if (Test-Path $buildPath) {
+if ($Clean -and (Test-Path $buildPath)) {
     $resolvedBuild = (Resolve-Path $buildPath).Path
     if (-not $resolvedBuild.StartsWith($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to delete build outside repository: $resolvedBuild"

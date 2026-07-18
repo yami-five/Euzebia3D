@@ -8,8 +8,8 @@ typedef struct spi_inst spi_inst_t;
 typedef struct audio_buffer_pool audio_buffer_pool_t;
 typedef struct spin_lock spin_lock_t;
 #else
-#include "hardware/spi.h"
 #include "hardware/pio.h"
+#include "hardware/spi.h"
 #include "pico/audio.h"
 #include "pico/audio_i2s.h"
 #endif
@@ -24,22 +24,21 @@ typedef struct spin_lock spin_lock_t;
 //     uint8_t sm;
 // } audio_format_t;
 
-typedef struct
-{
-    void (*init_hardware)(void);
-    void (*init_audio_i2s)(void);
-    void (*write)(uint32_t pin, uint8_t value);
-    void (*spi_write_byte)(uint8_t value);
-    uint8_t (*spi_write_read_byte)(uint8_t value);
-    void (*delay_ms)(uint32_t ms);
-    void (*set_pwm)(uint8_t value);
-    spi_inst_t *(*get_spi_port)(void);
-    void (*set_spi_port)(uint8_t spiNum);
-    audio_buffer_pool_t *(*get_audio_buffer_pool)(void);
-    spin_lock_t *(*get_spinlock)(void);
-    uint32_t (*get_lcd_spi_baudrate_hz)(void);
-    void (*set_lcd_cs_pin_high)(void);
-    void (*set_lcd_cs_pin_low)(void);
+typedef struct {
+  void (*init_hardware)(void);
+  void (*init_audio_i2s)(void);
+  void (*write)(uint32_t pin, uint8_t value);
+  void (*spi_write_byte)(uint8_t value);
+  uint8_t (*spi_write_read_byte)(uint8_t value);
+  void (*delay_ms)(uint32_t ms);
+  void (*set_pwm)(uint8_t value);
+  spi_inst_t *(*get_spi_port)(void);
+  void (*set_spi_port)(uint8_t spiNum);
+  audio_buffer_pool_t *(*get_audio_buffer_pool)(void);
+  spin_lock_t *(*get_spinlock)(void);
+  uint32_t (*get_lcd_spi_baudrate_hz)(void);
+  void (*set_lcd_cs_pin_high)(void);
+  void (*set_lcd_cs_pin_low)(void);
 } IHardware;
 
 #endif

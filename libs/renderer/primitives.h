@@ -5,14 +5,13 @@
 #include "vectors.h"
 #include <stdint.h>
 
-typedef struct
-{
-    Vector4 a;
-    Vector4 b;
-    Vector4 c;
-    Vector2 uvA;
-    Vector2 uvB;
-    Vector2 uvC;
+typedef struct {
+  Vector4 a;
+  Vector4 b;
+  Vector4 c;
+  Vector2 uvA;
+  Vector2 uvB;
+  Vector2 uvC;
 } TriangleToRender;
 
 typedef struct {

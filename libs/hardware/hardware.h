@@ -4,15 +4,15 @@
 #include "IHardware.h"
 
 #if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
+#include "../storage/pins.h"
 #include "hardware/clocks.h"
 #include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/pwm.h"
 #include "hardware/spi.h"
+#include "pico/audio_i2s.h"
 #include "pico/stdlib.h"
 #include "stdio.h"
-#include "../storage/pins.h"
-#include "pico/audio_i2s.h"
 
 static spi_inst_t *SPI_PORT = spi1;
 static spi_inst_t *I2C_PORT = spi1;

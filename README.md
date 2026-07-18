@@ -131,13 +131,13 @@ Useful build flags:
 Configure:
 
 ```bash
-cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS
+cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS
 ```
 
 If SDL3 is installed via `vcpkg`, configure with toolchain:
 
 ```bash
-cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
 With `vcpkg`, install the Windows dependencies first:
@@ -149,26 +149,30 @@ vcpkg install sdl3:x64-windows miniaudio:x64-windows
 Build:
 
 ```bash
-cmake --build build-win --config Release
+cmake --build build-windows --config Release
 ```
 
 Output target: `Euzebia3D_PC.exe`.
+
+`tools/build_windows.ps1` creates the Visual Studio solution and builds it. Use `-Clean` to recreate `build-windows` from scratch.
 
 ### Build for Raspberry Pi Pico
 
 Configure:
 
 ```bash
-cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO
+cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO -DCMAKE_BUILD_TYPE=Release
 ```
 
 Build:
 
 ```bash
-cmake --build build-pico --config Release
+cmake --build build-pico
 ```
 
 Output target: `Euzebia3D.elf` (plus additional Pico outputs, including UF2).
+
+`tools/build_pico.ps1` builds the firmware and copies the UF2 to a connected Pico in BOOTSEL mode. Use `-Clean` to recreate `build-pico`; `tools/debug_pico.ps1` builds the Debug variant and starts OpenOCD/GDB.
 
 Notes:
 - `PICO_BOARD` is set to `pico2` in `CMakeLists.txt`.

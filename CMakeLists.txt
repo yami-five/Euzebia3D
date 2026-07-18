@@ -63,8 +63,9 @@ if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
     add_subdirectory("${EUZEBIA3D_LIBS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/pico_libs")
 
     if(EUZEBIA3D_BUILD_APP)
-        # Add executable. Default name is the project name, version 0.1
         add_executable(Euzebia3D Euzebia3D.c)
+
+        # Configure executable. Default name is the project name, version 0.1
         target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_PLATFORM_PICO=1)
         if(DEBUG_MODE)
             target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_DEBUG_MODE=1)
@@ -127,6 +128,7 @@ elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
 
     if(EUZEBIA3D_BUILD_APP)
         add_executable(Euzebia3D_PC "${EUZEBIA3D_APP_MAIN}")
+
         target_include_directories(Euzebia3D_PC PRIVATE
                 "${CMAKE_CURRENT_LIST_DIR}"
                 "${CMAKE_CURRENT_LIST_DIR}/storage"

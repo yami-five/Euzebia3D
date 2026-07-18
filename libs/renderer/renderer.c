@@ -17,12 +17,6 @@
 static const IHardware *_hardware = NULL;
 static const IPainter *_painter = NULL;
 
-static const uint8_t FOCAL_LENGTH = 90;
-static const uint32_t FIRE_FLOOR_ADR = 76480;
-static const uint32_t FIXED_FOCAL_LENGTH = 90 << SHIFT_FACTOR;
-static const uint16_t BASE_WIDTH = 320;
-static const uint16_t BASE_HEIGHT = 240;
-
 static uint8_t render_scale = 1; // 2 => 160x120 render; 1 => 320x240 render
 static uint8_t output_scale = 1;
 static uint16_t render_width = 160;
@@ -30,37 +24,17 @@ static uint16_t render_height = 120;
 static uint16_t render_width_half = 80;
 static uint16_t render_height_half = 60;
 
-#define MAX_OBJECTS_IN_SCENE 1500
-#define SPAN_BUFFER_MAX 320
-#define LIGHT_LERP_SHIFT 8
-#define UV_LERP_SHIFT 8
-#define UV_PERSPECTIVE_SHIFT 6
-#define MAX_SHADING_SPAN_LEN 320
-#define SCREEN_COORD_GUARD 1024
-#define NEAR_CLIP_Z 1
-#define MAX_MODEL_TRANSFORMATIONS 8
-#define TEXTURE_TRANSPARENT_COLOR 0xf81fu
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD
 // in painter.
-
-#ifndef EUZEBIA3D_RENDERER_SHADING_ENABLED
-#define EUZEBIA3D_RENDERER_SHADING_ENABLED 1
-#endif
-#ifndef EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED
-#define EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED 1
-#endif
-#ifndef EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
-#define EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED 1
-#endif
-#ifndef EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
-#define EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED 1
-#endif
 
 static Primitive scene[MAX_OBJECTS_IN_SCENE];
 static uint16_t sceneCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
+
+static Camera *sceneCamera;
+static Light *sceneLight;
 
 static Primitive *append_scene_primitive(PrimType type) {
   if (sceneCounter >= MAX_OBJECTS_IN_SCENE)
@@ -140,36 +114,6 @@ volatile uint32_t renderer_debug_face_index = 0;
 volatile uint32_t renderer_debug_scene_counter = 0;
 volatile uint32_t renderer_debug_transform_count = 0;
 volatile uintptr_t renderer_debug_pointer = 0;
-
-// Build-time knobs injected from CMake (with safe fallbacks).
-#ifndef EUZEBIA3D_TEXTURE_CACHE_ENABLED
-#define EUZEBIA3D_TEXTURE_CACHE_ENABLED 1
-#endif
-#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH
-#define EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH 1
-#endif
-#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM
-#define EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM 1
-#endif
-#ifndef EUZEBIA3D_TEXTURE_CACHE_SIZE
-#define EUZEBIA3D_TEXTURE_CACHE_SIZE 64
-#endif
-#ifndef EUZEBIA3D_TEXTURE_CACHE_SLOTS
-#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 2
-#endif
-
-#if (EUZEBIA3D_TEXTURE_CACHE_SIZE < 1)
-#undef EUZEBIA3D_TEXTURE_CACHE_SIZE
-#define EUZEBIA3D_TEXTURE_CACHE_SIZE 1
-#endif
-#if (EUZEBIA3D_TEXTURE_CACHE_SLOTS < 1)
-#undef EUZEBIA3D_TEXTURE_CACHE_SLOTS
-#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 1
-#endif
-
-#define TEXTURE_CACHE_SIZE EUZEBIA3D_TEXTURE_CACHE_SIZE
-#define TEXTURE_CACHE_PIXELS (TEXTURE_CACHE_SIZE * TEXTURE_CACHE_SIZE)
-#define TEXTURE_CACHE_SLOTS EUZEBIA3D_TEXTURE_CACHE_SLOTS
 
 #if EUZEBIA3D_TEXTURE_CACHE_ENABLED
 typedef struct {
@@ -686,8 +630,7 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3],
 }
 
 static uint8_t transform_point_to_clip(const Vector3 *point,
-                                       const Camera *camera,
-                                       ClipVertex *out) {
+                                       const Camera *camera, ClipVertex *out) {
   if (point == NULL || camera == NULL || camera->vMatrix == NULL ||
       camera->pMatrix == NULL || out == NULL)
     return 0;
@@ -699,10 +642,8 @@ static uint8_t transform_point_to_clip(const Vector3 *point,
   out->uvx = 0;
   out->uvy = 0;
   out->light = 0;
-  fixed_mul_matrix_vector(&out->x, &out->y, &out->z, &out->w,
-                          camera->vMatrix);
-  fixed_mul_matrix_vector(&out->x, &out->y, &out->z, &out->w,
-                          camera->pMatrix);
+  fixed_mul_matrix_vector(&out->x, &out->y, &out->z, &out->w, camera->vMatrix);
+  fixed_mul_matrix_vector(&out->x, &out->y, &out->z, &out->w, camera->pMatrix);
   return 1;
 }
 
@@ -764,34 +705,34 @@ static uint8_t clip_line_to_render_area(Vector2 *start, Vector2 *end) {
       if (end->y == start->y)
         return 0;
       clipped.y = 0;
-      clipped.x = clamp_i64_to_i32(
-          (int64_t)start->x + ((int64_t)(end->x - start->x) *
-                               (clipped.y - start->y)) /
-                                  (end->y - start->y));
+      clipped.x =
+          clamp_i64_to_i32((int64_t)start->x + ((int64_t)(end->x - start->x) *
+                                                (clipped.y - start->y)) /
+                                                   (end->y - start->y));
     } else if (outCode & LINE_OUT_BOTTOM) {
       if (end->y == start->y)
         return 0;
       clipped.y = (int32_t)render_height - 1;
-      clipped.x = clamp_i64_to_i32(
-          (int64_t)start->x + ((int64_t)(end->x - start->x) *
-                               (clipped.y - start->y)) /
-                                  (end->y - start->y));
+      clipped.x =
+          clamp_i64_to_i32((int64_t)start->x + ((int64_t)(end->x - start->x) *
+                                                (clipped.y - start->y)) /
+                                                   (end->y - start->y));
     } else if (outCode & LINE_OUT_RIGHT) {
       if (end->x == start->x)
         return 0;
       clipped.x = (int32_t)render_width - 1;
-      clipped.y = clamp_i64_to_i32(
-          (int64_t)start->y + ((int64_t)(end->y - start->y) *
-                               (clipped.x - start->x)) /
-                                  (end->x - start->x));
+      clipped.y =
+          clamp_i64_to_i32((int64_t)start->y + ((int64_t)(end->y - start->y) *
+                                                (clipped.x - start->x)) /
+                                                   (end->x - start->x));
     } else {
       if (end->x == start->x)
         return 0;
       clipped.x = 0;
-      clipped.y = clamp_i64_to_i32(
-          (int64_t)start->y + ((int64_t)(end->y - start->y) *
-                               (clipped.x - start->x)) /
-                                  (end->x - start->x));
+      clipped.y =
+          clamp_i64_to_i32((int64_t)start->y + ((int64_t)(end->y - start->y) *
+                                                (clipped.x - start->x)) /
+                                                   (end->x - start->x));
     }
 
     if (outCode == startCode)
@@ -1547,7 +1488,7 @@ static void sort_scene_draw_items(uint16_t count) {
 }
 #endif
 
-void render_scene(Light *pLight) {
+void render_scene() {
   RENDERER_SET_DEBUG_STAGE(300);
   renderer_debug_scene_counter = sceneCounter;
 
@@ -1642,19 +1583,20 @@ void render_scene(Light *pLight) {
 #endif
 
     RENDERER_SET_DEBUG_STAGE(350);
-    tri(&triangle, triScene->mat, lightDistances, pLight);
+    tri(&triangle, triScene->mat, lightDistances, sceneLight);
   }
 
   RENDERER_SET_DEBUG_STAGE(390);
 }
 
-void add_model_to_scene(Mesh *mesh, Camera *camera, Light *pLight) {
+void add_model_to_scene(Mesh *mesh) {
   RENDERER_SET_DEBUG_STAGE(100);
   renderer_debug_vertex_index = 0;
   renderer_debug_face_index = 0;
   renderer_debug_scene_counter = sceneCounter;
 
-  if (mesh == NULL || camera == NULL || pLight == NULL || mesh->mat == NULL) {
+  if (mesh == NULL || sceneCamera == NULL || sceneLight == NULL ||
+      mesh->mat == NULL) {
     RENDERER_SET_DEBUG_STAGE(101);
     return;
   }
@@ -1729,8 +1671,8 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, Light *pLight) {
     int32_t y = verticesModified[i + 1];
     int32_t z = verticesModified[i + 2];
     int32_t w = SCALE_FACTOR;
-    fixed_mul_matrix_vector(&x, &y, &z, &w, camera->vMatrix);
-    fixed_mul_matrix_vector(&x, &y, &z, &w, camera->pMatrix);
+    fixed_mul_matrix_vector(&x, &y, &z, &w, sceneCamera->vMatrix);
+    fixed_mul_matrix_vector(&x, &y, &z, &w, sceneCamera->pMatrix);
     size_t clipBase = ((size_t)i / 3u) * 4u;
     verticesClip[clipBase] = x;
     verticesClip[clipBase + 1] = y;
@@ -1761,7 +1703,7 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, Light *pLight) {
     renderer_debug_vertex_index = i;
     size_t base = (size_t)i * 3u;
     Vector3 lightDirection;
-    make_light_direction(&lightDirection, pLight, verticesModified, base);
+    make_light_direction(&lightDirection, sceneLight, verticesModified, base);
     write_vector_triplet(verticesModified, i, &lightDirection);
   }
 
@@ -1939,17 +1881,17 @@ void add_model_to_scene(Mesh *mesh, Camera *camera, Light *pLight) {
   renderer_debug_scene_counter = sceneCounter;
 }
 
-void add_point_to_scene(Point3D *point, Camera *camera) {
+void add_point_to_scene(Point3D *point) {
   ClipVertex clipPoint;
   Vector2 screenPoint;
-  if (!transform_point_to_clip(point == NULL ? NULL : &point->point, camera,
-                               &clipPoint) ||
+  if (!transform_point_to_clip(point == NULL ? NULL : &point->point,
+                               sceneCamera, &clipPoint) ||
       !is_inside_near_plane(&clipPoint) ||
       !project_clip_point(&clipPoint, &screenPoint))
     return;
 
-  if (screenPoint.x < 0 || screenPoint.x >= render_width ||
-      screenPoint.y < 0 || screenPoint.y >= render_height)
+  if (screenPoint.x < 0 || screenPoint.x >= render_width || screenPoint.y < 0 ||
+      screenPoint.y >= render_height)
     return;
 
   Primitive *primitive = append_scene_primitive(POINT);
@@ -1963,14 +1905,14 @@ void add_point_to_scene(Point3D *point, Camera *camera) {
   primitive->pos.z = clipPoint.z;
 }
 
-void add_line_to_scene(Line3D *line, Camera *camera) {
+void add_line_to_scene(Line3D *line) {
   ClipVertex clipStart;
   ClipVertex clipEnd;
   Vector2 screenStart;
   Vector2 screenEnd;
   if (line == NULL ||
-      !transform_point_to_clip(&line->start, camera, &clipStart) ||
-      !transform_point_to_clip(&line->end, camera, &clipEnd) ||
+      !transform_point_to_clip(&line->start, sceneCamera, &clipStart) ||
+      !transform_point_to_clip(&line->end, sceneCamera, &clipEnd) ||
       !clip_line_against_near_plane(&clipStart, &clipEnd) ||
       !project_clip_point(&clipStart, &screenStart) ||
       !project_clip_point(&clipEnd, &screenEnd) ||
@@ -1991,12 +1933,20 @@ void add_line_to_scene(Line3D *line, Camera *camera) {
 
 void clean_scene() { sceneCounter = 0; }
 
-static IRenderer renderer = {.init_renderer = init_renderer,
-                             .render_scene = render_scene,
-                             .add_model_to_scene = add_model_to_scene,
-                             .add_point_to_scene = add_point_to_scene,
-                             .add_line_to_scene = add_line_to_scene,
-                             .clean_scene = clean_scene,
-                             .set_scale = renderer_set_scale};
+void set_camera(Camera *camera) { sceneCamera = camera; }
+
+void set_light(Light *light) { sceneLight = light; }
+
+static IRenderer renderer = {
+    .init_renderer = init_renderer,
+    .render_scene = render_scene,
+    .add_model_to_scene = add_model_to_scene,
+    .add_point_to_scene = add_point_to_scene,
+    .add_line_to_scene = add_line_to_scene,
+    .clean_scene = clean_scene,
+    .set_scale = renderer_set_scale,
+    .set_camera = set_camera,
+    .set_light = set_light,
+};
 
 const IRenderer *get_renderer(void) { return &renderer; }
