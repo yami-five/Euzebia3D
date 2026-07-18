@@ -31,7 +31,7 @@ What is implemented now in `libs/renderer/renderer.c`:
 - `libs/meshFactory`, `libs/cameraFactory`, `libs/lightFactory`, `libs/puppetFactory`: object/factory modules for scene and animation elements.
 - `libs/arithmetics`: fixed-point arithmetic, vectors/quaternions, trig lookup helpers.
 - `libs/hardware`, `libs/display`: low-level board and LCD control.
-- `libs/file_reader`: SD/FAT + WAV playback support (present in codebase; not used in current `main` loop).
+- `libs/audio_player`: SD/FAT + WAV playback support on Pico and miniaudio-backed WAV playback on Windows; not used in current `main` loop.
 - `storage`: embedded assets and storage API (models/textures/fonts/sprites/post-processing data, `get_storage()` access).
 - `assets`: source assets (e.g. OBJ) used for conversion.
 - `tools`: Python converters/exporters used to generate embedded asset data.
@@ -107,7 +107,7 @@ Requirements:
 - CMake
 - C compiler toolchain for selected platform
 - for `PICO`: Raspberry Pi Pico SDK `2.2.0` + Pico toolchain for RP2350
-- for `WINDOWS`: SDL3 development package (for example via `vcpkg`)
+- for `WINDOWS`: SDL3 development package and miniaudio header (for example via `vcpkg`)
 
 ### Select Platform
 
@@ -119,43 +119,60 @@ Current default in `CMakeLists.txt` is `PICO`.
 
 Use separate build directories per platform to avoid cache conflicts.
 
+Useful build flags:
+- `EUZEBIA3D_DEBUG_STAGE_ENABLED=OFF` compiles out the volatile `*_debug_stage` variables and writes to them.
+- `EUZEBIA3D_RENDERER_SHADING_ENABLED=OFF` disables per-pixel lighting/shading.
+- `EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED=OFF` switches texture sampling from 2x2 filtering to nearest texel.
+- `EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED=OFF` uses affine UV interpolation instead of perspective-correct UVs.
+- `EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED=OFF` skips scene triangle depth sorting.
+
 ### Build for Windows
 
 Configure:
 
 ```bash
-cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS
+cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS
 ```
 
 If SDL3 is installed via `vcpkg`, configure with toolchain:
 
 ```bash
-cmake -S . -B build-win -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+```
+
+With `vcpkg`, install the Windows dependencies first:
+
+```bash
+vcpkg install sdl3:x64-windows miniaudio:x64-windows
 ```
 
 Build:
 
 ```bash
-cmake --build build-win --config Release
+cmake --build build-windows --config Release
 ```
 
 Output target: `Euzebia3D_PC.exe`.
+
+`tools/build_windows.ps1` creates the Visual Studio solution and builds it. Use `-Clean` to recreate `build-windows` from scratch.
 
 ### Build for Raspberry Pi Pico
 
 Configure:
 
 ```bash
-cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO
+cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO -DCMAKE_BUILD_TYPE=Release
 ```
 
 Build:
 
 ```bash
-cmake --build build-pico --config Release
+cmake --build build-pico
 ```
 
 Output target: `Euzebia3D.elf` (plus additional Pico outputs, including UF2).
+
+`tools/build_pico.ps1` builds the firmware and copies the UF2 to a connected Pico in BOOTSEL mode. Use `-Clean` to recreate `build-pico`; `tools/debug_pico.ps1` builds the Debug variant and starts OpenOCD/GDB.
 
 Notes:
 - `PICO_BOARD` is set to `pico2` in `CMakeLists.txt`.
@@ -167,3 +184,9 @@ Notes:
 - The painter uses a full framebuffer (`BUFFER_SIZE = 153600` bytes) and streams it via DMA in chunks.
 - Triangles crossing the near plane are clipped before perspective divide; geometry fully behind camera is rejected.
 - With triangle sorting, intersecting geometry can still produce painter-order artifacts in edge cases.
+
+## Third-Party Code
+
+`libs/audio_player/fatfs` contains FatFS R0.15a by ChaN. FatFS is redistributed under the license notice included in its source files.
+
+When redistributing FatFS source, keep the copyright notice, redistribution condition, and warranty/liability disclaimer from the FatFS files.

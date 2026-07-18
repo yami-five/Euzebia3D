@@ -10,6 +10,22 @@ if(NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO" AND NOT EUZEBIA3D_PLATFORM_
     message(FATAL_ERROR "Unsupported EUZEBIA3D_PLATFORM_NORMALIZED='${EUZEBIA3D_PLATFORM_NORMALIZED}'")
 endif()
 
+if(NOT DEFINED EUZEBIA3D_DEBUG_STAGE_ENABLED)
+    set(EUZEBIA3D_DEBUG_STAGE_ENABLED ON)
+endif()
+if(NOT DEFINED EUZEBIA3D_RENDERER_SHADING_ENABLED)
+    set(EUZEBIA3D_RENDERER_SHADING_ENABLED ON)
+endif()
+if(NOT DEFINED EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED)
+    set(EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED ON)
+endif()
+if(NOT DEFINED EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED)
+    set(EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED ON)
+endif()
+if(NOT DEFINED EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED)
+    set(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED ON)
+endif()
+
 set(EUZEBIA3D_IS_WINDOWS OFF)
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     set(EUZEBIA3D_IS_WINDOWS ON)
@@ -23,6 +39,9 @@ else()
 endif()
 if(EUZEBIA3D_USE_PSRAM)
     target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_USE_PSRAM=1)
+endif()
+if(EUZEBIA3D_DEBUG_STAGE_ENABLED)
+    target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_DEBUG_STAGE_ENABLED=1)
 endif()
 
 add_library(Euzebia3D_PicoDeps INTERFACE)
@@ -54,17 +73,23 @@ endif()
 
 set(EUZEBIA3D_STORAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../storage")
 
-set(EUZEBIA3D_FILEREADER_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fileReader.c
+set(EUZEBIA3D_AUDIO_PLAYER_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/audioPlayer.c
 )
 if(NOT EUZEBIA3D_IS_WINDOWS)
-    list(APPEND EUZEBIA3D_FILEREADER_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ff.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/diskio.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffsystem.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs/ffunicode.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver/sd_driver.c
+    list(APPEND EUZEBIA3D_AUDIO_PLAYER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ff.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/diskio.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffsystem.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffunicode.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver/sd_driver.c
     )
+endif()
+if(EUZEBIA3D_IS_WINDOWS)
+    find_path(EUZEBIA3D_MINIAUDIO_INCLUDE_DIR NAMES miniaudio.h)
+    if(NOT EUZEBIA3D_MINIAUDIO_INCLUDE_DIR)
+        message(FATAL_ERROR "miniaudio.h not found. Install miniaudio or pass -DEUZEBIA3D_MINIAUDIO_INCLUDE_DIR=<directory containing miniaudio.h>.")
+    endif()
 endif()
 
 add_library(
@@ -104,17 +129,20 @@ target_include_directories(
 target_link_libraries(Euzebia3D_Display PUBLIC Euzebia3D_PicoDeps Euzebia3D_Hardware)
 
 add_library(
-    Euzebia3D_FileReader
-    ${EUZEBIA3D_FILEREADER_SOURCES}
+    Euzebia3D_AudioPlayer
+    ${EUZEBIA3D_AUDIO_PLAYER_SOURCES}
 )
 target_include_directories(
-    Euzebia3D_FileReader
+    Euzebia3D_AudioPlayer
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/fatfs
-    ${CMAKE_CURRENT_SOURCE_DIR}/file_reader/sd_driver
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs
+    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver
 )
-target_link_libraries(Euzebia3D_FileReader PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
+if(EUZEBIA3D_IS_WINDOWS)
+    target_include_directories(Euzebia3D_AudioPlayer PRIVATE ${EUZEBIA3D_MINIAUDIO_INCLUDE_DIR})
+endif()
+target_link_libraries(Euzebia3D_AudioPlayer PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
 
 add_library(
     Euzebia3D_Hardware
@@ -155,6 +183,18 @@ target_include_directories(
 target_link_libraries(Euzebia3D_LightFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
 add_library(
+    Euzebia3D_MaterialFactory
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory/material.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory/materialFactory.c
+)
+target_include_directories(
+    Euzebia3D_MaterialFactory
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/materialFactory
+)
+target_link_libraries(Euzebia3D_MaterialFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage)
+
+add_library(
     Euzebia3D_MeshFactory
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/mesh.c
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory/meshFactory.c
@@ -164,7 +204,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/meshFactory
 )
-target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations)
+target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations Euzebia3D_MaterialFactory)
 
 add_library(
     Euzebia3D_Painter
@@ -257,6 +297,7 @@ target_link_libraries(
     Euzebia3D_PicoDeps
     Euzebia3D_Arithmetics
     Euzebia3D_Transformations
+    Euzebia3D_MaterialFactory
     Euzebia3D_MeshFactory
     Euzebia3D_LightFactory
     Euzebia3D_Painter
@@ -277,6 +318,26 @@ if(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM)
 else()
     target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM=0)
 endif()
+if(EUZEBIA3D_RENDERER_SHADING_ENABLED)
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_SHADING_ENABLED=1)
+else()
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_SHADING_ENABLED=0)
+endif()
+if(EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED)
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED=1)
+else()
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED=0)
+endif()
+if(EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED)
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED=1)
+else()
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED=0)
+endif()
+if(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED)
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED=1)
+else()
+    target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED=0)
+endif()
 if(NOT EUZEBIA3D_IS_WINDOWS)
     target_link_libraries(Euzebia3D_Renderer PUBLIC hardware_interp)
 endif()
@@ -288,9 +349,10 @@ target_link_libraries(
     Euzebia3D_Arithmetics
     Euzebia3D_CameraFactory
     Euzebia3D_Display
-    Euzebia3D_FileReader
+    Euzebia3D_AudioPlayer
     Euzebia3D_Hardware
     Euzebia3D_LightFactory
+    Euzebia3D_MaterialFactory
     Euzebia3D_MeshFactory
     Euzebia3D_Painter
     Euzebia3D_Puppeteer
@@ -305,9 +367,10 @@ endif()
 add_library(Euzebia3D_CameraFactoryInterface INTERFACE)
 add_library(Euzebia3D_DebugModeInterface INTERFACE)
 add_library(Euzebia3D_DisplayInterface INTERFACE)
-add_library(Euzebia3D_FileReaderInterface INTERFACE)
+add_library(Euzebia3D_AudioPlayerInterface INTERFACE)
 add_library(Euzebia3D_HardwareInterface INTERFACE)
 add_library(Euzebia3D_LightFactoryInterface INTERFACE)
+add_library(Euzebia3D_MaterialFactoryInterface INTERFACE)
 add_library(Euzebia3D_MeshFactoryInterface INTERFACE)
 add_library(Euzebia3D_PainterInterface INTERFACE)
 add_library(Euzebia3D_PuppeteerInterface INTERFACE)
@@ -319,9 +382,10 @@ if(DEBUG_MODE)
     target_link_libraries(Euzebia3D_DebugModeInterface INTERFACE Euzebia3D_DebugMode)
 endif()
 target_link_libraries(Euzebia3D_DisplayInterface INTERFACE Euzebia3D_Display)
-target_link_libraries(Euzebia3D_FileReaderInterface INTERFACE Euzebia3D_FileReader)
+target_link_libraries(Euzebia3D_AudioPlayerInterface INTERFACE Euzebia3D_AudioPlayer)
 target_link_libraries(Euzebia3D_HardwareInterface INTERFACE Euzebia3D_Hardware)
 target_link_libraries(Euzebia3D_LightFactoryInterface INTERFACE Euzebia3D_LightFactory)
+target_link_libraries(Euzebia3D_MaterialFactoryInterface INTERFACE Euzebia3D_MaterialFactory)
 target_link_libraries(Euzebia3D_MeshFactoryInterface INTERFACE Euzebia3D_MeshFactory)
 target_link_libraries(Euzebia3D_PainterInterface INTERFACE Euzebia3D_Painter)
 target_link_libraries(Euzebia3D_PuppeteerInterface INTERFACE Euzebia3D_Puppeteer)

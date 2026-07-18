@@ -4,10 +4,9 @@
 #include "sprites.h"
 #include "stdint.h"
 
-typedef struct 
-{
-    const uint16_t *characters;
-    const uint8_t size;
+typedef struct {
+  const uint16_t *characters;
+  const uint8_t size;
 } Font;
 
 #endif

@@ -1,8 +1,8 @@
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
-#include "pico/multicore.h"
 #elif defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -17,11 +17,12 @@
 #include "IDisplay.h"
 #include "IHardware.h"
 #include "ILightFactory.h"
+#include "IMaterialFactory.h"
 #include "IMeshFactory.h"
 #include "IPainter.h"
+#include "IPuppeteer.h"
 #include "IRenderer.h"
 #include "IStorage.h"
-#include "IPuppeteer.h"
 
 #include "camera.h"
 #include "cameraFactory.h"
@@ -29,24 +30,40 @@
 #include "debugMode.h"
 #endif
 #include "lightFactory.h"
+#include "material.h"
+#include "materialFactory.h"
 #include "mesh.h"
 #include "meshFactory.h"
+#include "puppeteer.h"
 #include "renderer.h"
 #include "storage.h"
-#include "puppet.h"
-#include "puppeteer.h"
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
 #include "display.h"
 #include "hardware.h"
+#define EUZEBIA3D_SYS_CLOCK_KHZ 300000
+// #define EUZEBIA3D_SYS_CLOCK_KHZ 150000
 #endif
 
 const IPainter *get_painter(void);
+static char t_char[11];
+
+#if EUZEBIA3D_DEBUG_STAGE_ENABLED
+volatile uint32_t euzebia_debug_stage = 0;
+#define EUZEBIA3D_SET_DEBUG_STAGE(stage)                                       \
+  do {                                                                         \
+    euzebia_debug_stage = (stage);                                             \
+  } while (0)
+#else
+#define EUZEBIA3D_SET_DEBUG_STAGE(stage) ((void)0)
+#endif
+volatile uint32_t euzebia_debug_frame = 0;
 
 static const IHardware *hardware_core;
 static const IDisplay *display;
 static const IPainter *painter;
 static const IRenderer *renderer;
+static const IMaterialFactory *materialFactory;
 static const IMeshFactory *meshFactory;
 static const ILightFactory *lightFactory;
 static const ICameraFactory *cameraFactory;
@@ -65,14 +82,12 @@ static const IDebugMode *debugMode;
 #define EUZEBIA3D_PLASMA_FAC_B 7
 #define EUZEBIA3D_PLASMA_FAC_C 8
 #define EUZEBIA3D_PLASMA_FAC_D 7
-#define EUZEBIA3D_REQUIRE_POINTER(pointer, name) \
-    do                                           \
-    {                                            \
-        if (!require_pointer((pointer), (name))) \
-        {                                        \
-            return 1;                            \
-        }                                        \
-    } while (0)
+#define EUZEBIA3D_REQUIRE_POINTER(pointer, name)                               \
+  do {                                                                         \
+    if (!require_pointer((pointer), (name))) {                                 \
+      return 1;                                                                \
+    }                                                                          \
+  } while (0)
 #else
 #define EUZEBIA3D_PLASMA_SCALE 2
 #define EUZEBIA3D_PLASMA_FAC_A 6
@@ -83,59 +98,49 @@ static const IDebugMode *debugMode;
 #endif
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static int require_pointer(const void *pointer, const char *name)
-{
-    if (pointer != NULL)
-    {
-        return 1;
-    }
-
-    SDL_Log("%s failed", name);
-    return 0;
-}
-
-static int process_window_events(void)
-{
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        if (event.type == SDL_EVENT_QUIT)
-        {
-            return 0;
-        }
-        if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE)
-        {
-            return 0;
-        }
-    }
-
+static int require_pointer(const void *pointer, const char *name) {
+  if (pointer != NULL) {
     return 1;
+  }
+
+  SDL_Log("%s failed", name);
+  return 0;
 }
 
-static void cap_window_frame_rate(uint64_t frame_begin_ticks)
-{
-    uint64_t performance_frequency = SDL_GetPerformanceFrequency();
-    if (performance_frequency == 0u || EUZEBIA3D_WINDOWS_TARGET_FPS == 0u)
-    {
-        return;
+static int process_window_events(void) {
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_EVENT_QUIT) {
+      return 0;
     }
+    if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+      return 0;
+    }
+  }
 
-    uint64_t target_frame_ticks = performance_frequency / EUZEBIA3D_WINDOWS_TARGET_FPS;
-    uint64_t elapsed_ticks = SDL_GetPerformanceCounter() - frame_begin_ticks;
-    if (elapsed_ticks >= target_frame_ticks)
-    {
-        return;
-    }
+  return 1;
+}
 
-    uint64_t remaining_ticks = target_frame_ticks - elapsed_ticks;
-    uint64_t remaining_ms = (remaining_ticks * 1000u) / performance_frequency;
-    if (remaining_ms > 0u)
-    {
-        SDL_Delay((uint32_t)remaining_ms);
-    }
+static void cap_window_frame_rate(uint64_t frame_begin_ticks) {
+  uint64_t performance_frequency = SDL_GetPerformanceFrequency();
+  if (performance_frequency == 0u || EUZEBIA3D_WINDOWS_TARGET_FPS == 0u) {
+    return;
+  }
+
+  uint64_t target_frame_ticks =
+      performance_frequency / EUZEBIA3D_WINDOWS_TARGET_FPS;
+  uint64_t elapsed_ticks = SDL_GetPerformanceCounter() - frame_begin_ticks;
+  if (elapsed_ticks >= target_frame_ticks) {
+    return;
+  }
+
+  uint64_t remaining_ticks = target_frame_ticks - elapsed_ticks;
+  uint64_t remaining_ms = (remaining_ticks * 1000u) / performance_frequency;
+  if (remaining_ms > 0u) {
+    SDL_Delay((uint32_t)remaining_ms);
+  }
 }
 #endif
-
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 int main(int argc, char **argv)
@@ -144,167 +149,176 @@ int main(void)
 #endif
 {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    (void)argc;
-    (void)argv;
+  (void)argc;
+  (void)argv;
 #endif
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
-    set_sys_clock_khz(320000, true);
+  set_sys_clock_khz(EUZEBIA3D_SYS_CLOCK_KHZ, true);
 
-    hardware_core = get_hardware();
-    hardware_core->init_hardware();
+  hardware_core = get_hardware();
+  hardware_core->init_hardware();
 
-    display = get_display();
-    display->init_display(hardware_core);
+  display = get_display();
+  display->init_display(hardware_core);
 #endif
 
-    storage = get_storage();
-    EUZEBIA3D_REQUIRE_POINTER(storage, "get_storage");
+  storage = get_storage();
+  EUZEBIA3D_REQUIRE_POINTER(storage, "get_storage");
 
-    painter = get_painter();
-    EUZEBIA3D_REQUIRE_POINTER(painter, "get_painter");
-    painter->init_painter(display, hardware_core, storage);
+  painter = get_painter();
+  EUZEBIA3D_REQUIRE_POINTER(painter, "get_painter");
+  painter->init_painter(display, hardware_core, storage);
 
 #if defined(EUZEBIA3D_DEBUG_MODE)
-    debugMode = get_debugMode();
-    EUZEBIA3D_REQUIRE_POINTER(debugMode, "get_debugMode");
-    debugMode->init_debug_mode(hardware_core, painter);
+  debugMode = get_debugMode();
+  EUZEBIA3D_REQUIRE_POINTER(debugMode, "get_debugMode");
+  debugMode->init_debug_mode(hardware_core, painter);
 #endif
 
-    puppeteer = get_puppeteer();
-    puppeteer->init_puppeteer(storage, painter);
-    Puppet *pogodynka = puppeteer->create_puppet(0);
+  puppeteer = get_puppeteer();
+  puppeteer->init_puppeteer(storage, painter);
+  // Puppet rendering is disabled below; avoid reserving heap for it on Pico.
+  // Puppet *pogodynka = puppeteer->create_puppet(0);
 
-    renderer = get_renderer();
-    EUZEBIA3D_REQUIRE_POINTER(renderer, "get_renderer");
-    renderer->init_renderer(hardware_core, painter);
-    renderer->set_scale(1);
+  renderer = get_renderer();
+  EUZEBIA3D_REQUIRE_POINTER(renderer, "get_renderer");
+  renderer->init_renderer(hardware_core, painter);
+  renderer->set_scale(1);
 
-    meshFactory = get_meshFactory();
-    EUZEBIA3D_REQUIRE_POINTER(meshFactory, "get_meshFactory");
-    meshFactory->init_mesh_factory(storage);
+  materialFactory = get_materialFactory();
+  EUZEBIA3D_REQUIRE_POINTER(materialFactory, "get_materialFactory");
+  materialFactory->init_material_factory(storage);
 
-    Mesh *mug = meshFactory->create_textured_mesh(0, 1);
-    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-    mug->transformations = add_transformation(mug->transformations, &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
+  meshFactory = get_meshFactory();
+  EUZEBIA3D_REQUIRE_POINTER(meshFactory, "get_meshFactory");
+  meshFactory->init_mesh_factory(storage);
 
-    Mesh *room = meshFactory->create_textured_mesh(1, 2);
-    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-    room->transformations = add_transformation(room->transformations, &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
+  Material *mugMat = materialFactory->create_textured_mat(0,0.0f,0.0f,false);
+  Mesh *mug = meshFactory->create_mesh(mugMat, 1);
+  mug->transformations = add_transformation(mug->transformations,
+  &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+  mug->transformations = add_transformation(mug->transformations,
+  &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
 
-    lightFactory = get_lightFactory();
-    EUZEBIA3D_REQUIRE_POINTER(lightFactory, "get_lightFactory");
-    PointLight *pointLight = lightFactory->create_point_light(10.0f, 10.0f, 0.0f, 15.0f, 0xffff);
+  Material *roomMat = materialFactory->create_textured_mat(1,0.0f,0.0f,false);
+  Mesh *room = meshFactory->create_mesh(roomMat, 2);
+  room->transformations = add_transformation(room->transformations,
+  &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+  room->transformations = add_transformation(room->transformations,
+  &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
-    cameraFactory = get_cameraFactory();
-    EUZEBIA3D_REQUIRE_POINTER(cameraFactory, "get_cameraFactory");
-    Camera *camera = cameraFactory->create_camera(0.0f, 50.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    camera->transformations = add_camera_transformation(camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f, 0.0f, CAMERA_TRANSFORM_ROTATE);
+  lightFactory = get_lightFactory();
+  EUZEBIA3D_REQUIRE_POINTER(lightFactory, "get_lightFactory");
+  Light *light =
+      lightFactory->create_point_light(-10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
+  if (light == NULL)
+    return 1;
+  renderer->set_light(light);
 
-    painter->clear_buffer(0x1100);
+  cameraFactory = get_cameraFactory();
+  EUZEBIA3D_REQUIRE_POINTER(cameraFactory, "get_cameraFactory");
+  Camera *camera = cameraFactory->create_camera(0.0f, 75.0f, 100.0f, 0.0f, 0.0f,
+                                                0.0f, 0.0f, 1.0f, 0.0f);
+  if (camera == NULL)
+    return 1;
+  renderer->set_camera(camera);
+  // Camera transformation is unused while update_camera() is disabled in the
+  // main loop.
+  camera->transformations = add_camera_transformation(
+      camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f,
+      0.0f, CAMERA_TRANSFORM_TRANSLATE);
+  camera->transformations = add_camera_transformation(
+      camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f,
+      0.0f, CAMERA_TRANSFORM_ROTATE);
+
+  painter->clear_buffer(0x0000);
+  painter->draw_buffer();
+
+  uint32_t t = 0;
+
+  uint16_t plasmaColors[EUZEBIA3D_PLASMA_COLORS_NUM] = {
+      0x1be6, 0x2427, 0x3447, 0x4488, 0x54c8, 0x5d09, 0x6d49, 0x7d8a,
+      0x7d8a, 0x6d49, 0x5d09, 0x54c8, 0x4488, 0x3447, 0x2427, 0x1be6,
+  };
+  Rectangle plasmaRect = {
+      .x = 28,
+      .y = 44,
+      .height = 181,
+      .width = 241,
+  };
+  Rectangle bar1 = {
+      .x = 0,
+      .y = 0,
+      .height = 6,
+      .width = 320,
+  };
+  Point lineStart = {
+      .x = 0,
+      .y = 0,
+  };
+  Point lineEnd = {
+      .x = 100,
+      .y = 100,
+  };
+  int running = 1;
+  while (running) {
+    euzebia_debug_frame = t;
+    EUZEBIA3D_SET_DEBUG_STAGE(100);
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
+#endif
+#if defined(EUZEBIA3D_DEBUG_MODE)
+    debugMode->begin_frame();
+#endif
+
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+    running = process_window_events();
+#endif
+    float qt = t * 0.02f;
+    (void)qt;
+    renderer->clean_scene();
+    EUZEBIA3D_SET_DEBUG_STAGE(110);
+    modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f,
+    0); modify_mesh_transformation(mug->transformations, qt, 10.0f,
+    -10.0f, 10.0f, 0);
+    EUZEBIA3D_SET_DEBUG_STAGE(120);
+    renderer->add_model_to_scene(room);
+    renderer->add_model_to_scene(mug);
+    EUZEBIA3D_SET_DEBUG_STAGE(130);
+    EUZEBIA3D_SET_DEBUG_STAGE(140);
+    renderer->render_scene();
+    EUZEBIA3D_SET_DEBUG_STAGE(145);
+
+#if defined(EUZEBIA3D_DEBUG_MODE)
+    EUZEBIA3D_SET_DEBUG_STAGE(150);
+    debugMode->show_info();
+    snprintf(t_char, sizeof(t_char), "%lu", (unsigned long)t);
+    painter->print(t_char, 0, 220, 1, 0xffff);
+    debugMode->begin_draw_buffer();
+#endif
+    EUZEBIA3D_SET_DEBUG_STAGE(160);
     painter->draw_buffer();
-
-    uint32_t t = 0;
-
-    uint16_t plasmaColors[EUZEBIA3D_PLASMA_COLORS_NUM] = {
-        0x1be6,
-        0x2427,
-        0x3447,
-        0x4488,
-        0x54c8,
-        0x5d09,
-        0x6d49,
-        0x7d8a,
-        0x7d8a,
-        0x6d49,
-        0x5d09,
-        0x54c8,
-        0x4488,
-        0x3447,
-        0x2427,
-        0x1be6,
-    };
-    Rectangle plasmaRect = {
-        .x = 28,
-        .y = 44,
-        .height = 181,
-        .width = 241,
-    };
-    Rectangle bar1 = {
-        .x = 0,
-        .y = 0,
-        .height = 6,
-        .width = 320,
-    };
-    Point lineStart = {
-        .x = 0,
-        .y = 0,
-    };
-    Point lineEnd = {
-        .x = 100,
-        .y = 100,
-    };
-    int running = 1;
-    while (running)
-    {
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-        uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
-#endif
+    EUZEBIA3D_SET_DEBUG_STAGE(165);
 #if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->begin_frame();
+    debugMode->end_draw_buffer();
 #endif
+    t++;
+    EUZEBIA3D_SET_DEBUG_STAGE(170);
+    painter->clear_buffer(0);
+#if defined(EUZEBIA3D_DEBUG_MODE)
+    debugMode->end_frame();
+#endif
+    EUZEBIA3D_SET_DEBUG_STAGE(200);
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-        running = process_window_events();
+    cap_window_frame_rate(frame_begin_ticks);
 #endif
-        float qt = t * 0.02f;
-        (void)qt;
-        // modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f, 0);
-        // modify_mesh_transformation(mug->transformations, qt, 10.0f, -10.0f, 10.0f, 0);
-        // update_camera(camera);
-        // modify_camera_transformation(camera->transformations, 0.00f, 0.0f, 1.0f, 0.0f, 0);
-        // renderer->clean_scene();
-        // renderer->add_model_to_scene(room, camera, pointLight);
-        // renderer->add_model_to_scene(mug, camera, pointLight);
-        // renderer->render_scene(pointLight);
-        // puppeteer->perform(pogodynka, t);
-
-        /*painter->draw_plasma(
-            plasmaColors,
-            EUZEBIA3D_PLASMA_COLORS_NUM,
-            t,
-            EUZEBIA3D_PLASMA_SCALE,
-            EUZEBIA3D_PLASMA_FAC_A,
-            EUZEBIA3D_PLASMA_FAC_B,
-            EUZEBIA3D_PLASMA_FAC_C,
-            EUZEBIA3D_PLASMA_FAC_D,
-            &plasmaRect);
-        painter->print("test", 0, 20, 1, 0xffff);
-        painter->draw_rectangle(&bar1, 0x34b2);
-        painter->draw_line(&lineStart, &lineEnd, 0xfafa);*/
-
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->show_info();
-        debugMode->begin_draw_buffer();
-#endif
-        painter->draw_buffer();
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->end_draw_buffer();
-#endif
-        t++;
-        painter->clear_buffer(10);
-#if defined(EUZEBIA3D_DEBUG_MODE)
-        debugMode->end_frame();
-#endif
+  }
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-        cap_window_frame_rate(frame_begin_ticks);
-#endif
-    }
-
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    SDL_Quit();
+  SDL_Quit();
 #endif
 
-    return 0;
+  return 0;
 }

@@ -21,6 +21,11 @@ option(EUZEBIA3D_USE_PSRAM "Enable optional PSRAM-backed const asset copies on c
 option(EUZEBIA3D_TEXTURE_CACHE_ENABLED "Enable renderer texture cache for small textures" ON)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH "Allow renderer texture cache for textures stored in flash/XIP" OFF)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM "Allow renderer texture cache for textures stored in PSRAM/XIP" ON)
+option(EUZEBIA3D_DEBUG_STAGE_ENABLED "Enable volatile *_debug_stage markers for debugger tracing" OFF)
+option(EUZEBIA3D_RENDERER_SHADING_ENABLED "Enable renderer per-pixel lighting/shading" ON)
+option(EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED "Enable renderer 2x2 texture filtering" OFF)
+option(EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED "Enable perspective-correct texture coordinates" OFF)
+option(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED "Enable scene triangle depth sorting before rasterization" ON)
 option(DEBUG_MODE "Show metrics on the display" ON)
 
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
@@ -58,11 +63,15 @@ if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
     add_subdirectory("${EUZEBIA3D_LIBS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/pico_libs")
 
     if(EUZEBIA3D_BUILD_APP)
-        # Add executable. Default name is the project name, version 0.1
         add_executable(Euzebia3D Euzebia3D.c)
+
+        # Configure executable. Default name is the project name, version 0.1
         target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_PLATFORM_PICO=1)
         if(DEBUG_MODE)
             target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_DEBUG_MODE=1)
+        endif()
+        if(EUZEBIA3D_DEBUG_STAGE_ENABLED)
+            target_compile_definitions(Euzebia3D PRIVATE EUZEBIA3D_DEBUG_STAGE_ENABLED=1)
         endif()
 
         pico_set_program_name(Euzebia3D "Euzebia3D")
@@ -119,6 +128,7 @@ elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
 
     if(EUZEBIA3D_BUILD_APP)
         add_executable(Euzebia3D_PC "${EUZEBIA3D_APP_MAIN}")
+
         target_include_directories(Euzebia3D_PC PRIVATE
                 "${CMAKE_CURRENT_LIST_DIR}"
                 "${CMAKE_CURRENT_LIST_DIR}/storage"
@@ -126,6 +136,9 @@ elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
         target_compile_definitions(Euzebia3D_PC PRIVATE EUZEBIA3D_PLATFORM_WINDOWS=1)
         if(DEBUG_MODE)
             target_compile_definitions(Euzebia3D_PC PRIVATE EUZEBIA3D_DEBUG_MODE=1)
+        endif()
+        if(EUZEBIA3D_DEBUG_STAGE_ENABLED)
+            target_compile_definitions(Euzebia3D_PC PRIVATE EUZEBIA3D_DEBUG_STAGE_ENABLED=1)
         endif()
         target_link_libraries(Euzebia3D_PC PRIVATE Euzebia3D_libs)
     endif()

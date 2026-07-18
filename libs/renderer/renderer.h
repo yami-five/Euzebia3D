@@ -3,42 +3,97 @@
 
 #include "IRenderer.h"
 #include "fpa.h"
-#include "camera.h"
-#include "light.h"
-#include "mesh.h"
-#include "string.h"
 
-typedef struct
-{
-    Vector4 a;
-    Vector4 b;
-    Vector4 c;
-    Vector2 uvA;
-    Vector2 uvB;
-    Vector2 uvC;
-} TriangleToRender;
+// Renderer dimensions and scene limits.
+#ifndef FOCAL_LENGTH
+#define FOCAL_LENGTH 90
+#endif
+#ifndef FIRE_FLOOR_ADR
+#define FIRE_FLOOR_ADR 76480
+#endif
+#ifndef FIXED_FOCAL_LENGTH
+#define FIXED_FOCAL_LENGTH (FOCAL_LENGTH << SHIFT_FACTOR)
+#endif
+#ifndef BASE_WIDTH
+#define BASE_WIDTH 320
+#endif
+#ifndef BASE_HEIGHT
+#define BASE_HEIGHT 240
+#endif
+#ifndef MAX_OBJECTS_IN_SCENE
+#define MAX_OBJECTS_IN_SCENE 1500
+#endif
+#ifndef SPAN_BUFFER_MAX
+#define SPAN_BUFFER_MAX 320
+#endif
+#ifndef LIGHT_LERP_SHIFT
+#define LIGHT_LERP_SHIFT 8
+#endif
+#ifndef UV_LERP_SHIFT
+#define UV_LERP_SHIFT 8
+#endif
+#ifndef UV_PERSPECTIVE_SHIFT
+#define UV_PERSPECTIVE_SHIFT 6
+#endif
+#ifndef MAX_SHADING_SPAN_LEN
+#define MAX_SHADING_SPAN_LEN 320
+#endif
+#ifndef SCREEN_COORD_GUARD
+#define SCREEN_COORD_GUARD 1024
+#endif
+#ifndef NEAR_CLIP_Z
+#define NEAR_CLIP_Z 1
+#endif
+#ifndef MAX_MODEL_TRANSFORMATIONS
+#define MAX_MODEL_TRANSFORMATIONS 8
+#endif
+#ifndef TEXTURE_TRANSPARENT_COLOR
+#define TEXTURE_TRANSPARENT_COLOR 0xf81fu
+#endif
 
-typedef struct
-{
-    Vector2 a;
-    Vector2 b;
-    Vector2 c;
-} Triangle2D;
+// Build-time renderer options. CMake may override these definitions.
+#ifndef EUZEBIA3D_RENDERER_SHADING_ENABLED
+#define EUZEBIA3D_RENDERER_SHADING_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED
+#define EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
+#define EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED
+#define EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED 1
+#endif
 
-typedef struct
-{
-    Vector3 a;
-    Vector3 b;
-    Vector3 c;
-} Triangle3D;
+// Texture-cache configuration. CMake may override these definitions.
+#ifndef EUZEBIA3D_TEXTURE_CACHE_ENABLED
+#define EUZEBIA3D_TEXTURE_CACHE_ENABLED 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH
+#define EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM
+#define EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM 1
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define EUZEBIA3D_TEXTURE_CACHE_SIZE 64
+#endif
+#ifndef EUZEBIA3D_TEXTURE_CACHE_SLOTS
+#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 2
+#endif
 
-typedef struct
-{
-    Triangle3D TriangleOnScreen;
-    Triangle2D UV;
-    int32_t LightDistances[3];
-    Material *mat;
-} TriangleInScene;
+#if (EUZEBIA3D_TEXTURE_CACHE_SIZE < 1)
+#undef EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define EUZEBIA3D_TEXTURE_CACHE_SIZE 1
+#endif
+#if (EUZEBIA3D_TEXTURE_CACHE_SLOTS < 1)
+#undef EUZEBIA3D_TEXTURE_CACHE_SLOTS
+#define EUZEBIA3D_TEXTURE_CACHE_SLOTS 1
+#endif
+
+#define TEXTURE_CACHE_SIZE EUZEBIA3D_TEXTURE_CACHE_SIZE
+#define TEXTURE_CACHE_PIXELS (TEXTURE_CACHE_SIZE * TEXTURE_CACHE_SIZE)
+#define TEXTURE_CACHE_SLOTS EUZEBIA3D_TEXTURE_CACHE_SLOTS
 
 const IRenderer *get_renderer(void);
 void renderer_set_scale(uint8_t scale);

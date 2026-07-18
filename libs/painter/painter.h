@@ -1,14 +1,14 @@
 #ifndef PAINTER_h
 #define PAINTER_h
 
+#include "../storage/gfx.h"
+#include "../storage/pins.h"
 #include "IPainter.h"
-#include "stdio.h"
-#include "pico/stdlib.h"
 #include "hardware/dma.h"
 #include "hardware/spi.h"
+#include "pico/stdlib.h"
+#include "stdio.h"
 #include "string.h"
-#include "../storage/pins.h"
-#include "../storage/gfx.h"
 
 #define WIDTH_DOUBLED 640
 #define HEIGHT_DOUBLED 480
