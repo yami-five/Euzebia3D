@@ -5,15 +5,15 @@
 #include "puppetCalc.h"
 #include "string.h"
 
-static const IStorage *_storage;
+static const e3d_IStorage *_storage;
 
-void init_puppet_factory(const IStorage *storage) { _storage = storage; }
+void init_puppet_factory(const e3d_IStorage *storage) { _storage = storage; }
 
-PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones,
+e3d_PuppetBone *create_PuppetBones(const e3d_RawPuppetBone *rawPuppetBones,
                                const uint8_t puppetBonesNum,
                                int *parentWorldMatrix) {
-  PuppetBone *newPuppetBones =
-      (PuppetBone *)malloc(sizeof(PuppetBone) * puppetBonesNum);
+  e3d_PuppetBone *newPuppetBones =
+      (e3d_PuppetBone *)malloc(sizeof(e3d_PuppetBone) * puppetBonesNum);
   for (uint8_t i = 0; i < puppetBonesNum; i++) {
     newPuppetBones[i].label = rawPuppetBones[i].label;
     newPuppetBones[i].x = rawPuppetBones[i].x;
@@ -45,14 +45,14 @@ PuppetBone *create_PuppetBones(const RawPuppetBone *rawPuppetBones,
   return newPuppetBones;
 }
 
-static PuppetBone *find_PuppetBone_by_label(PuppetBone *puppetBones,
+static e3d_PuppetBone *find_PuppetBone_by_label(e3d_PuppetBone *puppetBones,
                                             uint8_t puppetBonesNum,
                                             const char *label) {
   if (puppetBones == NULL || label == NULL)
     return NULL;
 
   for (uint8_t i = 0; i < puppetBonesNum; i++) {
-    PuppetBone *found;
+    e3d_PuppetBone *found;
 
     if (puppetBones[i].label == label)
       return &puppetBones[i];
@@ -73,15 +73,15 @@ static PuppetBone *find_PuppetBone_by_label(PuppetBone *puppetBones,
   return NULL;
 }
 
-PuppetBoneTimelinePair *
-create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet,
-                              PuppetBone *puppetBones) {
-  PuppetBoneTimelinePair *newPairs = (PuppetBoneTimelinePair *)malloc(
-      sizeof(PuppetBoneTimelinePair) * rawPuppet->boneAnimationPairsNum);
+e3d_PuppetBoneTimelinePair *
+create_PuppetBoneTimelinePair(const e3d_RawPuppet *rawPuppet,
+                              e3d_PuppetBone *puppetBones) {
+  e3d_PuppetBoneTimelinePair *newPairs = (e3d_PuppetBoneTimelinePair *)malloc(
+      sizeof(e3d_PuppetBoneTimelinePair) * rawPuppet->boneAnimationPairsNum);
   for (uint8_t i = 0; i < rawPuppet->boneAnimationPairsNum; i++) {
-    const RawBoneAnimationPair *rawPair = &rawPuppet->boneAnimationPairs[i];
-    PuppetBone *bone = NULL;
-    PuppetBoneAnimTimeline *newTimeline = NULL;
+    const e3d_RawBoneAnimationPair *rawPair = &rawPuppet->boneAnimationPairs[i];
+    e3d_PuppetBone *bone = NULL;
+    e3d_PuppetBoneAnimTimeline *newTimeline = NULL;
 
     newPairs[i].bone = NULL;
     newPairs[i].boneTimeline = NULL;
@@ -92,11 +92,11 @@ create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet,
 
     if (bone != NULL && rawPair->rawAnimation != NULL) {
       newTimeline =
-          (PuppetBoneAnimTimeline *)malloc(sizeof(PuppetBoneAnimTimeline));
+          (e3d_PuppetBoneAnimTimeline *)malloc(sizeof(e3d_PuppetBoneAnimTimeline));
       if (newTimeline != NULL) {
         newTimeline->keyFramesNum = rawPair->rawAnimation->framesNum;
         newTimeline->keyFrames =
-            (KeyFrame *)malloc(sizeof(KeyFrame) * newTimeline->keyFramesNum);
+            (e3d_KeyFrame *)malloc(sizeof(e3d_KeyFrame) * newTimeline->keyFramesNum);
         if (newTimeline->keyFrames != NULL) {
           for (uint16_t k = 0; k < rawPair->rawAnimation->framesNum; k++) {
             newTimeline->keyFrames[k].x = rawPair->rawAnimation->frames[k].x;
@@ -117,9 +117,9 @@ create_PuppetBoneTimelinePair(const RawPuppet *rawPuppet,
   return newPairs;
 }
 
-Puppet *create(uint8_t puppetIndex) {
-  Puppet *newPuppet = (Puppet *)malloc(sizeof(Puppet));
-  const RawPuppet *rawPuppet = _storage->get_raw_puppet(puppetIndex);
+e3d_Puppet *create(uint8_t puppetIndex) {
+  e3d_Puppet *newPuppet = (e3d_Puppet *)malloc(sizeof(e3d_Puppet));
+  const e3d_RawPuppet *rawPuppet = _storage->get_raw_puppet(puppetIndex);
   newPuppet->x = rawPuppet->x;
   newPuppet->y = rawPuppet->y;
   newPuppet->angle = rawPuppet->angle;
@@ -149,9 +149,9 @@ Puppet *create(uint8_t puppetIndex) {
   return newPuppet;
 }
 
-static IPuppetFactory puppet = {
+static e3d_IPuppetFactory puppet = {
     .init_puppet_factory = init_puppet_factory,
     .create = create,
 };
 
-const IPuppetFactory *get_puppetFactory(void) { return &puppet; }
+const e3d_IPuppetFactory *get_puppetFactory(void) { return &puppet; }

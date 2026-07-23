@@ -14,34 +14,34 @@ typedef struct {
   int y;
   float angle;
   int startFrameNum;
-} KeyFrame;
+} e3d_KeyFrame;
 
 typedef struct {
-  KeyFrame *keyFrames;
+  e3d_KeyFrame *keyFrames;
   uint16_t keyFramesNum;
-} PuppetBoneAnimTimeline;
+} e3d_PuppetBoneAnimTimeline;
 
-typedef struct PuppetBone PuppetBone;
+typedef struct e3d_PuppetBone e3d_PuppetBone;
 
-typedef struct PuppetBone {
+typedef struct e3d_PuppetBone {
   const char *label;
   int16_t x;
   int16_t y;
   float angle;
-  const Sprite *sprite;
+  const e3d_Sprite *sprite;
   int16_t baseSpriteAngle;
   int worldMatrix[9];
   int localMatrix[9];
-  PuppetBone *childPuppetBonesLayer1;
+  e3d_PuppetBone *childPuppetBonesLayer1;
   uint8_t childPuppetBonesNumLayer1;
-  PuppetBone *childPuppetBonesLayer2;
+  e3d_PuppetBone *childPuppetBonesLayer2;
   uint8_t childPuppetBonesNumLayer2;
-} PuppetBone;
+} e3d_PuppetBone;
 
 typedef struct {
-  PuppetBoneAnimTimeline *boneTimeline;
-  PuppetBone *bone;
-} PuppetBoneTimelinePair;
+  e3d_PuppetBoneAnimTimeline *boneTimeline;
+  e3d_PuppetBone *bone;
+} e3d_PuppetBoneTimelinePair;
 
 typedef struct {
   const char *label;
@@ -50,11 +50,11 @@ typedef struct {
   float angle;
   int worldMatrix[9];
   int localMatrix[9];
-  PuppetBone *puppetBones;
+  e3d_PuppetBone *puppetBones;
   uint8_t puppetBonesNum;
-  PuppetBoneTimelinePair *boneTimelinePairs;
+  e3d_PuppetBoneTimelinePair *boneTimelinePairs;
   uint8_t boneTimelinePairsNum;
   int32_t animationStartFrame;
-} Puppet;
+} e3d_Puppet;
 
 #endif

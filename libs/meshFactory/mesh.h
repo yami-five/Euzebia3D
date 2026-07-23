@@ -21,18 +21,18 @@ typedef struct {
   uint16_t *normals;
   int32_t *vn;
   uint16_t vnCounter;
-  Material *mat;
-  TransformInfo *transformations;
+  e3d_Material *mat;
+  e3d_TransformInfo *transformations;
   uint32_t transformationsNum;
-} Mesh;
+} e3d_Mesh;
 
-TransformInfo *add_transformation(TransformInfo *currentTransformations,
+e3d_TransformInfo *add_transformation(e3d_TransformInfo *currentTransformations,
                                   uint32_t *currentTransformationsNum, float w,
                                   float x, float y, float z,
-                                  ModelTransformType transformationType);
-void modify_mesh_transformation(TransformInfo *currentTransformations, float w,
+                                  e3d_ModelTransformType transformationType);
+void modify_mesh_transformation(e3d_TransformInfo *currentTransformations, float w,
                                 float x, float y, float z,
                                 uint32_t transformationIndex);
-void free_model(Mesh *mesh);
+void free_model(e3d_Mesh *mesh);
 
 #endif

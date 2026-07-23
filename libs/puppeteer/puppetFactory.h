@@ -3,6 +3,6 @@
 
 #include "IPuppetFactory.h"
 
-const IPuppetFactory *get_puppetFactory(void);
+const e3d_IPuppetFactory *get_puppetFactory(void);
 
 #endif

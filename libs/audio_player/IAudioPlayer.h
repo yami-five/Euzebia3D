@@ -5,8 +5,8 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_audio_player)(const IHardware *hardware);
+  void (*init_audio_player)(const e3d_IHardware *hardware);
   void (*play_wave_file)(char *file_name);
-} IAudioPlayer;
+} e3d_IAudioPlayer;
 
 #endif

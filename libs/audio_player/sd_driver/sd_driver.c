@@ -3,7 +3,7 @@
 #include "hardware.h"
 
 unsigned char SD_Type = 0; // version of the sd card
-const IHardware *_hardware;
+const e3d_IHardware *_hardware;
 
 // data: data to be written to sd card.
 // return: data read from sd card.
@@ -200,7 +200,7 @@ uint32_t SD_GetSectorCount(void) {
 }
 
 // initialize sd card
-unsigned char SD_Initialize(const IHardware *hardware) {
+unsigned char SD_Initialize(const e3d_IHardware *hardware) {
   unsigned char r1;
   unsigned short retry;
   unsigned char buf[4];

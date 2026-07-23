@@ -5,10 +5,10 @@
 #include <stdint.h>
 
 typedef struct {
-  Light *(*create_point_light)(float x, float y, float z, float intensity,
+  e3d_Light *(*create_point_light)(float x, float y, float z, float intensity,
                                uint16_t color);
-  Light *(*create_directional_light)(float x, float y, float z, float intensity,
+  e3d_Light *(*create_directional_light)(float x, float y, float z, float intensity,
                                      uint16_t color);
-} ILightFactory;
+} e3d_ILightFactory;
 
 #endif

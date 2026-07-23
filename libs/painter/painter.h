@@ -20,6 +20,6 @@
 #define BUFFER_SIZE_HALF 76800
 static uint dma_channel;
 
-const IPainter *get_painter(void);
+const e3d_IPainter *get_painter(void);
 
 #endif

@@ -24,11 +24,11 @@ typedef struct {
   uint8_t frame_active;
   uint8_t draw_buffer_active;
   char text[80];
-} DebugModeState;
+} e3d_DebugModeState;
 
-static const IHardware *_hardware = NULL;
-static const IPainter *_painter = NULL;
-static DebugModeState state;
+static const e3d_IHardware *_hardware = NULL;
+static const e3d_IPainter *_painter = NULL;
+static e3d_DebugModeState state;
 
 static uint64_t get_debug_ticks(void) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -137,8 +137,8 @@ static void update_debug_mode(uint64_t rest_ticks, uint64_t draw_buffer_ticks) {
   }
 }
 
-static void init_debug_mode(const IHardware *hardware,
-                            const IPainter *painter) {
+static void init_debug_mode(const e3d_IHardware *hardware,
+                            const e3d_IPainter *painter) {
   _hardware = hardware;
   _painter = painter;
   state.tick_frequency = get_debug_tick_frequency();
@@ -205,7 +205,7 @@ static void show_info(void) {
   _painter->print(state.text, 4, 4, 0, 0xffff);
 }
 
-static IDebugMode debugMode = {
+static e3d_IDebugMode debugMode = {
     .init_debug_mode = init_debug_mode,
     .begin_frame = begin_frame,
     .begin_draw_buffer = begin_draw_buffer,
@@ -215,4 +215,4 @@ static IDebugMode debugMode = {
     .show_info = show_info,
 };
 
-const IDebugMode *get_debugMode(void) { return &debugMode; }
+const e3d_IDebugMode *get_debugMode(void) { return &debugMode; }

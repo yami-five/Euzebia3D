@@ -1,44 +1,44 @@
 #include "puppetCalc.h"
 #include <string.h>
 
-void make_local_matrix(PuppetBone *PuppetBone) {
-  int32_t angleIndex = radian_to_index(float_to_fixed(PuppetBone->angle));
+void make_local_matrix(e3d_PuppetBone *e3d_PuppetBone) {
+  int32_t angleIndex = radian_to_index(float_to_fixed(e3d_PuppetBone->angle));
   int16_t sin = fast_sin(angleIndex);
   int16_t cos = fast_cos(angleIndex);
-  PuppetBone->localMatrix[0] = cos;
-  PuppetBone->localMatrix[1] = -sin;
-  PuppetBone->localMatrix[2] = PuppetBone->x << SHIFT_FACTOR;
-  PuppetBone->localMatrix[3] = sin;
-  PuppetBone->localMatrix[4] = cos;
-  PuppetBone->localMatrix[5] = PuppetBone->y << SHIFT_FACTOR;
-  PuppetBone->localMatrix[6] = 0;
-  PuppetBone->localMatrix[7] = 0;
-  PuppetBone->localMatrix[8] = SCALE_FACTOR;
+  e3d_PuppetBone->localMatrix[0] = cos;
+  e3d_PuppetBone->localMatrix[1] = -sin;
+  e3d_PuppetBone->localMatrix[2] = e3d_PuppetBone->x << SHIFT_FACTOR;
+  e3d_PuppetBone->localMatrix[3] = sin;
+  e3d_PuppetBone->localMatrix[4] = cos;
+  e3d_PuppetBone->localMatrix[5] = e3d_PuppetBone->y << SHIFT_FACTOR;
+  e3d_PuppetBone->localMatrix[6] = 0;
+  e3d_PuppetBone->localMatrix[7] = 0;
+  e3d_PuppetBone->localMatrix[8] = SCALE_FACTOR;
 }
 
-void make_world_matrix(PuppetBone *PuppetBone, int *parentWorldMatrix) {
-  int *result = mul_matrices(parentWorldMatrix, PuppetBone->localMatrix, 3, 3);
+void make_world_matrix(e3d_PuppetBone *e3d_PuppetBone, int *parentWorldMatrix) {
+  int *result = mul_matrices(parentWorldMatrix, e3d_PuppetBone->localMatrix, 3, 3);
   for (uint8_t i = 0; i < 9; i++) {
-    PuppetBone->worldMatrix[i] = result[i];
+    e3d_PuppetBone->worldMatrix[i] = result[i];
   }
   free(result);
 }
 
-void update_bones_world_matrices(PuppetBone *PuppetBone,
+void update_bones_world_matrices(e3d_PuppetBone *e3d_PuppetBone,
                                  int *parentWorldMatrix) {
-  make_local_matrix(PuppetBone);
-  make_world_matrix(PuppetBone, parentWorldMatrix);
-  for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer1; i++) {
-    update_bones_world_matrices(&PuppetBone->childPuppetBonesLayer1[i],
-                                PuppetBone->worldMatrix);
+  make_local_matrix(e3d_PuppetBone);
+  make_world_matrix(e3d_PuppetBone, parentWorldMatrix);
+  for (uint8_t i = 0; i < e3d_PuppetBone->childPuppetBonesNumLayer1; i++) {
+    update_bones_world_matrices(&e3d_PuppetBone->childPuppetBonesLayer1[i],
+                                e3d_PuppetBone->worldMatrix);
   }
-  for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer2; i++) {
-    update_bones_world_matrices(&PuppetBone->childPuppetBonesLayer2[i],
-                                PuppetBone->worldMatrix);
+  for (uint8_t i = 0; i < e3d_PuppetBone->childPuppetBonesNumLayer2; i++) {
+    update_bones_world_matrices(&e3d_PuppetBone->childPuppetBonesLayer2[i],
+                                e3d_PuppetBone->worldMatrix);
   }
 }
 
-void update_world_matrices(Puppet *puppet) {
+void update_world_matrices(e3d_Puppet *puppet) {
   int32_t angleIndex = radian_to_index(float_to_fixed(puppet->angle));
   int16_t sin = fast_sin(angleIndex);
   int16_t cos = fast_cos(angleIndex);

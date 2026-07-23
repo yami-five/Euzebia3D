@@ -3,6 +3,6 @@
 
 #include "ILightFactory.h"
 
-const ILightFactory *get_lightFactory(void);
+const e3d_ILightFactory *get_lightFactory(void);
 
 #endif

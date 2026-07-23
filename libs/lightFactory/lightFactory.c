@@ -5,9 +5,9 @@
 #include "light.h"
 #include <stdlib.h>
 
-Light *create_point_light(float x, float y, float z, float intensity,
+e3d_Light *create_point_light(float x, float y, float z, float intensity,
                           uint16_t color) {
-  Light *light = (Light *)malloc(sizeof(Light));
+  e3d_Light *light = (e3d_Light *)malloc(sizeof(e3d_Light));
   if (light == NULL)
     return NULL;
 
@@ -20,9 +20,9 @@ Light *create_point_light(float x, float y, float z, float intensity,
   return light;
 }
 
-Light *create_directional_light(float x, float y, float z, float intensity,
+e3d_Light *create_directional_light(float x, float y, float z, float intensity,
                                 uint16_t color) {
-  Light *light = (Light *)malloc(sizeof(Light));
+  e3d_Light *light = (e3d_Light *)malloc(sizeof(e3d_Light));
   if (light == NULL)
     return NULL;
 
@@ -35,9 +35,9 @@ Light *create_directional_light(float x, float y, float z, float intensity,
   return light;
 }
 
-static ILightFactory lightFactory = {
+static e3d_ILightFactory lightFactory = {
     .create_point_light = create_point_light,
     .create_directional_light = create_directional_light,
 };
 
-const ILightFactory *get_lightFactory(void) { return &lightFactory; }
+const e3d_ILightFactory *get_lightFactory(void) { return &lightFactory; }

@@ -1,6 +1,6 @@
 #include "transformations.h"
 
-void modify_transformation(TransformInfo *currentTransformations, float w,
+void modify_transformation(e3d_TransformInfo *currentTransformations, float w,
                            float x, float y, float z,
                            uint32_t transformationIndex) {
   if (currentTransformations == NULL ||

@@ -6,8 +6,8 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_puppet_factory)(const IStorage *storage);
-  Puppet *(*create)(uint8_t puppetIndex);
-} IPuppetFactory;
+  void (*init_puppet_factory)(const e3d_IStorage *storage);
+  e3d_Puppet *(*create)(uint8_t puppetIndex);
+} e3d_IPuppetFactory;
 
 #endif

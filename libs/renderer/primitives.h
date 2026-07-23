@@ -6,73 +6,73 @@
 #include <stdint.h>
 
 typedef struct {
-  Vector4 a;
-  Vector4 b;
-  Vector4 c;
-  Vector2 uvA;
-  Vector2 uvB;
-  Vector2 uvC;
-} TriangleToRender;
+  e3d_Vector4 a;
+  e3d_Vector4 b;
+  e3d_Vector4 c;
+  e3d_Vector2 uvA;
+  e3d_Vector2 uvB;
+  e3d_Vector2 uvC;
+} e3d_TriangleToRender;
 
 typedef struct {
-  Vector2 a;
-  Vector2 b;
-  Vector2 c;
-} Triangle2D;
+  e3d_Vector2 a;
+  e3d_Vector2 b;
+  e3d_Vector2 c;
+} e3d_Triangle2D;
 
 typedef struct {
-  Vector3 a;
-  Vector3 b;
-  Vector3 c;
-} Triangle3D;
+  e3d_Vector3 a;
+  e3d_Vector3 b;
+  e3d_Vector3 c;
+} e3d_Triangle3D;
 
 typedef struct {
-  Triangle3D TriangleOnScreen;
-  Triangle2D UV;
+  e3d_Triangle3D TriangleOnScreen;
+  e3d_Triangle2D UV;
   int32_t LightDistances[3];
-  Material *mat;
-} TriangleInScene;
+  e3d_Material *mat;
+} e3d_TriangleInScene;
 
 typedef struct {
-  Vector3 point;
+  e3d_Vector3 point;
   uint16_t color;
-} Point3D;
+} e3d_Point3D;
 
 typedef struct {
-  Vector2 point;
+  e3d_Vector2 point;
   uint16_t color;
-} PointInScene;
+} e3d_PointInScene;
 
 typedef struct {
-  Vector3 start;
-  Vector3 end;
+  e3d_Vector3 start;
+  e3d_Vector3 end;
   uint16_t color;
-} Line3D;
+} e3d_Line3D;
 
 typedef struct {
-  Vector2 start;
-  Vector2 end;
+  e3d_Vector2 start;
+  e3d_Vector2 end;
   uint16_t color;
-} LineInScene;
+} e3d_LineInScene;
 
 typedef enum {
   POINT = 0,
   LINE = 1,
   TRIANGLE = 2,
-} PrimType;
+} e3d_PrimType;
 
 typedef union {
-  PointInScene point;
-  LineInScene line;
-  TriangleInScene triangle;
-} PrimitivePayload;
+  e3d_PointInScene point;
+  e3d_LineInScene line;
+  e3d_TriangleInScene triangle;
+} e3d_PrimitivePayload;
 
 typedef struct {
   // The center is calculated when the primitive is added to the scene and is
   // used only as the painter-sort key. Rendering uses the payload coordinates.
-  Vector3 pos;
-  PrimType type;
-  PrimitivePayload payload;
-} Primitive;
+  e3d_Vector3 pos;
+  e3d_PrimType type;
+  e3d_PrimitivePayload payload;
+} e3d_Primitive;
 
 #endif

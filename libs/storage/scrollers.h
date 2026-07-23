@@ -7,6 +7,6 @@ typedef struct {
   const uint16_t *bitmap;
   const uint8_t width;
   const uint8_t height;
-} Scroller;
+} e3d_Scroller;
 
 #endif

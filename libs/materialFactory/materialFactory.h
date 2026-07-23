@@ -3,6 +3,6 @@
 
 #include "IMaterialFactory.h"
 
-const IMaterialFactory *get_materialFactory(void);
+const e3d_IMaterialFactory *get_materialFactory(void);
 
 #endif

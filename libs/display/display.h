@@ -8,6 +8,6 @@
 #include "pico/stdlib.h"
 #endif
 
-const IDisplay *get_display(void);
+const e3d_IDisplay *get_display(void);
 
 #endif

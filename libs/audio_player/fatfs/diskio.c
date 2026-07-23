@@ -17,7 +17,7 @@
 #define SD_CARD 0
 
 #define FLASH_SECTOR_SIZE 512
-const IHardware* hardware;
+const e3d_IHardware* hardware;
 
 DSTATUS disk_initialize(
 	BYTE drv /* Physical drive nmuber (0..) */

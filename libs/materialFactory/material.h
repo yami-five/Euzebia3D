@@ -17,8 +17,8 @@ typedef struct {
   bool transparent;
   uint8_t roughness;
   uint8_t metallic;
-} Material;
+} e3d_Material;
 
-void free_material(Material *mat);
+void free_material(e3d_Material *mat);
 
 #endif

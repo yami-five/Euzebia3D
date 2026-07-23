@@ -5,7 +5,7 @@
 #include "fpa.h"
 #include <stdlib.h>
 
-static void free_partial_camera(Camera *cam) {
+static void free_partial_camera(e3d_Camera *cam) {
   if (cam == NULL)
     return;
   free(cam->pos);
@@ -18,18 +18,18 @@ static void free_partial_camera(Camera *cam) {
   free(cam);
 }
 
-Camera *create_camera(float camX, float camY, float camZ, float targetX,
+e3d_Camera *create_camera(float camX, float camY, float camZ, float targetX,
                       float targetY, float targetZ, float upX, float upY,
                       float upZ) {
-  Camera *cam = (Camera *)calloc(1, sizeof(Camera));
+  e3d_Camera *cam = (e3d_Camera *)calloc(1, sizeof(e3d_Camera));
   if (cam == NULL)
     return NULL;
 
-  cam->pos = (Vector3 *)malloc(sizeof(Vector3));
-  cam->target = (Vector3 *)malloc(sizeof(Vector3));
-  cam->up = (Vector3 *)malloc(sizeof(Vector3));
-  cam->forward = (Vector3 *)malloc(sizeof(Vector3));
-  cam->right = (Vector3 *)malloc(sizeof(Vector3));
+  cam->pos = (e3d_Vector3 *)malloc(sizeof(e3d_Vector3));
+  cam->target = (e3d_Vector3 *)malloc(sizeof(e3d_Vector3));
+  cam->up = (e3d_Vector3 *)malloc(sizeof(e3d_Vector3));
+  cam->forward = (e3d_Vector3 *)malloc(sizeof(e3d_Vector3));
+  cam->right = (e3d_Vector3 *)malloc(sizeof(e3d_Vector3));
   cam->vMatrix = (int32_t *)malloc(sizeof(int32_t) * 16);
   cam->pMatrix = (int32_t *)malloc(sizeof(int32_t) * 16);
   if (cam->pos == NULL || cam->target == NULL || cam->up == NULL ||
@@ -52,6 +52,6 @@ Camera *create_camera(float camX, float camY, float camZ, float targetX,
   return cam;
 }
 
-static ICameraFactory cameraFactory = {.create_camera = create_camera};
+static e3d_ICameraFactory cameraFactory = {.create_camera = create_camera};
 
-const ICameraFactory *get_cameraFactory(void) { return &cameraFactory; }
+const e3d_ICameraFactory *get_cameraFactory(void) { return &cameraFactory; }

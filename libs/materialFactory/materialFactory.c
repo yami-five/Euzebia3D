@@ -6,11 +6,11 @@
 #include "material.h"
 #include <stdlib.h>
 
-static const IStorage *_storage = NULL;
+static const e3d_IStorage *_storage = NULL;
 
-void init_material_factory(const IStorage *storage) { _storage = storage; }
+void init_material_factory(const e3d_IStorage *storage) { _storage = storage; }
 
-Material *create_diffuse_mat(uint16_t color, float roughness, float metallic) {
+e3d_Material *create_diffuse_mat(uint16_t color, float roughness, float metallic) {
   if (roughness < 0.0f)
     roughness = 0.0f;
   else if (roughness > 1.0f)
@@ -20,7 +20,7 @@ Material *create_diffuse_mat(uint16_t color, float roughness, float metallic) {
   else if (metallic > 1.0f)
     metallic = 1.0f;
 
-  Material *mat = (Material *)calloc(1, sizeof(Material));
+  e3d_Material *mat = (e3d_Material *)calloc(1, sizeof(e3d_Material));
   if (mat == NULL) {
     return NULL;
   }
@@ -37,7 +37,7 @@ Material *create_diffuse_mat(uint16_t color, float roughness, float metallic) {
   return mat;
 }
 
-Material *create_textured_mat(uint8_t imageIndex, float roughness,
+e3d_Material *create_textured_mat(uint8_t imageIndex, float roughness,
                               float metallic, bool transparent) {
   if (roughness < 0.0f)
     roughness = 0.0f;
@@ -48,7 +48,7 @@ Material *create_textured_mat(uint8_t imageIndex, float roughness,
   else if (metallic > 1.0f)
     metallic = 1.0f;
 
-  Material *mat = (Material *)calloc(1, sizeof(Material));
+  e3d_Material *mat = (e3d_Material *)calloc(1, sizeof(e3d_Material));
   if (mat == NULL) {
     return NULL;
   }
@@ -58,7 +58,7 @@ Material *create_textured_mat(uint8_t imageIndex, float roughness,
     return NULL;
   }
 
-  const Image *texture_temp = _storage->get_image(imageIndex);
+  const e3d_Image *texture_temp = _storage->get_image(imageIndex);
   if (texture_temp == NULL) {
     free(mat);
     return NULL;
@@ -76,10 +76,10 @@ Material *create_textured_mat(uint8_t imageIndex, float roughness,
   return mat;
 }
 
-static IMaterialFactory materialFactory = {
+static e3d_IMaterialFactory materialFactory = {
     .init_material_factory = init_material_factory,
     .create_textured_mat = create_textured_mat,
     .create_diffuse_mat = create_diffuse_mat,
 };
 
-const IMaterialFactory *get_materialFactory(void) { return &materialFactory; }
+const e3d_IMaterialFactory *get_materialFactory(void) { return &materialFactory; }

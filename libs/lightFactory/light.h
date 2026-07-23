@@ -10,13 +10,13 @@
 typedef enum {
   POINT_LIGHT = 0,
   DIRECTIONAL_LIGHT = 1,
-} LightType;
+} e3d_LightType;
 
 typedef struct {
-  Vector3 position;
+  e3d_Vector3 position;
   uint32_t intensity;
   uint16_t color;
-  LightType lightType;
-} Light;
+  e3d_LightType lightType;
+} e3d_Light;
 
 #endif

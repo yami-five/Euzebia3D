@@ -39,6 +39,6 @@ typedef struct {
   uint32_t (*get_lcd_spi_baudrate_hz)(void);
   void (*set_lcd_cs_pin_high)(void);
   void (*set_lcd_cs_pin_low)(void);
-} IHardware;
+} e3d_IHardware;
 
 #endif
