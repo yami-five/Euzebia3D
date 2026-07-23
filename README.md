@@ -111,11 +111,15 @@ Requirements:
 
 ### Select Platform
 
-Platform is controlled by CMake cache variable:
-- `EUZEBIA3D_PLATFORM=WINDOWS`
-- `EUZEBIA3D_PLATFORM=PICO`
+Select the active platform with the PowerShell script:
 
-Current default in `CMakeLists.txt` is `PICO`.
+```powershell
+.\tools\select_platform.ps1
+```
+
+The script asks for Pico or Windows and generates the root `CMakeLists.txt` only
+for that platform. For non-interactive use, pass `-Platform Pico` or
+`-Platform Windows`. The build scripts select their platform automatically.
 
 Use separate build directories per platform to avoid cache conflicts.
 
@@ -131,13 +135,13 @@ Useful build flags:
 Configure:
 
 ```bash
-cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS
+cmake -S . -B build-windows
 ```
 
 If SDL3 is installed via `vcpkg`, configure with toolchain:
 
 ```bash
-cmake -S . -B build-windows -DEUZEBIA3D_PLATFORM=WINDOWS -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake -S . -B build-windows -DCMAKE_TOOLCHAIN_FILE=C:/Repos/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
 ```
 
 With `vcpkg`, install the Windows dependencies first:
@@ -161,7 +165,7 @@ Output target: `Euzebia3D_PC.exe`.
 Configure:
 
 ```bash
-cmake -S . -B build-pico -DEUZEBIA3D_PLATFORM=PICO -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build-pico -DCMAKE_BUILD_TYPE=Release
 ```
 
 Build:

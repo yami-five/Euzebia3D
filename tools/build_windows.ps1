@@ -235,10 +235,15 @@ else {
     }
 }
 
+$platformSelector = Join-Path $repoRoot "tools\select_platform.ps1"
+if (-not (Test-Path -LiteralPath $platformSelector)) {
+    throw "Platform selector not found: $platformSelector"
+}
+& $platformSelector -Platform Windows
+
 $configureArgs = @(
     "-S", $repoRoot,
-    "-B", $buildPath,
-    "-DEUZEBIA3D_PLATFORM=WINDOWS"
+    "-B", $buildPath
 )
 
 if (-not [string]::IsNullOrWhiteSpace($vcpkgToolchain)) {

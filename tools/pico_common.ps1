@@ -134,7 +134,6 @@ function Invoke-PicoBuild {
         "-S", $RepositoryRoot,
         "-B", $BuildContext.BuildPath,
         "-G", "Ninja",
-        "-DEUZEBIA3D_PLATFORM=PICO",
         "-DCMAKE_BUILD_TYPE=$BuildType"
     )
     if ($BuildContext.Board) {

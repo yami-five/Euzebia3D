@@ -38,6 +38,12 @@ function Get-RpiRp2Drive {
 }
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
+$platformSelector = Join-Path $repositoryRoot "tools\select_platform.ps1"
+if (-not (Test-Path -LiteralPath $platformSelector)) {
+    throw "Platform selector not found: $platformSelector"
+}
+& $platformSelector -Platform Pico
+
 $commonScript = Join-Path $repositoryRoot "tools\pico_common.ps1"
 if (-not (Test-Path -LiteralPath $commonScript)) {
     throw "Shared Pico build helpers not found: $commonScript"
