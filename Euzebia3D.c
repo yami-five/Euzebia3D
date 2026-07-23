@@ -10,42 +10,8 @@
 #error "Unsupported Euzebia3D platform"
 #endif
 
-#include "ICameraFactory.h"
-#if defined(EUZEBIA3D_DEBUG_MODE)
-#include "IDebugMode.h"
-#endif
-#include "IDisplay.h"
-#include "IHardware.h"
-#include "ILightFactory.h"
-#include "IMaterialFactory.h"
-#include "IMeshFactory.h"
-#include "IPainter.h"
-#include "IPuppeteer.h"
-#include "IRenderer.h"
-#include "IStorage.h"
+#include "engineApi.h"
 
-#include "camera.h"
-#include "cameraFactory.h"
-#if defined(EUZEBIA3D_DEBUG_MODE)
-#include "debugMode.h"
-#endif
-#include "lightFactory.h"
-#include "material.h"
-#include "materialFactory.h"
-#include "mesh.h"
-#include "meshFactory.h"
-#include "puppeteer.h"
-#include "renderer.h"
-#include "storage.h"
-
-#if defined(EUZEBIA3D_PLATFORM_PICO)
-#include "display.h"
-#include "hardware.h"
-#define EUZEBIA3D_SYS_CLOCK_KHZ 300000
-// #define EUZEBIA3D_SYS_CLOCK_KHZ 150000
-#endif
-
-const IPainter *get_painter(void);
 static char t_char[11];
 
 #if EUZEBIA3D_DEBUG_STAGE_ENABLED
@@ -59,19 +25,7 @@ volatile uint32_t euzebia_debug_stage = 0;
 #endif
 volatile uint32_t euzebia_debug_frame = 0;
 
-static const IHardware *hardware_core;
-static const IDisplay *display;
-static const IPainter *painter;
-static const IRenderer *renderer;
-static const IMaterialFactory *materialFactory;
-static const IMeshFactory *meshFactory;
-static const ILightFactory *lightFactory;
-static const ICameraFactory *cameraFactory;
-static const IStorage *storage;
-static const IPuppeteer *puppeteer;
-#if defined(EUZEBIA3D_DEBUG_MODE)
-static const IDebugMode *debugMode;
-#endif
+static e3d_EngineContext engine_ctx;
 
 #define EUZEBIA3D_PLASMA_COLORS_NUM 16
 
@@ -82,31 +36,15 @@ static const IDebugMode *debugMode;
 #define EUZEBIA3D_PLASMA_FAC_B 7
 #define EUZEBIA3D_PLASMA_FAC_C 8
 #define EUZEBIA3D_PLASMA_FAC_D 7
-#define EUZEBIA3D_REQUIRE_POINTER(pointer, name)                               \
-  do {                                                                         \
-    if (!require_pointer((pointer), (name))) {                                 \
-      return 1;                                                                \
-    }                                                                          \
-  } while (0)
 #else
 #define EUZEBIA3D_PLASMA_SCALE 2
 #define EUZEBIA3D_PLASMA_FAC_A 6
 #define EUZEBIA3D_PLASMA_FAC_B 6
 #define EUZEBIA3D_PLASMA_FAC_C 7
 #define EUZEBIA3D_PLASMA_FAC_D 6
-#define EUZEBIA3D_REQUIRE_POINTER(pointer, name) ((void)0)
 #endif
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static int require_pointer(const void *pointer, const char *name) {
-  if (pointer != NULL) {
-    return 1;
-  }
-
-  SDL_Log("%s failed", name);
-  return 0;
-}
-
 static int process_window_events(void) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
@@ -153,87 +91,43 @@ int main(void)
   (void)argv;
 #endif
 
-#if defined(EUZEBIA3D_PLATFORM_PICO)
-  set_sys_clock_khz(EUZEBIA3D_SYS_CLOCK_KHZ, true);
+  e3d_InitEngine(&engine_ctx);
 
-  hardware_core = get_hardware();
-  hardware_core->init_hardware();
+  e3d_Material *mugMat =
+      e3d_Material_CreateTexturedMat(&engine_ctx, 0, 0.0f, 0.0f, false);
+  e3d_Mesh *mug = e3d_Mesh_CreateMesh(&engine_ctx, mugMat, 1);
+  mug->transformations = e3d_Mesh_AddTransformation(
+      &engine_ctx, mug->transformations, &mug->transformationsNum, 0, 0.0f,
+      0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+  mug->transformations = e3d_Mesh_AddTransformation(
+      &engine_ctx, mug->transformations, &mug->transformationsNum, 0, 0.0f,
+      0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
 
-  display = get_display();
-  display->init_display(hardware_core);
-#endif
+  e3d_Material *roomMat =
+      e3d_Material_CreateTexturedMat(&engine_ctx, 1, 0.0f, 0.0f, false);
+  e3d_Mesh *room = e3d_Mesh_CreateMesh(&engine_ctx, roomMat, 2);
+  room->transformations = e3d_Mesh_AddTransformation(
+      &engine_ctx, room->transformations, &room->transformationsNum, 0.2f,
+      0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
+  room->transformations = e3d_Mesh_AddTransformation(
+      &engine_ctx, room->transformations, &room->transformationsNum, 0, 2.2f,
+      2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
 
-  storage = get_storage();
-  EUZEBIA3D_REQUIRE_POINTER(storage, "get_storage");
-
-  painter = get_painter();
-  EUZEBIA3D_REQUIRE_POINTER(painter, "get_painter");
-  painter->init_painter(display, hardware_core, storage);
-
-#if defined(EUZEBIA3D_DEBUG_MODE)
-  debugMode = get_debugMode();
-  EUZEBIA3D_REQUIRE_POINTER(debugMode, "get_debugMode");
-  debugMode->init_debug_mode(hardware_core, painter);
-#endif
-
-  puppeteer = get_puppeteer();
-  puppeteer->init_puppeteer(storage, painter);
-  // Puppet rendering is disabled below; avoid reserving heap for it on Pico.
-  // Puppet *pogodynka = puppeteer->create_puppet(0);
-
-  renderer = get_renderer();
-  EUZEBIA3D_REQUIRE_POINTER(renderer, "get_renderer");
-  renderer->init_renderer(hardware_core, painter);
-  renderer->set_scale(1);
-
-  materialFactory = get_materialFactory();
-  EUZEBIA3D_REQUIRE_POINTER(materialFactory, "get_materialFactory");
-  materialFactory->init_material_factory(storage);
-
-  meshFactory = get_meshFactory();
-  EUZEBIA3D_REQUIRE_POINTER(meshFactory, "get_meshFactory");
-  meshFactory->init_mesh_factory(storage);
-
-  Material *mugMat = materialFactory->create_textured_mat(0,0.0f,0.0f,false);
-  Mesh *mug = meshFactory->create_mesh(mugMat, 1);
-  mug->transformations = add_transformation(mug->transformations,
-  &mug->transformationsNum, 0, 0.0f, 0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-  mug->transformations = add_transformation(mug->transformations,
-  &mug->transformationsNum, 0, 0.0f, 0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
-
-  Material *roomMat = materialFactory->create_textured_mat(1,0.0f,0.0f,false);
-  Mesh *room = meshFactory->create_mesh(roomMat, 2);
-  room->transformations = add_transformation(room->transformations,
-  &room->transformationsNum, 0.2f, 0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-  room->transformations = add_transformation(room->transformations,
-  &room->transformationsNum, 0, 2.2f, 2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
-
-  lightFactory = get_lightFactory();
-  EUZEBIA3D_REQUIRE_POINTER(lightFactory, "get_lightFactory");
-  Light *light =
-      lightFactory->create_point_light(-10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
+  e3d_Light *light = e3d_Light_CreatePointLight(
+      &engine_ctx, -10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
   if (light == NULL)
     return 1;
-  renderer->set_light(light);
+  e3d_Renderer_SetLight(&engine_ctx, light);
 
-  cameraFactory = get_cameraFactory();
-  EUZEBIA3D_REQUIRE_POINTER(cameraFactory, "get_cameraFactory");
-  Camera *camera = cameraFactory->create_camera(0.0f, 75.0f, 100.0f, 0.0f, 0.0f,
-                                                0.0f, 0.0f, 1.0f, 0.0f);
+  e3d_Camera *camera = e3d_Camera_CreateCamera(
+      &engine_ctx, 0.0f, 75.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+      0.0f);
   if (camera == NULL)
     return 1;
-  renderer->set_camera(camera);
-  // Camera transformation is unused while update_camera() is disabled in the
-  // main loop.
-  camera->transformations = add_camera_transformation(
-      camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f,
-      0.0f, CAMERA_TRANSFORM_TRANSLATE);
-  camera->transformations = add_camera_transformation(
-      camera->transformations, &camera->transformationsNum, 0.0f, 0.0f, 0.0f,
-      0.0f, CAMERA_TRANSFORM_ROTATE);
+  e3d_Renderer_SetCamera(&engine_ctx, camera);
 
-  painter->clear_buffer(0x0000);
-  painter->draw_buffer();
+  e3d_Buffer_ClearBuffer(&engine_ctx, 0x0000);
+  e3d_Buffer_DrawBuffer(&engine_ctx);
 
   uint32_t t = 0;
 
@@ -241,23 +135,23 @@ int main(void)
       0x1be6, 0x2427, 0x3447, 0x4488, 0x54c8, 0x5d09, 0x6d49, 0x7d8a,
       0x7d8a, 0x6d49, 0x5d09, 0x54c8, 0x4488, 0x3447, 0x2427, 0x1be6,
   };
-  Rectangle plasmaRect = {
+  e3d_Rectangle plasmaRect = {
       .x = 28,
       .y = 44,
       .height = 181,
       .width = 241,
   };
-  Rectangle bar1 = {
+  e3d_Rectangle bar1 = {
       .x = 0,
       .y = 0,
       .height = 6,
       .width = 320,
   };
-  Point lineStart = {
+  e3d_Point lineStart = {
       .x = 0,
       .y = 0,
   };
-  Point lineEnd = {
+  e3d_Point lineEnd = {
       .x = 100,
       .y = 100,
   };
@@ -269,7 +163,7 @@ int main(void)
     uint64_t frame_begin_ticks = SDL_GetPerformanceCounter();
 #endif
 #if defined(EUZEBIA3D_DEBUG_MODE)
-    debugMode->begin_frame();
+    e3d_Debug_BeginFrame(&engine_ctx);
 #endif
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
@@ -277,37 +171,38 @@ int main(void)
 #endif
     float qt = t * 0.02f;
     (void)qt;
-    renderer->clean_scene();
+    e3d_Renderer_CleanScene(&engine_ctx);
     EUZEBIA3D_SET_DEBUG_STAGE(110);
-    modify_mesh_transformation(room->transformations, qt, 0.0f, -10.0f, 0.0f,
-    0); modify_mesh_transformation(mug->transformations, qt, 10.0f,
-    -10.0f, 10.0f, 0);
+    e3d_Mesh_ModifyTransformation(&engine_ctx, room->transformations, qt, 0.0f,
+                                  -10.0f, 0.0f, 0);
+    e3d_Mesh_ModifyTransformation(&engine_ctx, mug->transformations, qt, 10.0f,
+                                  -10.0f, 10.0f, 0);
     EUZEBIA3D_SET_DEBUG_STAGE(120);
-    renderer->add_model_to_scene(room);
-    renderer->add_model_to_scene(mug);
+    e3d_Renderer_AddModelToScene(&engine_ctx, room);
+    e3d_Renderer_AddModelToScene(&engine_ctx, mug);
     EUZEBIA3D_SET_DEBUG_STAGE(130);
     EUZEBIA3D_SET_DEBUG_STAGE(140);
-    renderer->render_scene();
+    e3d_Renderer_RenderScene(&engine_ctx);
     EUZEBIA3D_SET_DEBUG_STAGE(145);
 
 #if defined(EUZEBIA3D_DEBUG_MODE)
     EUZEBIA3D_SET_DEBUG_STAGE(150);
-    debugMode->show_info();
+    e3d_Debug_ShowInfo(&engine_ctx);
     snprintf(t_char, sizeof(t_char), "%lu", (unsigned long)t);
-    painter->print(t_char, 0, 220, 1, 0xffff);
-    debugMode->begin_draw_buffer();
+    e3d_Painter_Print(&engine_ctx, t_char, 0, 220, 1, 0xffff);
+    e3d_Debug_BeginDrawBuffer(&engine_ctx);
 #endif
     EUZEBIA3D_SET_DEBUG_STAGE(160);
-    painter->draw_buffer();
+    e3d_Buffer_DrawBuffer(&engine_ctx);
     EUZEBIA3D_SET_DEBUG_STAGE(165);
 #if defined(EUZEBIA3D_DEBUG_MODE)
-    debugMode->end_draw_buffer();
+    e3d_Debug_EndDrawBuffer(&engine_ctx);
 #endif
     t++;
     EUZEBIA3D_SET_DEBUG_STAGE(170);
-    painter->clear_buffer(0);
+    e3d_Buffer_ClearBuffer(&engine_ctx, 0);
 #if defined(EUZEBIA3D_DEBUG_MODE)
-    debugMode->end_frame();
+    e3d_Debug_EndFrame(&engine_ctx);
 #endif
     EUZEBIA3D_SET_DEBUG_STAGE(200);
 

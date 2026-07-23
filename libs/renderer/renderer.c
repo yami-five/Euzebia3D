@@ -1,4 +1,4 @@
-﻿#include "renderer.h"
+#include "renderer.h"
 #include "IRenderer.h"
 #include "camera.h"
 #include "light.h"
@@ -14,8 +14,8 @@
 #include "hardware/interp.h"
 #endif
 
-static const IHardware *_hardware = NULL;
-static const IPainter *_painter = NULL;
+static const e3d_IHardware *_hardware = NULL;
+static const e3d_IPainter *_painter = NULL;
 
 static uint8_t render_scale = 1; // 2 => 160x120 render; 1 => 320x240 render
 static uint8_t output_scale = 1;
@@ -27,20 +27,20 @@ static uint16_t render_height_half = 60;
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD
 // in painter.
 
-static Primitive scene[MAX_OBJECTS_IN_SCENE];
+static e3d_Primitive scene[MAX_OBJECTS_IN_SCENE];
 static uint16_t sceneCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
 
-static Camera *sceneCamera;
-static Light *sceneLight;
+static e3d_Camera *sceneCamera;
+static e3d_Light *sceneLight;
 
-static Primitive *append_scene_primitive(PrimType type) {
+static e3d_Primitive *append_scene_primitive(e3d_PrimType type) {
   if (sceneCounter >= MAX_OBJECTS_IN_SCENE)
     return NULL;
 
-  Primitive *primitive = &scene[sceneCounter++];
+  e3d_Primitive *primitive = &scene[sceneCounter++];
   primitive->type = type;
   return primitive;
 }
@@ -122,18 +122,18 @@ typedef struct {
   int32_t height;
   uint8_t valid;
   uint16_t pixels[TEXTURE_CACHE_PIXELS];
-} TextureCacheSlot;
+} e3d_TextureCacheSlot;
 
 typedef enum {
   TEXTURE_SOURCE_UNKNOWN = 0,
   TEXTURE_SOURCE_FLASH = 1,
   TEXTURE_SOURCE_PSRAM = 2
-} TextureSource;
+} e3d_TextureSource;
 
-static TextureCacheSlot textureCache[TEXTURE_CACHE_SLOTS] = {0};
+static e3d_TextureCacheSlot textureCache[TEXTURE_CACHE_SLOTS] = {0};
 static uint8_t textureCacheNextSlot = 0;
 
-static inline TextureSource detect_texture_source(const uint16_t *texture) {
+static inline e3d_TextureSource detect_texture_source(const uint16_t *texture) {
   (void)texture;
 #if defined(EUZEBIA3D_PLATFORM_PICO)
   uintptr_t address = (uintptr_t)texture;
@@ -146,7 +146,7 @@ static inline TextureSource detect_texture_source(const uint16_t *texture) {
   return TEXTURE_SOURCE_UNKNOWN;
 }
 
-static inline uint8_t texture_cache_source_enabled(TextureSource source) {
+static inline uint8_t texture_cache_source_enabled(e3d_TextureSource source) {
   if (source == TEXTURE_SOURCE_FLASH)
     return (uint8_t)(EUZEBIA3D_TEXTURE_CACHE_FROM_FLASH ? 1 : 0);
   if (source == TEXTURE_SOURCE_PSRAM)
@@ -174,7 +174,7 @@ static inline void set_active_texture_data(const uint16_t *texture,
   activeTextureHeightShift = texture_dimension_shift(height);
 }
 
-static inline void set_active_texture_direct(Material *mat) {
+static inline void set_active_texture_direct(e3d_Material *mat) {
   if (mat == NULL) {
     set_active_texture_data(NULL, 0, 0);
     return;
@@ -182,7 +182,7 @@ static inline void set_active_texture_direct(Material *mat) {
   set_active_texture_data(mat->texture, mat->textureWidth, mat->textureHeight);
 }
 
-static void prepare_texture_cache(Material *mat) {
+static void prepare_texture_cache(e3d_Material *mat) {
   set_active_texture_direct(mat);
 
 #if EUZEBIA3D_TEXTURE_CACHE_ENABLED
@@ -211,7 +211,7 @@ static void prepare_texture_cache(Material *mat) {
     }
   }
 
-  TextureCacheSlot *slot = &textureCache[textureCacheNextSlot];
+  e3d_TextureCacheSlot *slot = &textureCache[textureCacheNextSlot];
   textureCacheNextSlot++;
   if (textureCacheNextSlot >= TEXTURE_CACHE_SLOTS)
     textureCacheNextSlot = 0;
@@ -294,7 +294,7 @@ static uint8_t ensure_model_scratch_capacity(uint16_t verticesCounter,
 }
 
 // Normalize vector but bail out on zero-length to avoid NaNs.
-static inline uint8_t norm_vector_safe(Vector3 *vec) {
+static inline uint8_t norm_vector_safe(e3d_Vector3 *vec) {
   int32_t len = len_vector(vec);
   if (len == 0)
     return 0;
@@ -304,7 +304,7 @@ static inline uint8_t norm_vector_safe(Vector3 *vec) {
   return 1;
 }
 
-static inline uint8_t read_normal_vector(Vector3 *out, const int32_t *normals,
+static inline uint8_t read_normal_vector(e3d_Vector3 *out, const int32_t *normals,
                                          uint16_t normalsCounter,
                                          uint16_t normalIndex) {
   if (normalIndex >= normalsCounter)
@@ -318,20 +318,20 @@ static inline uint8_t read_normal_vector(Vector3 *out, const int32_t *normals,
 }
 
 static inline void write_vector_triplet(int32_t *vectors, uint16_t vectorIndex,
-                                        const Vector3 *value) {
+                                        const e3d_Vector3 *value) {
   size_t base = (size_t)vectorIndex * 3u;
   vectors[base] = value->x;
   vectors[base + 1u] = value->y;
   vectors[base + 2u] = value->z;
 }
 
-static inline void zero_vector(Vector3 *value) {
+static inline void zero_vector(e3d_Vector3 *value) {
   value->x = 0;
   value->y = 0;
   value->z = 0;
 }
 
-static inline void make_light_direction(Vector3 *out, const Light *light,
+static inline void make_light_direction(e3d_Vector3 *out, const e3d_Light *light,
                                         const int32_t *vertices,
                                         size_t vertexBase) {
   if (light->lightType == DIRECTIONAL_LIGHT) {
@@ -373,7 +373,7 @@ void renderer_set_scale(uint8_t scale) {
   configure_render_dimensions();
 }
 
-void init_renderer(const IHardware *hardware, const IPainter *painter) {
+void init_renderer(const e3d_IHardware *hardware, const e3d_IPainter *painter) {
   _hardware = hardware;
   _painter = painter;
   configure_render_dimensions();
@@ -391,8 +391,8 @@ static int32_t average_i32_triple(int32_t a, int32_t b, int32_t c) {
   return clamp_i64_to_i32(((int64_t)a + b + c) / 3);
 }
 
-static Vector3 calculate_triangle_center(const Triangle3D *triangle) {
-  Vector3 center = {
+static e3d_Vector3 calculate_triangle_center(const e3d_Triangle3D *triangle) {
+  e3d_Vector3 center = {
       .x = average_i32_triple(triangle->a.x, triangle->b.x, triangle->c.x),
       .y = average_i32_triple(triangle->a.y, triangle->b.y, triangle->c.y),
       .z = average_i32_triple(triangle->a.z, triangle->b.z, triangle->c.z),
@@ -401,7 +401,7 @@ static Vector3 calculate_triangle_center(const Triangle3D *triangle) {
 }
 
 void rotate(int32_t *vertices, uint16_t verticesCounter,
-            TransformVector *vector) {
+            e3d_TransformVector *vector) {
   RENDERER_SET_DEBUG_STAGE(600);
   renderer_debug_scene_counter = verticesCounter;
   renderer_debug_pointer = (uintptr_t)vector;
@@ -416,8 +416,8 @@ void rotate(int32_t *vertices, uint16_t verticesCounter,
   int32_t s = fast_sin(qt_rad >> 1);
   RENDERER_SET_DEBUG_STAGE(610);
 
-  Vector3 qVec = {.x = vector->x, .y = vector->y, .z = vector->z};
-  Quaternion q = {.w = c, .vec = &qVec};
+  e3d_Vector3 qVec = {.x = vector->x, .y = vector->y, .z = vector->z};
+  e3d_Quaternion q = {.w = c, .vec = &qVec};
   if (!norm_vector_safe(q.vec)) {
     RENDERER_SET_DEBUG_STAGE(611);
     return;
@@ -426,20 +426,20 @@ void rotate(int32_t *vertices, uint16_t verticesCounter,
   mul_vec_scalar(q.vec, s);
   RENDERER_SET_DEBUG_STAGE(620);
 
-  Vector3 qVecInv = {.x = -q.vec->x, .y = -q.vec->y, .z = -q.vec->z};
-  Quaternion qInv = {.w = c, .vec = &qVecInv};
+  e3d_Vector3 qVecInv = {.x = -q.vec->x, .y = -q.vec->y, .z = -q.vec->z};
+  e3d_Quaternion qInv = {.w = c, .vec = &qVecInv};
   for (uint16_t i = 0; i < verticesCounter; i++) {
     RENDERER_SET_DEBUG_STAGE(630);
     renderer_debug_vertex_index = i;
-    Vector3 vec_vertex = {.x = vertices[i * 3],
+    e3d_Vector3 vec_vertex = {.x = vertices[i * 3],
                           .y = vertices[i * 3 + 1],
                           .z = vertices[i * 3 + 2]};
-    Quaternion q_vertex = {.w = 0, .vec = &vec_vertex};
-    Vector3 resultVec1;
-    Quaternion result = {.w = 0, .vec = &resultVec1};
+    e3d_Quaternion q_vertex = {.w = 0, .vec = &vec_vertex};
+    e3d_Vector3 resultVec1;
+    e3d_Quaternion result = {.w = 0, .vec = &resultVec1};
     mul_quaternion(&result, &q, &q_vertex);
-    Vector3 resultVec2;
-    Quaternion result2 = {.w = 0, .vec = &resultVec2};
+    e3d_Vector3 resultVec2;
+    e3d_Quaternion result2 = {.w = 0, .vec = &resultVec2};
     mul_quaternion(&result2, &result, &qInv);
     vertices[i * 3] = result2.vec->x;
     vertices[i * 3 + 1] = result2.vec->y;
@@ -450,7 +450,7 @@ void rotate(int32_t *vertices, uint16_t verticesCounter,
 }
 
 void translate(int32_t *vertices, uint16_t verticesCounter,
-               TransformVector *vector) {
+               e3d_TransformVector *vector) {
   RENDERER_SET_DEBUG_STAGE(700);
   renderer_debug_scene_counter = verticesCounter;
   renderer_debug_pointer = (uintptr_t)vector;
@@ -471,7 +471,7 @@ void translate(int32_t *vertices, uint16_t verticesCounter,
 }
 
 void scale(int32_t *vertices, uint16_t verticesCounter,
-           TransformVector *vector) {
+           e3d_TransformVector *vector) {
   RENDERER_SET_DEBUG_STAGE(800);
   renderer_debug_scene_counter = verticesCounter;
   renderer_debug_pointer = (uintptr_t)vector;
@@ -492,7 +492,7 @@ void scale(int32_t *vertices, uint16_t verticesCounter,
 }
 
 void transform(int32_t *vertices, uint16_t verticesCounter,
-               TransformInfo *transformInfo) {
+               e3d_TransformInfo *transformInfo) {
   RENDERER_SET_DEBUG_STAGE(900);
   renderer_debug_scene_counter = verticesCounter;
   renderer_debug_pointer = (uintptr_t)transformInfo;
@@ -520,7 +520,7 @@ void inf(float *x, float *y, float qt) {
   *y += 2.0f * fast_cos(qt_rad) * fast_sin(qt_rad);
 }
 
-int32_t check_if_triangle_visible(Triangle2D *triangle) {
+int32_t check_if_triangle_visible(e3d_Triangle2D *triangle) {
   int32_t e1x = triangle->b.x - triangle->a.x;
   int32_t e1y = triangle->b.y - triangle->a.y;
   int32_t e2x = triangle->c.x - triangle->a.x;
@@ -568,9 +568,9 @@ typedef struct {
   int32_t uvx;
   int32_t uvy;
   int32_t light;
-} ClipVertex;
+} e3d_ClipVertex;
 
-static inline uint8_t is_inside_near_plane(const ClipVertex *v) {
+static inline uint8_t is_inside_near_plane(const e3d_ClipVertex *v) {
   return v->z >= NEAR_CLIP_Z;
 }
 
@@ -578,9 +578,9 @@ static inline int32_t interpolate_fixed(int32_t a, int32_t b, int32_t t) {
   return a + (int32_t)fixed_mul((b - a), t);
 }
 
-static ClipVertex intersect_near_plane(const ClipVertex *a,
-                                       const ClipVertex *b) {
-  ClipVertex out = *a;
+static e3d_ClipVertex intersect_near_plane(const e3d_ClipVertex *a,
+                                       const e3d_ClipVertex *b) {
+  e3d_ClipVertex out = *a;
   int32_t dz = b->z - a->z;
   if (dz == 0) {
     out.z = NEAR_CLIP_Z;
@@ -603,14 +603,14 @@ static ClipVertex intersect_near_plane(const ClipVertex *a,
   return out;
 }
 
-static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3],
-                                                ClipVertex out[4]) {
+static uint8_t clip_triangle_against_near_plane(const e3d_ClipVertex in[3],
+                                                e3d_ClipVertex out[4]) {
   uint8_t outCount = 0;
-  ClipVertex prev = in[2];
+  e3d_ClipVertex prev = in[2];
   uint8_t prevInside = is_inside_near_plane(&prev);
 
   for (uint8_t i = 0; i < 3; i++) {
-    ClipVertex curr = in[i];
+    e3d_ClipVertex curr = in[i];
     uint8_t currInside = is_inside_near_plane(&curr);
 
     if (currInside) {
@@ -629,8 +629,8 @@ static uint8_t clip_triangle_against_near_plane(const ClipVertex in[3],
   return outCount;
 }
 
-static uint8_t transform_point_to_clip(const Vector3 *point,
-                                       const Camera *camera, ClipVertex *out) {
+static uint8_t transform_point_to_clip(const e3d_Vector3 *point,
+                                       const e3d_Camera *camera, e3d_ClipVertex *out) {
   if (point == NULL || camera == NULL || camera->vMatrix == NULL ||
       camera->pMatrix == NULL || out == NULL)
     return 0;
@@ -647,7 +647,7 @@ static uint8_t transform_point_to_clip(const Vector3 *point,
   return 1;
 }
 
-static uint8_t project_clip_point(const ClipVertex *in, Vector2 *out) {
+static uint8_t project_clip_point(const e3d_ClipVertex *in, e3d_Vector2 *out) {
   if (in == NULL || out == NULL || in->w <= 0)
     return 0;
 
@@ -656,8 +656,8 @@ static uint8_t project_clip_point(const ClipVertex *in, Vector2 *out) {
   return 1;
 }
 
-static uint8_t clip_line_against_near_plane(ClipVertex *start,
-                                            ClipVertex *end) {
+static uint8_t clip_line_against_near_plane(e3d_ClipVertex *start,
+                                            e3d_ClipVertex *end) {
   uint8_t startInside = is_inside_near_plane(start);
   uint8_t endInside = is_inside_near_plane(end);
 
@@ -677,7 +677,7 @@ enum {
   LINE_OUT_BOTTOM = 8,
 };
 
-static uint8_t line_out_code(const Vector2 *point) {
+static uint8_t line_out_code(const e3d_Vector2 *point) {
   uint8_t code = 0;
   if (point->x < 0)
     code |= LINE_OUT_LEFT;
@@ -690,7 +690,7 @@ static uint8_t line_out_code(const Vector2 *point) {
   return code;
 }
 
-static uint8_t clip_line_to_render_area(Vector2 *start, Vector2 *end) {
+static uint8_t clip_line_to_render_area(e3d_Vector2 *start, e3d_Vector2 *end) {
   for (uint8_t attempts = 0; attempts < 8; attempts++) {
     uint8_t startCode = line_out_code(start);
     uint8_t endCode = line_out_code(end);
@@ -700,7 +700,7 @@ static uint8_t clip_line_to_render_area(Vector2 *start, Vector2 *end) {
       return 0;
 
     uint8_t outCode = startCode != 0 ? startCode : endCode;
-    Vector2 clipped = {0, 0};
+    e3d_Vector2 clipped = {0, 0};
     if (outCode & LINE_OUT_TOP) {
       if (end->y == start->y)
         return 0;
@@ -748,9 +748,9 @@ typedef struct {
   uint32_t rLightScale;
   uint32_t gLightScale;
   uint32_t bLightScale;
-} ShadingContext;
+} e3d_ShadingContext;
 
-static inline ShadingContext make_shading_context(const Light *light) {
+static inline e3d_ShadingContext make_shading_context(const e3d_Light *light) {
   int32_t intensity = light->intensity;
   if (intensity < 0)
     intensity = 0;
@@ -762,7 +762,7 @@ static inline ShadingContext make_shading_context(const Light *light) {
   uint32_t gLight = (light->color >> 5) & 0x3f;
   uint32_t bLight = light->color & 0x1f;
 
-  ShadingContext context = {
+  e3d_ShadingContext context = {
       .intensity = intensity,
       .rLightScale = rLight * 33u,
       .gLightScale = gLight * 16u,
@@ -772,7 +772,7 @@ static inline ShadingContext make_shading_context(const Light *light) {
 }
 
 static inline uint16_t shade_color(uint16_t color,
-                                   const ShadingContext *context,
+                                   const e3d_ShadingContext *context,
                                    int32_t lightDistance) {
   if (color == TEXTURE_TRANSPARENT_COLOR)
     return color;
@@ -821,8 +821,8 @@ static inline uint16_t shade_color(uint16_t color,
   return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
-void shading(uint16_t *color, Light *light, int32_t lightDistance) {
-  ShadingContext context = make_shading_context(light);
+void shading(uint16_t *color, e3d_Light *light, int32_t lightDistance) {
+  e3d_ShadingContext context = make_shading_context(light);
   *color = shade_color(*color, &context, lightDistance);
 }
 
@@ -990,7 +990,7 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color) {
     dst[i] = color;
 }
 
-static void texture_span(uint16_t *dst, uint16_t length, Material *mat,
+static void texture_span(uint16_t *dst, uint16_t length, e3d_Material *mat,
                          int32_t U, int32_t dUdx, int32_t V, int32_t dVdx,
                          int32_t Z, int32_t dZdx) {
   const uint16_t *texture = activeTextureData;
@@ -1068,9 +1068,9 @@ static void texture_span(uint16_t *dst, uint16_t length, Material *mat,
 #endif
 }
 
-static void shade_span(uint16_t *dst, uint16_t length, Light *light, int32_t L,
+static void shade_span(uint16_t *dst, uint16_t length, e3d_Light *light, int32_t L,
                        int32_t dLdx) {
-  ShadingContext context = make_shading_context(light);
+  e3d_ShadingContext context = make_shading_context(light);
   if (length <= MAX_SHADING_SPAN_LEN) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
     int32_t Lacc = L;
@@ -1104,7 +1104,7 @@ typedef struct {
   int32_t V1;
   int32_t Z0;
   int32_t Z1;
-} SpanEndpoints;
+} e3d_SpanEndpoints;
 
 typedef struct {
   int32_t L;
@@ -1115,12 +1115,12 @@ typedef struct {
   int32_t dVdx;
   int32_t Z;
   int32_t dZdx;
-} SpanLerpState;
+} e3d_SpanLerpState;
 
-static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start,
+static e3d_SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start,
                                           int32_t x_end,
-                                          const SpanEndpoints *endpoints) {
-  SpanLerpState state = {0};
+                                          const e3d_SpanEndpoints *endpoints) {
+  e3d_SpanLerpState state = {0};
   int32_t span = x_end - x_start;
   int32_t x_offset = x0 - x_start;
 
@@ -1137,8 +1137,8 @@ static SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start,
   return state;
 }
 
-static void build_material_span(uint16_t *dst, uint16_t length, Material *mat,
-                                Light *light, const SpanLerpState *lerp) {
+static void build_material_span(uint16_t *dst, uint16_t length, e3d_Material *mat,
+                                e3d_Light *light, const e3d_SpanLerpState *lerp) {
   if (length == 0)
     return;
 
@@ -1159,7 +1159,7 @@ inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1,
   return inverse(z);
 }
 
-void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, Light *light,
+void rasterize(int32_t y, int32_t x0, int32_t x1, e3d_Material *mat, e3d_Light *light,
                int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0,
                int32_t V1, int32_t Z0, int32_t Z1) {
   // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
@@ -1208,7 +1208,7 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, Light *light,
   if (span_length > SPAN_BUFFER_MAX)
     span_length = SPAN_BUFFER_MAX;
 
-  SpanEndpoints endpoints = {
+  e3d_SpanEndpoints endpoints = {
       .L0 = L0,
       .L1 = L1,
       .U0 = U0,
@@ -1218,7 +1218,7 @@ void rasterize(int32_t y, int32_t x0, int32_t x1, Material *mat, Light *light,
       .Z0 = Z0,
       .Z1 = Z1,
   };
-  SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
+  e3d_SpanLerpState lerp = make_span_lerp_state(x0, xStart, xEnd, &endpoints);
 
   RENDERER_SET_DEBUG_STAGE(510);
   build_material_span(span_buffer, span_length, mat, light, &lerp);
@@ -1262,8 +1262,8 @@ inline void swap_int32(int32_t *x, int32_t *y) {
   *y = temp;
 }
 
-void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[],
-         Light *light) {
+void tri(e3d_TriangleToRender *triangle, e3d_Material *mat, int32_t lightDistances[],
+         e3d_Light *light) {
   RENDERER_SET_DEBUG_STAGE(400);
   prepare_texture_cache(mat);
   RENDERER_SET_DEBUG_STAGE(401);
@@ -1433,8 +1433,8 @@ void tri(TriangleToRender *triangle, Material *mat, int32_t lightDistances[],
 typedef struct {
   uint16_t index;
   int32_t depth;
-} SceneDrawItem;
-static SceneDrawItem drawItems[MAX_OBJECTS_IN_SCENE];
+} e3d_SceneDrawItem;
+static e3d_SceneDrawItem drawItems[MAX_OBJECTS_IN_SCENE];
 
 static void draw_scaled_scene_pixel(int32_t x, int32_t y, uint16_t color) {
   if (_painter == NULL)
@@ -1455,15 +1455,15 @@ static void draw_scaled_scene_pixel(int32_t x, int32_t y, uint16_t color) {
   }
 }
 
-static void draw_scene_line(const LineInScene *line) {
+static void draw_scene_line(const e3d_LineInScene *line) {
   if (_painter == NULL || line == NULL)
     return;
 
-  Point start = {
+  e3d_Point start = {
       .x = (int16_t)(line->start.x * output_scale),
       .y = (int16_t)(line->start.y * output_scale),
   };
-  Point end = {
+  e3d_Point end = {
       .x = (int16_t)(line->end.x * output_scale),
       .y = (int16_t)(line->end.y * output_scale),
   };
@@ -1475,7 +1475,7 @@ static void sort_scene_draw_items(uint16_t count) {
   uint16_t gap = count >> 1;
   while (gap > 0) {
     for (uint16_t i = gap; i < count; i++) {
-      SceneDrawItem item = drawItems[i];
+      e3d_SceneDrawItem item = drawItems[i];
       uint16_t j = i;
       while (j >= gap && drawItems[j - gap].depth < item.depth) {
         drawItems[j] = drawItems[j - gap];
@@ -1519,9 +1519,9 @@ void render_scene() {
     RENDERER_SET_DEBUG_STAGE(331);
     renderer_debug_vertex_index = i;
     renderer_debug_face_index = drawItems[i].index;
-    Primitive *primitive = &scene[drawItems[i].index];
+    e3d_Primitive *primitive = &scene[drawItems[i].index];
     if (primitive->type == POINT) {
-      PointInScene *point = &primitive->payload.point;
+      e3d_PointInScene *point = &primitive->payload.point;
       draw_scaled_scene_pixel(point->point.x, point->point.y, point->color);
       continue;
     }
@@ -1532,7 +1532,7 @@ void render_scene() {
     if (primitive->type != TRIANGLE)
       continue;
 
-    TriangleInScene *triScene = &primitive->payload.triangle;
+    e3d_TriangleInScene *triScene = &primitive->payload.triangle;
     if (triScene->TriangleOnScreen.a.z < NEAR_CLIP_Z ||
         triScene->TriangleOnScreen.b.z < NEAR_CLIP_Z ||
         triScene->TriangleOnScreen.c.z < NEAR_CLIP_Z)
@@ -1542,7 +1542,7 @@ void render_scene() {
     int32_t aW = inverse(triScene->TriangleOnScreen.a.z);
     int32_t bW = inverse(triScene->TriangleOnScreen.b.z);
     int32_t cW = inverse(triScene->TriangleOnScreen.c.z);
-    TriangleToRender triangle = {
+    e3d_TriangleToRender triangle = {
         {
             triScene->TriangleOnScreen.a.x,
             triScene->TriangleOnScreen.a.y,
@@ -1589,7 +1589,7 @@ void render_scene() {
   RENDERER_SET_DEBUG_STAGE(390);
 }
 
-void add_model_to_scene(Mesh *mesh) {
+void add_model_to_scene(e3d_Mesh *mesh) {
   RENDERER_SET_DEBUG_STAGE(100);
   renderer_debug_vertex_index = 0;
   renderer_debug_face_index = 0;
@@ -1684,7 +1684,7 @@ void add_model_to_scene(Mesh *mesh) {
   for (uint16_t i = 0; i < vnCounter; i++) {
     renderer_debug_vertex_index = i;
     size_t base = (size_t)i * 3u;
-    Vector3 normal = {
+    e3d_Vector3 normal = {
         .x = normalsModified[base],
         .y = normalsModified[base + 1u],
         .z = normalsModified[base + 2u],
@@ -1702,17 +1702,17 @@ void add_model_to_scene(Mesh *mesh) {
   for (uint16_t i = 0; i < verticesCounter; i++) {
     renderer_debug_vertex_index = i;
     size_t base = (size_t)i * 3u;
-    Vector3 lightDirection;
+    e3d_Vector3 lightDirection;
     make_light_direction(&lightDirection, sceneLight, verticesModified, base);
     write_vector_triplet(verticesModified, i, &lightDirection);
   }
 
-  Vector3 normalVectorA;
-  Vector3 normalVectorB;
-  Vector3 normalVectorC;
-  Vector3 lightDirectionA;
-  Vector3 lightDirectionB;
-  Vector3 lightDirectionC;
+  e3d_Vector3 normalVectorA;
+  e3d_Vector3 normalVectorB;
+  e3d_Vector3 normalVectorC;
+  e3d_Vector3 lightDirectionA;
+  e3d_Vector3 lightDirectionB;
+  e3d_Vector3 lightDirectionC;
 
   RENDERER_SET_DEBUG_STAGE(140);
   uint32_t faceIndexCount = (uint32_t)mesh->facesCounter * 3u;
@@ -1778,7 +1778,7 @@ void add_model_to_scene(Mesh *mesh) {
           clamp_light_distance(dot_product(&normalVectorC, &lightDirectionC));
     }
 
-    ClipVertex triangleIn[3] = {{
+    e3d_ClipVertex triangleIn[3] = {{
                                     .x = verticesClip[a * 4],
                                     .y = verticesClip[a * 4 + 1],
                                     .z = verticesClip[a * 4 + 2],
@@ -1807,16 +1807,16 @@ void add_model_to_scene(Mesh *mesh) {
                                 }};
 
     RENDERER_SET_DEBUG_STAGE(170);
-    ClipVertex clipped[4];
+    e3d_ClipVertex clipped[4];
     uint8_t clippedCount =
         clip_triangle_against_near_plane(triangleIn, clipped);
     if (clippedCount < 3)
       continue;
 
     for (uint8_t t = 1; t + 1 < clippedCount; t++) {
-      ClipVertex va = clipped[0];
-      ClipVertex vb = clipped[t];
-      ClipVertex vc = clipped[t + 1];
+      e3d_ClipVertex va = clipped[0];
+      e3d_ClipVertex vb = clipped[t];
+      e3d_ClipVertex vc = clipped[t + 1];
 
       if (va.w <= 0 || vb.w <= 0 || vc.w <= 0)
         continue;
@@ -1835,7 +1835,7 @@ void add_model_to_scene(Mesh *mesh) {
       if (triangle_outside_raster_guard(ax, ay, bx, by, cx, cy))
         continue;
 
-      Triangle2D triangle = {
+      e3d_Triangle2D triangle = {
           {ax, ay},
           {bx, by},
           {cx, cy},
@@ -1845,12 +1845,12 @@ void add_model_to_scene(Mesh *mesh) {
         continue;
 
       RENDERER_SET_DEBUG_STAGE(191);
-      Primitive *outPrimitive = append_scene_primitive(TRIANGLE);
+      e3d_Primitive *outPrimitive = append_scene_primitive(TRIANGLE);
       if (outPrimitive == NULL) {
         RENDERER_SET_DEBUG_STAGE(190);
         return;
       }
-      TriangleInScene *outTriangle = &outPrimitive->payload.triangle;
+      e3d_TriangleInScene *outTriangle = &outPrimitive->payload.triangle;
       outTriangle->TriangleOnScreen.a.x = ax;
       outTriangle->TriangleOnScreen.a.y = ay;
       outTriangle->TriangleOnScreen.a.z = va.z;
@@ -1881,9 +1881,9 @@ void add_model_to_scene(Mesh *mesh) {
   renderer_debug_scene_counter = sceneCounter;
 }
 
-void add_point_to_scene(Point3D *point) {
-  ClipVertex clipPoint;
-  Vector2 screenPoint;
+void add_point_to_scene(e3d_Point3D *point) {
+  e3d_ClipVertex clipPoint;
+  e3d_Vector2 screenPoint;
   if (!transform_point_to_clip(point == NULL ? NULL : &point->point,
                                sceneCamera, &clipPoint) ||
       !is_inside_near_plane(&clipPoint) ||
@@ -1894,7 +1894,7 @@ void add_point_to_scene(Point3D *point) {
       screenPoint.y >= render_height)
     return;
 
-  Primitive *primitive = append_scene_primitive(POINT);
+  e3d_Primitive *primitive = append_scene_primitive(POINT);
   if (primitive == NULL)
     return;
 
@@ -1905,11 +1905,11 @@ void add_point_to_scene(Point3D *point) {
   primitive->pos.z = clipPoint.z;
 }
 
-void add_line_to_scene(Line3D *line) {
-  ClipVertex clipStart;
-  ClipVertex clipEnd;
-  Vector2 screenStart;
-  Vector2 screenEnd;
+void add_line_to_scene(e3d_Line3D *line) {
+  e3d_ClipVertex clipStart;
+  e3d_ClipVertex clipEnd;
+  e3d_Vector2 screenStart;
+  e3d_Vector2 screenEnd;
   if (line == NULL ||
       !transform_point_to_clip(&line->start, sceneCamera, &clipStart) ||
       !transform_point_to_clip(&line->end, sceneCamera, &clipEnd) ||
@@ -1919,7 +1919,7 @@ void add_line_to_scene(Line3D *line) {
       !clip_line_to_render_area(&screenStart, &screenEnd))
     return;
 
-  Primitive *primitive = append_scene_primitive(LINE);
+  e3d_Primitive *primitive = append_scene_primitive(LINE);
   if (primitive == NULL)
     return;
 
@@ -1933,11 +1933,11 @@ void add_line_to_scene(Line3D *line) {
 
 void clean_scene() { sceneCounter = 0; }
 
-void set_camera(Camera *camera) { sceneCamera = camera; }
+void set_camera(e3d_Camera *camera) { sceneCamera = camera; }
 
-void set_light(Light *light) { sceneLight = light; }
+void set_light(e3d_Light *light) { sceneLight = light; }
 
-static IRenderer renderer = {
+static e3d_IRenderer renderer = {
     .init_renderer = init_renderer,
     .render_scene = render_scene,
     .add_model_to_scene = add_model_to_scene,
@@ -1949,4 +1949,4 @@ static IRenderer renderer = {
     .set_light = set_light,
 };
 
-const IRenderer *get_renderer(void) { return &renderer; }
+const e3d_IRenderer *get_renderer(void) { return &renderer; }

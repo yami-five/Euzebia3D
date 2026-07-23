@@ -13,42 +13,42 @@ typedef struct {
   const int y;
   const float angle;
   const int startFrameNum;
-} RawFrame;
+} e3d_RawFrame;
 
 typedef struct {
-  const RawFrame *frames;
+  const e3d_RawFrame *frames;
   const uint16_t framesNum;
-} RawAnimation;
+} e3d_RawAnimation;
 
-typedef struct RawPuppetBone RawPuppetBone;
+typedef struct e3d_RawPuppetBone e3d_RawPuppetBone;
 
-typedef struct RawPuppetBone {
+typedef struct e3d_RawPuppetBone {
   const char *label;
   const int16_t x;
   const int16_t y;
   const float angle;
   const uint8_t spriteIndex;
   const float baseSpriteAngle;
-  const RawPuppetBone *childPuppetBonesLayer1;
+  const e3d_RawPuppetBone *childPuppetBonesLayer1;
   const uint8_t childPuppetBonesNumLayer1;
-  const RawPuppetBone *childPuppetBonesLayer2;
+  const e3d_RawPuppetBone *childPuppetBonesLayer2;
   const uint8_t childPuppetBonesNumLayer2;
-} RawPuppetBone;
+} e3d_RawPuppetBone;
 
 typedef struct {
-  const RawPuppetBone *rawBone;
-  const RawAnimation *rawAnimation;
-} RawBoneAnimationPair;
+  const e3d_RawPuppetBone *rawBone;
+  const e3d_RawAnimation *rawAnimation;
+} e3d_RawBoneAnimationPair;
 
 typedef struct {
   const char *label;
   const int16_t x;
   const int16_t y;
   const float angle;
-  const RawPuppetBone *puppetBones;
+  const e3d_RawPuppetBone *puppetBones;
   const uint8_t puppetBonesNum;
-  const RawBoneAnimationPair *boneAnimationPairs;
+  const e3d_RawBoneAnimationPair *boneAnimationPairs;
   const uint8_t boneAnimationPairsNum;
-} RawPuppet;
+} e3d_RawPuppet;
 
 #endif

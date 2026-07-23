@@ -8,7 +8,7 @@ typedef struct {
   const uint32_t size;
   const uint16_t width;
   const uint16_t heigth;
-} Image;
+} e3d_Image;
 
 typedef struct {
   const uint16_t verticesCounter;
@@ -22,6 +22,6 @@ typedef struct {
   const uint16_t vnCounter;
   const uint16_t *normals;
   const uint16_t nn;
-} Model;
+} e3d_Model;
 
 #endif

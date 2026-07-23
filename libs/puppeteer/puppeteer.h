@@ -3,6 +3,6 @@
 
 #include "IPuppeteer.h"
 
-const IPuppeteer *get_puppeteer(void);
+const e3d_IPuppeteer *get_puppeteer(void);
 
 #endif

@@ -7,7 +7,7 @@
 static const uint16_t DISPLAY_WIDTH = 320;
 static const uint16_t DISPLAY_HEIGHT = 240;
 static const uint8_t HORIZONTAL = 0;
-static const IHardware *_hardware;
+static const e3d_IHardware *_hardware;
 
 static void send_command(uint8_t reg) {
   _hardware->write(LCD_DC_PIN, 0);
@@ -64,7 +64,7 @@ static void set_windows(uint16_t Xstart, uint16_t Ystart, uint16_t Xend,
 }
 #endif
 
-static void init_display(const IHardware *hardware) {
+static void init_display(const e3d_IHardware *hardware) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
   (void)hardware;
 #else
@@ -163,8 +163,8 @@ static void init_display(const IHardware *hardware) {
 #endif
 }
 
-static IDisplay display = {
+static e3d_IDisplay display = {
     .init_display = init_display,
 };
 
-const IDisplay *get_display(void) { return &display; }
+const e3d_IDisplay *get_display(void) { return &display; }

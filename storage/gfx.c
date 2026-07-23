@@ -23,7 +23,7 @@ const uint16_t boxUV[24] = {0,1,2,3,4,5,6,7,8,9,10,11,0,12,1,3,13,4,6,14,7,9,15,
 const float boxVN[12] = {-0.0f,1.0f,-0.0f,-0.0f,-0.0f,1.0f,1.0f,-0.0f,-0.0f,-1.0f,-0.0f,-0.0f};
 const uint16_t boxNormals[24] = {0,0,0,1,1,1,2,2,2,3,3,3,0,0,0,1,1,1,2,2,2,3,3,3};
 
-const Model models[3] = {
+const e3d_Model models[3] = {
     {
         .vertices = triangleVertices,
         .faces = triangleFaces,
@@ -62,7 +62,7 @@ const Model models[3] = {
     },
 };
 
-const Image images[2] = {
+const e3d_Image images[2] = {
     {
         mug_texture, // 0
         sizeof(mug_texture),

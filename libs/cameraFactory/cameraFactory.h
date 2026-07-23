@@ -3,6 +3,6 @@
 
 #include "ICameraFactory.h"
 
-const ICameraFactory *get_cameraFactory(void);
+const e3d_ICameraFactory *get_cameraFactory(void);
 
 #endif

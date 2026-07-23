@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_display)(const IHardware *hardware);
-} IDisplay;
+  void (*init_display)(const e3d_IHardware *hardware);
+} e3d_IDisplay;
 
 #endif

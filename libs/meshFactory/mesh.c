@@ -1,21 +1,21 @@
 #include "mesh.h"
 
-TransformInfo *add_transformation(TransformInfo *currentTransformations,
+e3d_TransformInfo *add_transformation(e3d_TransformInfo *currentTransformations,
                                   uint32_t *currentTransformationsNum, float w,
                                   float x, float y, float z,
-                                  ModelTransformType transformationType) {
+                                  e3d_ModelTransformType transformationType) {
   if (transformationType > MODEL_TRANSFORM_SCALE)
     return currentTransformations;
 
   uint32_t oldTransformationsNum = *currentTransformationsNum;
   uint32_t newTransformationsNum = oldTransformationsNum + 1u;
-  TransformInfo *newTransformations = (TransformInfo *)realloc(
-      currentTransformations, newTransformationsNum * sizeof(TransformInfo));
+  e3d_TransformInfo *newTransformations = (e3d_TransformInfo *)realloc(
+      currentTransformations, newTransformationsNum * sizeof(e3d_TransformInfo));
   if (newTransformations == NULL)
     return currentTransformations;
 
-  TransformVector *newVector =
-      (TransformVector *)malloc(sizeof(TransformVector));
+  e3d_TransformVector *newVector =
+      (e3d_TransformVector *)malloc(sizeof(e3d_TransformVector));
   if (newVector == NULL)
     return newTransformations;
 
@@ -34,14 +34,14 @@ TransformInfo *add_transformation(TransformInfo *currentTransformations,
   return newTransformations;
 }
 
-void modify_mesh_transformation(TransformInfo *currentTransformations, float w,
+void modify_mesh_transformation(e3d_TransformInfo *currentTransformations, float w,
                                 float x, float y, float z,
                                 uint32_t transformationIndex) {
   modify_transformation(currentTransformations, w, x, y, z,
                         transformationIndex);
 }
 
-void free_model(Mesh *mesh) {
+void free_model(e3d_Mesh *mesh) {
   if (mesh == NULL)
     return;
   if (mesh->transformations != NULL) {

@@ -9,51 +9,51 @@
 #include "puppetFactory.h"
 #include "string.h"
 
-static const IPainter *_painter;
-static const IPuppetFactory *_puppetFactory;
+static const e3d_IPainter *_painter;
+static const e3d_IPuppetFactory *_puppetFactory;
 
-void init_puppeteer(const IStorage *storage, const IPainter *painter) {
+void init_puppeteer(const e3d_IStorage *storage, const e3d_IPainter *painter) {
   _puppetFactory = get_puppetFactory();
   _puppetFactory->init_puppet_factory(storage);
   _painter = painter;
 }
 
-Puppet *create_puppet(uint8_t puppetIndex) {
+e3d_Puppet *create_puppet(uint8_t puppetIndex) {
   return _puppetFactory->create(puppetIndex);
 }
 
-void draw_PuppetBone(PuppetBone *PuppetBone, int *parentWorldMatrix) {
-  for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer2; i++) {
-    draw_PuppetBone(&PuppetBone->childPuppetBonesLayer2[i],
-                    PuppetBone->worldMatrix);
+void draw_PuppetBone(e3d_PuppetBone *e3d_PuppetBone, int *parentWorldMatrix) {
+  for (uint8_t i = 0; i < e3d_PuppetBone->childPuppetBonesNumLayer2; i++) {
+    draw_PuppetBone(&e3d_PuppetBone->childPuppetBonesLayer2[i],
+                    e3d_PuppetBone->worldMatrix);
   }
-  if (PuppetBone->sprite != NULL) {
-    if (PuppetBone->sprite->width != PuppetBone->sprite->height)
+  if (e3d_PuppetBone->sprite != NULL) {
+    if (e3d_PuppetBone->sprite->width != e3d_PuppetBone->sprite->height)
       return;
 
-    uint8_t spriteWidthHalved = PuppetBone->sprite->width >> 1;
-    uint8_t spriteHeightHalved = PuppetBone->sprite->height >> 1;
-    int16_t startX = PuppetBone->worldMatrix[2] >> SHIFT_FACTOR;
-    int16_t startY = PuppetBone->worldMatrix[5] >> SHIFT_FACTOR;
+    uint8_t spriteWidthHalved = e3d_PuppetBone->sprite->width >> 1;
+    uint8_t spriteHeightHalved = e3d_PuppetBone->sprite->height >> 1;
+    int16_t startX = e3d_PuppetBone->worldMatrix[2] >> SHIFT_FACTOR;
+    int16_t startY = e3d_PuppetBone->worldMatrix[5] >> SHIFT_FACTOR;
     int16_t parentX = parentWorldMatrix[2] >> SHIFT_FACTOR;
     int16_t parentY = parentWorldMatrix[5] >> SHIFT_FACTOR;
     int32_t angle = 0;
-    if (PuppetBone->sprite->canRotate) {
+    if (e3d_PuppetBone->sprite->canRotate) {
       angle = fast_atan2(startY - parentY, startX - parentX) +
-              PuppetBone->baseSpriteAngle;
+              e3d_PuppetBone->baseSpriteAngle;
       angle = radian_to_index(angle);
     }
     startX += ((parentX - startX) >> 1) - spriteWidthHalved;
     startY += ((parentY - startY) >> 1) - spriteHeightHalved;
-    _painter->draw_sprite(PuppetBone->sprite, startX, startY, angle, 1);
+    _painter->draw_sprite(e3d_PuppetBone->sprite, startX, startY, angle, 1);
   }
-  for (uint8_t i = 0; i < PuppetBone->childPuppetBonesNumLayer1; i++) {
-    draw_PuppetBone(&PuppetBone->childPuppetBonesLayer1[i],
-                    PuppetBone->worldMatrix);
+  for (uint8_t i = 0; i < e3d_PuppetBone->childPuppetBonesNumLayer1; i++) {
+    draw_PuppetBone(&e3d_PuppetBone->childPuppetBonesLayer1[i],
+                    e3d_PuppetBone->worldMatrix);
   }
 }
 
-void draw_puppet(Puppet *puppet) {
+void draw_puppet(e3d_Puppet *puppet) {
   for (uint8_t i = 0; i < puppet->puppetBonesNum; i++) {
     draw_PuppetBone(&puppet->puppetBones[i], puppet->worldMatrix);
   }
@@ -71,7 +71,7 @@ static int32_t anim_sine_alpha(uint32_t frameInSpan, uint32_t span) {
   return fast_sin(radian_to_index(angle));
 }
 
-void perform(Puppet *puppet, uint32_t t) {
+void perform(e3d_Puppet *puppet, uint32_t t) {
   if (puppet->boneTimelinePairsNum <= 0 || puppet->puppetBonesNum <= 0)
     return;
   if (puppet->boneTimelinePairs == NULL)
@@ -80,7 +80,7 @@ void perform(Puppet *puppet, uint32_t t) {
     puppet->animationStartFrame = t;
   int localAnimFrame = t - puppet->animationStartFrame;
   for (uint8_t i = 0; i < puppet->boneTimelinePairsNum; i++) {
-    PuppetBoneTimelinePair pair = puppet->boneTimelinePairs[i];
+    e3d_PuppetBoneTimelinePair pair = puppet->boneTimelinePairs[i];
     if (pair.bone == NULL || pair.boneTimeline == NULL ||
         pair.boneTimeline->keyFrames == NULL)
       continue;
@@ -92,8 +92,8 @@ void perform(Puppet *puppet, uint32_t t) {
       continue;
 
     for (uint16_t j = 0; j < pair.boneTimeline->keyFramesNum - 1; j++) {
-      KeyFrame *keyFrame = &pair.boneTimeline->keyFrames[j];
-      KeyFrame *nextKeyFrame = &pair.boneTimeline->keyFrames[j + 1];
+      e3d_KeyFrame *keyFrame = &pair.boneTimeline->keyFrames[j];
+      e3d_KeyFrame *nextKeyFrame = &pair.boneTimeline->keyFrames[j + 1];
 
       if (localAnimFrame >= keyFrame->startFrameNum &&
           localAnimFrame < nextKeyFrame->startFrameNum) {
@@ -126,10 +126,10 @@ void perform(Puppet *puppet, uint32_t t) {
   draw_puppet(puppet);
 }
 
-static IPuppeteer puppet = {
+static e3d_IPuppeteer puppet = {
     .init_puppeteer = init_puppeteer,
     .create_puppet = create_puppet,
     .perform = perform,
 };
 
-const IPuppeteer *get_puppeteer(void) { return &puppet; }
+const e3d_IPuppeteer *get_puppeteer(void) { return &puppet; }

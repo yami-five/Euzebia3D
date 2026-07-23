@@ -6,9 +6,9 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_puppeteer)(const IStorage *storage, const IPainter *painter);
-  Puppet *(*create_puppet)(uint8_t puppetIndex);
-  void (*perform)(Puppet *puppet, uint32_t t);
-} IPuppeteer;
+  void (*init_puppeteer)(const e3d_IStorage *storage, const e3d_IPainter *painter);
+  e3d_Puppet *(*create_puppet)(uint8_t puppetIndex);
+  void (*perform)(e3d_Puppet *puppet, uint32_t t);
+} e3d_IPuppeteer;
 
 #endif

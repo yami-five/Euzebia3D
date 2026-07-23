@@ -222,7 +222,7 @@ static void set_lcd_cs_pin_low(void) {
 #endif
 }
 
-static IHardware hardware = {
+static e3d_IHardware hardware = {
     .init_hardware = init_hardware,
     .init_audio_i2s = init_audio_i2s,
     .write = write,
@@ -239,4 +239,4 @@ static IHardware hardware = {
     .set_lcd_cs_pin_low = set_lcd_cs_pin_low,
 };
 
-const IHardware *get_hardware(void) { return &hardware; }
+const e3d_IHardware *get_hardware(void) { return &hardware; }

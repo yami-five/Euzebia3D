@@ -7,6 +7,6 @@
 typedef struct {
   const uint16_t *characters;
   const uint8_t size;
-} Font;
+} e3d_Font;
 
 #endif

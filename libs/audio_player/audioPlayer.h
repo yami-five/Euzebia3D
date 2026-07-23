@@ -3,6 +3,6 @@
 
 #include "IAudioPlayer.h"
 
-const IAudioPlayer *get_audioPlayer(void);
+const e3d_IAudioPlayer *get_audioPlayer(void);
 
 #endif

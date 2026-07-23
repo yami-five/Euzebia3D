@@ -6,8 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-void make_local_matrix(PuppetBone *PuppetBone);
-void make_world_matrix(PuppetBone *PuppetBone, int *parentWorldMatrix);
-void update_world_matrices(Puppet *puppet);
+void make_local_matrix(e3d_PuppetBone *e3d_PuppetBone);
+void make_world_matrix(e3d_PuppetBone *e3d_PuppetBone, int *parentWorldMatrix);
+void update_world_matrices(e3d_Puppet *puppet);
 
 #endif

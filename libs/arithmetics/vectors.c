@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void mul_quaternion(Quaternion *out, const Quaternion *q1,
-                    const Quaternion *q2) {
+void mul_quaternion(e3d_Quaternion *out, const e3d_Quaternion *q1,
+                    const e3d_Quaternion *q2) {
   if (!q1 || !q2 || !out || !q1->vec || !q2->vec || !out->vec)
     return;
   out->w = fixed_mul(q1->w, q2->w) - fixed_mul(q1->vec->x, q2->vec->x) -
@@ -21,51 +21,51 @@ void mul_quaternion(Quaternion *out, const Quaternion *q1,
       fixed_mul(q1->vec->y, q2->vec->x) + fixed_mul(q1->vec->z, q2->w);
 }
 
-void add_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB) {
+void add_vectors(e3d_Vector3 *out, const e3d_Vector3 *vecA, const e3d_Vector3 *vecB) {
   out->x = vecA->x + vecB->x;
   out->y = vecA->y + vecB->y;
   out->z = vecA->z + vecB->z;
 }
 
-void sub_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB) {
+void sub_vectors(e3d_Vector3 *out, const e3d_Vector3 *vecA, const e3d_Vector3 *vecB) {
   out->x = vecA->x - vecB->x;
   out->y = vecA->y - vecB->y;
   out->z = vecA->z - vecB->z;
 }
 
-void mul_vectors(Vector3 *out, const Vector3 *vecA, const Vector3 *vecB) {
+void mul_vectors(e3d_Vector3 *out, const e3d_Vector3 *vecA, const e3d_Vector3 *vecB) {
   out->x = fixed_mul(vecA->y, vecB->z) - fixed_mul(vecA->z, vecB->y);
   out->y = fixed_mul(vecA->z, vecB->x) - fixed_mul(vecA->x, vecB->z);
   out->z = fixed_mul(vecA->x, vecB->y) - fixed_mul(vecA->y, vecB->x);
 }
 
-int32_t dot_product(const Vector3 *vecA, const Vector3 *vecB) {
+int32_t dot_product(const e3d_Vector3 *vecA, const e3d_Vector3 *vecB) {
   return fixed_mul(vecA->x, vecB->x) + fixed_mul(vecA->y, vecB->y) +
          fixed_mul(vecA->z, vecB->z);
 }
-void add_vec_scalar(Vector3 *vec, int32_t scal) {
+void add_vec_scalar(e3d_Vector3 *vec, int32_t scal) {
   vec->x = vec->x + scal;
   vec->y = vec->y + scal;
   vec->z = vec->z + scal;
 }
 
-void sub_vec_scalar(Vector3 *vec, int32_t scal) {
+void sub_vec_scalar(e3d_Vector3 *vec, int32_t scal) {
   vec->x = vec->x - scal;
   vec->y = vec->y - scal;
   vec->z = vec->z - scal;
 }
 
-void mul_vec_scalar(Vector3 *vec, const int32_t scal) {
+void mul_vec_scalar(e3d_Vector3 *vec, const int32_t scal) {
   vec->x = fixed_mul(vec->x, scal);
   vec->y = fixed_mul(vec->y, scal);
   vec->z = fixed_mul(vec->z, scal);
 }
 
-int32_t len_vector(const Vector3 *vec) {
+int32_t len_vector(const e3d_Vector3 *vec) {
   return fast_sqrt(fixed_pow(vec->x) + fixed_pow(vec->y) + fixed_pow(vec->z));
 }
 
-void norm_vector(Vector3 *vec) {
+void norm_vector(e3d_Vector3 *vec) {
   int32_t len = len_vector(vec);
   if (len == 0)
     return;

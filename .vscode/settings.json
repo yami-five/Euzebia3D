@@ -24,9 +24,6 @@
     "cmake.generator": "Ninja",
     "cmake.cmakePath": "${userHome}/.pico-sdk/cmake/v4.3.4/bin/cmake",
     "C_Cpp.debugShortcut": false,
-    "cortex-debug.armToolchainPath": "${userHome}/.pico-sdk/toolchain/15_2_Rel1/bin",
-    "cortex-debug.gdbPath": "${userHome}/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-gdb.exe",
-    "cortex-debug.openocdPath": "${userHome}/.pico-sdk/openocd/0.12.0+dev/openocd.exe",
     "terminal.integrated.env.windows": {
         "PICO_SDK_PATH": "${env:USERPROFILE}/.pico-sdk/sdk/2.3.0",
         "PICO_TOOLCHAIN_PATH": "${env:USERPROFILE}/.pico-sdk/toolchain/15_2_Rel1",
@@ -45,6 +42,5 @@
     "raspberry-pi-pico.cmakeAutoConfigure": true,
     "raspberry-pi-pico.useCmakeTools": false,
     "raspberry-pi-pico.cmakePath": "${HOME}/.pico-sdk/cmake/v4.3.4/bin/cmake",
-    "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.13.2/ninja",
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "raspberry-pi-pico.ninjaPath": "${HOME}/.pico-sdk/ninja/v1.13.2/ninja"
 }

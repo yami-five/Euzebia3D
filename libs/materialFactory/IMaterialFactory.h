@@ -7,11 +7,11 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_material_factory)(const IStorage *storage);
-  Material *(*create_diffuse_mat)(uint16_t color, float roughness,
+  void (*init_material_factory)(const e3d_IStorage *storage);
+  e3d_Material *(*create_diffuse_mat)(uint16_t color, float roughness,
                                   float metallic);
-  Material *(*create_textured_mat)(uint8_t imageIndex, float roughness,
+  e3d_Material *(*create_textured_mat)(uint8_t imageIndex, float roughness,
                                    float metallic, bool transparent);
-} IMaterialFactory;
+} e3d_IMaterialFactory;
 
 #endif

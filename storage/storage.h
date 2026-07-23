@@ -3,6 +3,6 @@
 
 #include "IStorage.h"
 
-const IStorage *get_storage(void);
+const e3d_IStorage *get_storage(void);
 
 #endif

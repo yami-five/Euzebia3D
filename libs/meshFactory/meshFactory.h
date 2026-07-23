@@ -3,6 +3,6 @@
 
 #include "IMeshFactory.h"
 
-const IMeshFactory *get_meshFactory(void);
+const e3d_IMeshFactory *get_meshFactory(void);
 
 #endif

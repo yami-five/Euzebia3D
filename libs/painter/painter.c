@@ -40,9 +40,9 @@
 #define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
 #define FONT_TRANSPARENT_COLOR 63519u
 #define FONT_GLYPH_END_COLOR 0u
-static const IHardware *_hardware = NULL;
-static const IDisplay *_display = NULL;
-static const IStorage *_storage = NULL;
+static const e3d_IHardware *_hardware = NULL;
+static const e3d_IDisplay *_display = NULL;
+static const e3d_IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 
 #if EUZEBIA3D_DEBUG_STAGE_ENABLED
@@ -183,8 +183,8 @@ static void init_dma(void) {
 }
 #endif
 
-void init_painter(const IDisplay *display, const IHardware *hardware,
-                  const IStorage *storage) {
+void init_painter(const e3d_IDisplay *display, const e3d_IHardware *hardware,
+                  const e3d_IStorage *storage) {
   _hardware = hardware;
   _display = display;
   _storage = storage;
@@ -281,7 +281,7 @@ void draw_image(uint8_t image_index) {
   if (_storage == NULL)
     return;
 
-  const Image *image = _storage->get_image(image_index);
+  const e3d_Image *image = _storage->get_image(image_index);
   if (image == NULL || image->image == NULL)
     return;
 
@@ -441,7 +441,7 @@ void middle_point(int16_t *x, int16_t *y, int16_t x1, int16_t y1, int16_t x2,
   *y = y1 + ((y2 - y1) >> 1);
 }
 
-static void draw_rectangle_size(const Sprite *sprite, int16_t pos_x,
+static void draw_rectangle_size(const e3d_Sprite *sprite, int16_t pos_x,
                                 int16_t pos_y, uint8_t scale) {
   if (sprite == NULL || sprite->pixels == NULL || scale == 0)
     return;
@@ -472,7 +472,7 @@ static void draw_rectangle_size(const Sprite *sprite, int16_t pos_x,
   }
 }
 
-void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y,
+void draw_sprite(const e3d_Sprite *sprite, int16_t pos_x, int16_t pos_y,
                  int32_t angle, uint8_t scale) {
   if (sprite == NULL || sprite->pixels == NULL || scale == 0)
     return;
@@ -536,7 +536,7 @@ void draw_sprite(const Sprite *sprite, int16_t pos_x, int16_t pos_y,
   }
 }
 
-void draw_background(Image *image) {
+void draw_background(e3d_Image *image) {
   if (image == NULL)
     return;
   if (image->image == NULL)
@@ -549,7 +549,7 @@ void draw_background(Image *image) {
   memcpy(buffer, image->image, BUFFER_SIZE);
 }
 
-static void draw_font_glyph(const Font *font, uint8_t glyph_index,
+static void draw_font_glyph(const e3d_Font *font, uint8_t glyph_index,
                             int16_t pos_x, int16_t pos_y, uint16_t color) {
   if (font == NULL || font->characters == NULL || font->size == 0u)
     return;
@@ -579,7 +579,7 @@ static void draw_font_glyph(const Font *font, uint8_t glyph_index,
   }
 }
 
-static uint8_t get_font_glyph_advance(const Font *font, uint8_t glyph_index) {
+static uint8_t get_font_glyph_advance(const e3d_Font *font, uint8_t glyph_index) {
   if (font == NULL || font->characters == NULL || font->size == 0u)
     return 0u;
 
@@ -609,7 +609,7 @@ static void print(const char *text, int16_t x, int16_t y, uint8_t fontIndex,
   if (text == NULL || _storage == NULL || _storage->get_font == NULL)
     return;
 
-  const Font *font = _storage->get_font(fontIndex);
+  const e3d_Font *font = _storage->get_font(fontIndex);
   if (font == NULL || font->characters == NULL || font->size == 0u)
     return;
 
@@ -676,7 +676,7 @@ void fade_fullscreen(uint8_t mode, uint32_t startFrame, uint32_t currentFrame) {
   }
 }
 
-void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y,
+void draw_scroller(const e3d_Scroller *scroller, uint16_t x, uint16_t y,
                    uint32_t startFrame, uint32_t currentFrame) {
   if (scroller == NULL || scroller->bitmap == NULL || scroller->width == 0 ||
       scroller->height == 0)
@@ -713,7 +713,7 @@ void draw_scroller(const Scroller *scroller, uint16_t x, uint16_t y,
 
 void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t,
                  uint8_t scale, int8_t facA, int8_t facB, int8_t facC,
-                 int8_t facD, Rectangle *rectangle) {
+                 int8_t facD, e3d_Rectangle *rectangle) {
   if (colors == NULL || colorsNum == 0 ||
       ((colorsNum & (colorsNum - 1)) != 0) || scale == 0)
     return;
@@ -785,7 +785,7 @@ void draw_plasma(uint16_t *colors, uint16_t colorsNum, uint32_t t,
   }
 }
 
-void draw_rectangle(Rectangle *rect, uint16_t color) {
+void draw_rectangle(e3d_Rectangle *rect, uint16_t color) {
   uint16_t span[DISPLAY_WIDTH];
   for (uint16_t i = 0; i < DISPLAY_WIDTH; i++) {
     span[i] = color;
@@ -795,7 +795,7 @@ void draw_rectangle(Rectangle *rect, uint16_t color) {
   }
 }
 
-void draw_line(Point *start, Point *end, uint16_t color) {
+void draw_line(e3d_Point *start, e3d_Point *end, uint16_t color) {
   if (start == NULL || end == NULL)
     return;
 
@@ -880,7 +880,7 @@ static inline uint16_t rgb888_to_rgb565_dithered(uint8_t r, uint8_t g,
   return rgb888_to_rgb565((uint8_t)rd, (uint8_t)gd, (uint8_t)bd);
 }
 
-void draw_gradient(uint16_t colorA, uint16_t colorB, Rectangle *rectangle,
+void draw_gradient(uint16_t colorA, uint16_t colorB, e3d_Rectangle *rectangle,
                    uint8_t direction) {
   if (rectangle == NULL || rectangle->width == 0u || rectangle->height == 0u)
     return;
@@ -948,7 +948,7 @@ void draw_gradient(uint16_t colorA, uint16_t colorB, Rectangle *rectangle,
   }
 }
 
-static IPainter painter = {
+static e3d_IPainter painter = {
     .init_painter = init_painter,
     .draw_buffer = draw_buffer,
     .clear_buffer = clear_buffer,
@@ -967,4 +967,4 @@ static IPainter painter = {
     .draw_line = draw_line,
 };
 
-const IPainter *get_painter(void) { return &painter; }
+const e3d_IPainter *get_painter(void) { return &painter; }

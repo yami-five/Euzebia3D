@@ -95,7 +95,7 @@
 #define TEXTURE_CACHE_PIXELS (TEXTURE_CACHE_SIZE * TEXTURE_CACHE_SIZE)
 #define TEXTURE_CACHE_SLOTS EUZEBIA3D_TEXTURE_CACHE_SLOTS
 
-const IRenderer *get_renderer(void);
+const e3d_IRenderer *get_renderer(void);
 void renderer_set_scale(uint8_t scale);
 
 #endif

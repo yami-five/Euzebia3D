@@ -5,23 +5,23 @@
 #include "mesh.h"
 #include <stdlib.h>
 
-static const IStorage *_storage = NULL;
+static const e3d_IStorage *_storage = NULL;
 
-void init_mesh_factory(const IStorage *storage) { _storage = storage; }
+void init_mesh_factory(const e3d_IStorage *storage) { _storage = storage; }
 
-Mesh *create_mesh(Material *mat, uint8_t meshIndex) {
+e3d_Mesh *create_mesh(e3d_Material *mat, uint8_t meshIndex) {
   if (_storage == NULL || mat == NULL) {
     free(mat);
     return NULL;
   }
 
-  const Model *obj = _storage->get_model(meshIndex);
+  const e3d_Model *obj = _storage->get_model(meshIndex);
   if (obj == NULL) {
     free(mat);
     return NULL;
   }
 
-  Mesh *mesh = (Mesh *)calloc(1, sizeof(Mesh));
+  e3d_Mesh *mesh = (e3d_Mesh *)calloc(1, sizeof(e3d_Mesh));
   if (mesh == NULL) {
     free(mat);
     return NULL;
@@ -77,9 +77,9 @@ Mesh *create_mesh(Material *mat, uint8_t meshIndex) {
   return mesh;
 }
 
-static IMeshFactory meshFactory = {
+static e3d_IMeshFactory meshFactory = {
     .init_mesh_factory = init_mesh_factory,
     .create_mesh = create_mesh,
 };
 
-const IMeshFactory *get_meshFactory(void) { return &meshFactory; }
+const e3d_IMeshFactory *get_meshFactory(void) { return &meshFactory; }

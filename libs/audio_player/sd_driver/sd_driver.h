@@ -48,7 +48,7 @@ void SD_SPI_SpeedLow(void);
 void SD_SPI_SpeedHigh(void);
 uint8_t SD_WaitReady(void);
 uint8_t SD_GetResponse(uint8_t Response);
-uint8_t SD_Initialize(const IHardware *hardware);
+uint8_t SD_Initialize(const e3d_IHardware *hardware);
 uint8_t SD_ReadDisk(uint8_t *buf, uint32_t sector, uint8_t cnt);
 uint8_t SD_WriteDisk(uint8_t *buf, uint32_t sector, uint8_t cnt);
 uint32_t SD_GetSectorCount(void);

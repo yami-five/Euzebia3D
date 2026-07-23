@@ -7,8 +7,8 @@
 #include <stdint.h>
 
 typedef struct {
-  void (*init_mesh_factory)(const IStorage *storage);
-  Mesh *(*create_mesh)(Material *mat, uint8_t meshIndex);
-} IMeshFactory;
+  void (*init_mesh_factory)(const e3d_IStorage *storage);
+  e3d_Mesh *(*create_mesh)(e3d_Material *mat, uint8_t meshIndex);
+} e3d_IMeshFactory;
 
 #endif

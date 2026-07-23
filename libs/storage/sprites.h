@@ -10,6 +10,6 @@ typedef struct {
   const uint16_t height;
   const uint16_t width;
   const bool canRotate;
-} Sprite;
+} e3d_Sprite;
 
 #endif

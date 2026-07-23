@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-static const IHardware *_hardware = NULL;
+static const e3d_IHardware *_hardware = NULL;
 
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #if defined(_MSC_VER)
@@ -172,14 +172,14 @@ static void play_wave_file(char *file_name) {
 #error "Unsupported Euzebia3D audio player platform"
 #endif
 
-static void init_audio_player(const IHardware *hardware) {
+static void init_audio_player(const e3d_IHardware *hardware) {
   _hardware = hardware;
   audio_player_init();
 }
 
-static IAudioPlayer audioPlayer = {
+static e3d_IAudioPlayer audioPlayer = {
     .init_audio_player = init_audio_player,
     .play_wave_file = play_wave_file,
 };
 
-const IAudioPlayer *get_audioPlayer(void) { return &audioPlayer; }
+const e3d_IAudioPlayer *get_audioPlayer(void) { return &audioPlayer; }
