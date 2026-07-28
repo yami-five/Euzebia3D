@@ -27,9 +27,8 @@ static uint16_t render_height_half = 60;
 // Render can be downscaled: render_scale=2 -> 160x120 rendered, scaled to LCD
 // in painter.
 
-static e3d_Primitive scene[MAX_OBJECTS_IN_SCENE];
+static e3d_Primitive scene[MAX_PRIMITIVES_IN_SCENE];
 static uint16_t sceneCounter = 0;
-static uint16_t sceneTrisCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
@@ -38,16 +37,11 @@ static e3d_Camera *sceneCamera;
 static e3d_Light *sceneLight;
 
 static e3d_Primitive *append_scene_primitive(e3d_PrimType type) {
-  if (sceneCounter >= MAX_OBJECTS_IN_SCENE)
-    return NULL;
-
-  if (type == TRIANGLE && sceneTrisCounter >= MAX_TRIS_IN_SCENE)
+  if (sceneCounter >= MAX_PRIMITIVES_IN_SCENE)
     return NULL;
 
   e3d_Primitive *primitive = &scene[sceneCounter++];
   primitive->type = type;
-  if (type == TRIANGLE)
-    sceneTrisCounter++;
   return primitive;
 }
 
@@ -1440,7 +1434,7 @@ typedef struct {
   uint16_t index;
   int32_t depth;
 } e3d_SceneDrawItem;
-static e3d_SceneDrawItem drawItems[MAX_OBJECTS_IN_SCENE];
+static e3d_SceneDrawItem drawItems[MAX_PRIMITIVES_IN_SCENE];
 
 static void draw_scaled_scene_pixel(int32_t x, int32_t y, uint16_t color) {
   if (_painter == NULL)
@@ -1939,7 +1933,6 @@ void add_line_to_scene(e3d_Line3D *line) {
 
 void clean_scene() {
   sceneCounter = 0;
-  sceneTrisCounter = 0;
 }
 
 void set_camera(e3d_Camera *camera) { sceneCamera = camera; }
