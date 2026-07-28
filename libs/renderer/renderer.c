@@ -29,6 +29,7 @@ static uint16_t render_height_half = 60;
 
 static e3d_Primitive scene[MAX_OBJECTS_IN_SCENE];
 static uint16_t sceneCounter = 0;
+static uint16_t sceneTrisCounter = 0;
 static uint16_t span_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_scaled_buffer[SPAN_BUFFER_MAX];
 static uint16_t span_length = 0;
@@ -40,8 +41,13 @@ static e3d_Primitive *append_scene_primitive(e3d_PrimType type) {
   if (sceneCounter >= MAX_OBJECTS_IN_SCENE)
     return NULL;
 
+  if (type == TRIANGLE && sceneTrisCounter >= MAX_TRIS_IN_SCENE)
+    return NULL;
+
   e3d_Primitive *primitive = &scene[sceneCounter++];
   primitive->type = type;
+  if (type == TRIANGLE)
+    sceneTrisCounter++;
   return primitive;
 }
 
@@ -1931,7 +1937,10 @@ void add_line_to_scene(e3d_Line3D *line) {
   primitive->pos.z = average_i32_pair(clipStart.z, clipEnd.z);
 }
 
-void clean_scene() { sceneCounter = 0; }
+void clean_scene() {
+  sceneCounter = 0;
+  sceneTrisCounter = 0;
+}
 
 void set_camera(e3d_Camera *camera) { sceneCamera = camera; }
 

@@ -21,7 +21,10 @@
 #define BASE_HEIGHT 240
 #endif
 #ifndef MAX_OBJECTS_IN_SCENE
-#define MAX_OBJECTS_IN_SCENE 1500
+#define MAX_OBJECTS_IN_SCENE 15000
+#endif
+#ifndef MAX_TRIS_IN_SCENE
+#define MAX_TRIS_IN_SCENE 1500
 #endif
 #ifndef SPAN_BUFFER_MAX
 #define SPAN_BUFFER_MAX 320
