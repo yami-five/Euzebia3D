@@ -2,8 +2,8 @@
 
 #define ZNEAR 4096       // floatToFixed(1.0f)
 #define ZFAR 409600      // floatToFixed(100.0f)
-#define ASPECTRATIO 5461 // 4:3
-#define TANFOV2 4096     // tan(fov/2) fov=90
+#define ASPECTRATIO 4096 // 1.0; the renderer outputs square display pixels
+#define TANFOV2 4096      // tan(fov/2) fov=90
 
 static void calculate_forward_vector(e3d_Vector3 *out, const e3d_Vector3 *pos,
                                      const e3d_Vector3 *target) {
@@ -41,7 +41,12 @@ void calculateViewMatrix(e3d_Camera *camera) {
 }
 
 void calculatePerspectiveMatrix(e3d_Camera *camera) {
-  camera->pMatrix[0] = fixed_div(SCALE_FACTOR, fixed_mul(TANFOV2, ASPECTRATIO));
+  // Screen-space projection currently treats the perspective-divide result as
+  // a pixel offset directly. Applying the 4:3 viewport aspect here therefore
+  // compressed X and produced visibly rectangular pixels. Keep the horizontal
+  // and vertical projection scales equal for square pixels.
+  camera->pMatrix[0] =
+      fixed_div(SCALE_FACTOR, fixed_mul(TANFOV2, ASPECTRATIO));
   camera->pMatrix[1] = camera->pMatrix[2] = camera->pMatrix[3] = 0;
   camera->pMatrix[4] = 0;
   camera->pMatrix[5] = fixed_div(SCALE_FACTOR, TANFOV2);
