@@ -154,6 +154,31 @@ e3d_Camera *e3d_Camera_CreateCamera(e3d_EngineContext *engine_ctx, float camX,
       camX, camY, camZ, targetX, targetY, targetZ, upX, upY, upZ);
 }
 
+e3d_TransformInfo *e3d_Camera_AddTransformation(
+    e3d_EngineContext *engine_ctx, e3d_Camera *camera, float w, float x, float y,
+    float z,
+    e3d_CameraTransformType transformationType) {
+  (void)engine_ctx;
+  if (camera == NULL)
+    return NULL;
+
+  camera->transformations = add_camera_transformation(
+      camera->transformations, &camera->transformationsNum, w, x, y, z,
+      transformationType);
+  return camera->transformations;
+}
+
+void e3d_Camera_ModifyTransformation(
+    e3d_EngineContext *engine_ctx, e3d_Camera *camera, float w, float x, float y,
+    float z, uint32_t transformationIndex) {
+  (void)engine_ctx;
+  if (camera == NULL || transformationIndex >= camera->transformationsNum)
+    return;
+
+  modify_camera_transformation(camera->transformations, w, x, y, z,
+                               transformationIndex);
+}
+
 // e3d_Light
 e3d_Light *e3d_Light_CreatePointLight(e3d_EngineContext *engine_ctx, float x, float y,
                                   float z, float intensity, uint16_t color) {
@@ -175,19 +200,26 @@ e3d_Mesh *e3d_Mesh_CreateMesh(e3d_EngineContext *engine_ctx, e3d_Material *mat,
 }
 
 e3d_TransformInfo *e3d_Mesh_AddTransformation(
-    e3d_EngineContext *engine_ctx, e3d_TransformInfo *currentTransformations,
-    uint32_t *currentTransformationsNum, float w, float x, float y, float z,
+    e3d_EngineContext *engine_ctx, e3d_Mesh *mesh, float w, float x, float y, float z,
     e3d_ModelTransformType transformationType) {
   (void)engine_ctx;
-  return add_transformation(currentTransformations, currentTransformationsNum,
-                            w, x, y, z, transformationType);
+  if (mesh == NULL)
+    return NULL;
+
+  mesh->transformations =
+      add_transformation(mesh->transformations, &mesh->transformationsNum, w, x,
+                         y, z, transformationType);
+  return mesh->transformations;
 }
 
 void e3d_Mesh_ModifyTransformation(
-    e3d_EngineContext *engine_ctx, e3d_TransformInfo *currentTransformations,
-    float w, float x, float y, float z, uint32_t transformationIndex) {
+    e3d_EngineContext *engine_ctx, e3d_Mesh *mesh, float w, float x, float y,
+    float z, uint32_t transformationIndex) {
   (void)engine_ctx;
-  modify_mesh_transformation(currentTransformations, w, x, y, z,
+  if (mesh == NULL || transformationIndex >= mesh->transformationsNum)
+    return;
+
+  modify_mesh_transformation(mesh->transformations, w, x, y, z,
                              transformationIndex);
 }
 

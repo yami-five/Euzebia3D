@@ -96,22 +96,18 @@ int main(void)
   e3d_Material *mugMat =
       e3d_Material_CreateTexturedMat(&engine_ctx, 0, 0.0f, 0.0f, false);
   e3d_Mesh *mug = e3d_Mesh_CreateMesh(&engine_ctx, mugMat, 1);
-  mug->transformations = e3d_Mesh_AddTransformation(
-      &engine_ctx, mug->transformations, &mug->transformationsNum, 0, 0.0f,
-      0.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-  mug->transformations = e3d_Mesh_AddTransformation(
-      &engine_ctx, mug->transformations, &mug->transformationsNum, 0, 0.0f,
-      0.0f, 0.3f, MODEL_TRANSFORM_TRANSLATE);
+  e3d_Mesh_AddTransformation(&engine_ctx, mug, 0, 0.0f, 0.0f, 0.0f,
+                             MODEL_TRANSFORM_ROTATE);
+  e3d_Mesh_AddTransformation(&engine_ctx, mug, 0, 0.0f, 0.0f, 0.3f,
+                             MODEL_TRANSFORM_TRANSLATE);
 
   e3d_Material *roomMat =
       e3d_Material_CreateTexturedMat(&engine_ctx, 1, 0.0f, 0.0f, false);
   e3d_Mesh *room = e3d_Mesh_CreateMesh(&engine_ctx, roomMat, 2);
-  room->transformations = e3d_Mesh_AddTransformation(
-      &engine_ctx, room->transformations, &room->transformationsNum, 0.2f,
-      0.0f, 1.0f, 0.0f, MODEL_TRANSFORM_ROTATE);
-  room->transformations = e3d_Mesh_AddTransformation(
-      &engine_ctx, room->transformations, &room->transformationsNum, 0, 2.2f,
-      2.2f, 2.2f, MODEL_TRANSFORM_SCALE);
+  e3d_Mesh_AddTransformation(&engine_ctx, room, 0.2f, 0.0f, 1.0f, 0.0f,
+                             MODEL_TRANSFORM_ROTATE);
+  e3d_Mesh_AddTransformation(&engine_ctx, room, 0, 2.2f, 2.2f, 2.2f,
+                             MODEL_TRANSFORM_SCALE);
 
   e3d_Light *light = e3d_Light_CreatePointLight(
       &engine_ctx, -10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
@@ -173,10 +169,10 @@ int main(void)
     (void)qt;
     e3d_Renderer_CleanScene(&engine_ctx);
     EUZEBIA3D_SET_DEBUG_STAGE(110);
-    e3d_Mesh_ModifyTransformation(&engine_ctx, room->transformations, qt, 0.0f,
-                                  -10.0f, 0.0f, 0);
-    e3d_Mesh_ModifyTransformation(&engine_ctx, mug->transformations, qt, 10.0f,
-                                  -10.0f, 10.0f, 0);
+    e3d_Mesh_ModifyTransformation(&engine_ctx, room, qt, 0.0f, -10.0f, 0.0f,
+                                  0);
+    e3d_Mesh_ModifyTransformation(&engine_ctx, mug, qt, 10.0f, -10.0f, 10.0f,
+                                  0);
     EUZEBIA3D_SET_DEBUG_STAGE(120);
     e3d_Renderer_AddModelToScene(&engine_ctx, room);
     e3d_Renderer_AddModelToScene(&engine_ctx, mug);

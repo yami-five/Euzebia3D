@@ -131,6 +131,15 @@ e3d_Camera *e3d_Camera_CreateCamera(e3d_EngineContext *engine_ctx, float camX,
                                 float camY, float camZ, float targetX,
                                 float targetY, float targetZ, float upX,
                                 float upY, float upZ);
+/// Appends a transformation to a camera and updates its transformation count.
+e3d_TransformInfo *e3d_Camera_AddTransformation(
+    e3d_EngineContext *engine_ctx, e3d_Camera *camera, float w, float x, float y,
+    float z,
+    e3d_CameraTransformType transformationType);
+/// Replaces the values of an existing camera transformation at the given index.
+void e3d_Camera_ModifyTransformation(
+    e3d_EngineContext *engine_ctx, e3d_Camera *camera, float w, float x, float y,
+    float z, uint32_t transformationIndex);
 // e3d_Light
 /// Creates a point light at the specified position.
 e3d_Light *e3d_Light_CreatePointLight(e3d_EngineContext *engine_ctx, float x, float y,
@@ -143,15 +152,14 @@ e3d_Light *e3d_Light_CreateDirectionalLight(e3d_EngineContext *engine_ctx, float
 /// Creates a mesh from the indexed mesh resource and assigns its material.
 e3d_Mesh *e3d_Mesh_CreateMesh(e3d_EngineContext *engine_ctx, e3d_Material *mat,
                           uint8_t meshIndex);
-/// Appends a transformation to a mesh transformation list and updates its count.
+/// Appends a transformation to a mesh and updates its transformation count.
 e3d_TransformInfo *e3d_Mesh_AddTransformation(
-    e3d_EngineContext *engine_ctx, e3d_TransformInfo *currentTransformations,
-    uint32_t *currentTransformationsNum, float w, float x, float y, float z,
+    e3d_EngineContext *engine_ctx, e3d_Mesh *mesh, float w, float x, float y, float z,
     e3d_ModelTransformType transformationType);
 /// Replaces the values of an existing mesh transformation at the given index.
 void e3d_Mesh_ModifyTransformation(
-    e3d_EngineContext *engine_ctx, e3d_TransformInfo *currentTransformations,
-    float w, float x, float y, float z, uint32_t transformationIndex);
+    e3d_EngineContext *engine_ctx, e3d_Mesh *mesh, float w, float x, float y,
+    float z, uint32_t transformationIndex);
 // e3d_Material
 /// Creates a diffuse material with the specified color and surface properties.
 e3d_Material *e3d_Material_CreateDiffuseMat(e3d_EngineContext *engine_ctx,
