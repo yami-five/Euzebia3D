@@ -179,6 +179,11 @@ void e3d_Camera_ModifyTransformation(
                                transformationIndex);
 }
 
+void e3d_Camera_UpdateCamera(e3d_EngineContext *engine_ctx, e3d_Camera *camera) {
+  (void)engine_ctx;
+  update_camera(camera);
+}
+
 // e3d_Light
 e3d_Light *e3d_Light_CreatePointLight(e3d_EngineContext *engine_ctx, float x, float y,
                                   float z, float intensity, uint16_t color) {

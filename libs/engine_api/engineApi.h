@@ -140,6 +140,8 @@ e3d_TransformInfo *e3d_Camera_AddTransformation(
 void e3d_Camera_ModifyTransformation(
     e3d_EngineContext *engine_ctx, e3d_Camera *camera, float w, float x, float y,
     float z, uint32_t transformationIndex);
+/// Applies camera transformations and recalculates its view and projection matrices.
+void e3d_Camera_UpdateCamera(e3d_EngineContext *engine_ctx, e3d_Camera *camera);
 // e3d_Light
 /// Creates a point light at the specified position.
 e3d_Light *e3d_Light_CreatePointLight(e3d_EngineContext *engine_ctx, float x, float y,
