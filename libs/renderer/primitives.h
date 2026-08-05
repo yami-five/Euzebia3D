@@ -30,7 +30,7 @@ typedef struct {
   e3d_Triangle3D TriangleOnScreen;
   e3d_Triangle2D UV;
   int32_t LightDistances[3];
-  e3d_Material *mat;
+  const e3d_Material *mat;
 } e3d_TriangleInScene;
 
 typedef struct {

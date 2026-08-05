@@ -9,21 +9,18 @@ static const e3d_IStorage *_storage = NULL;
 
 void init_mesh_factory(const e3d_IStorage *storage) { _storage = storage; }
 
-e3d_Mesh *create_mesh(e3d_Material *mat, uint8_t meshIndex) {
+e3d_Mesh *create_mesh(const e3d_Material *mat, uint8_t meshIndex) {
   if (_storage == NULL || mat == NULL) {
-    free(mat);
     return NULL;
   }
 
   const e3d_Model *obj = _storage->get_model(meshIndex);
   if (obj == NULL) {
-    free(mat);
     return NULL;
   }
 
   e3d_Mesh *mesh = (e3d_Mesh *)calloc(1, sizeof(e3d_Mesh));
   if (mesh == NULL) {
-    free(mat);
     return NULL;
   }
 

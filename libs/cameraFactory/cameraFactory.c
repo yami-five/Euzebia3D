@@ -5,19 +5,6 @@
 #include "fpa.h"
 #include <stdlib.h>
 
-static void free_partial_camera(e3d_Camera *cam) {
-  if (cam == NULL)
-    return;
-  free(cam->pos);
-  free(cam->target);
-  free(cam->up);
-  free(cam->forward);
-  free(cam->right);
-  free(cam->vMatrix);
-  free(cam->pMatrix);
-  free(cam);
-}
-
 e3d_Camera *create_camera(float camX, float camY, float camZ, float targetX,
                       float targetY, float targetZ, float upX, float upY,
                       float upZ) {
@@ -35,7 +22,7 @@ e3d_Camera *create_camera(float camX, float camY, float camZ, float targetX,
   if (cam->pos == NULL || cam->target == NULL || cam->up == NULL ||
       cam->forward == NULL || cam->right == NULL || cam->vMatrix == NULL ||
       cam->pMatrix == NULL) {
-    free_partial_camera(cam);
+    free_camera(cam);
     return NULL;
   }
 

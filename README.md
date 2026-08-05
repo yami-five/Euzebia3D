@@ -88,6 +88,21 @@ All public engine-owned types use the `e3d_` prefix. API functions follow the
 `e3d_<Module>_<Operation>` naming scheme, for example
 `e3d_Painter_Print()` and `e3d_Renderer_RenderScene()`.
 
+Meshes borrow their materials, so a material may be shared by multiple meshes.
+Delete all meshes that reference a material before deleting the material itself:
+
+```c
+e3d_Mesh_DeleteMesh(&engine_ctx, &mesh);
+e3d_Material_DeleteMat(&engine_ctx, &material);
+e3d_Light_DeleteLight(&engine_ctx, &light);
+e3d_Camera_DeleteCamera(&engine_ctx, &camera);
+```
+
+The delete functions accept pointer-to-pointer arguments and set successfully
+deleted object pointers to `NULL`. Deleting a camera or light also detaches it
+from the renderer; deleting the active light removes queued triangles that need
+it. Deleting a material removes queued scene triangles that reference it.
+
 For CMake consumers, link only the aggregate API target:
 
 ```cmake

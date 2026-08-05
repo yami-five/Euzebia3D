@@ -19,6 +19,9 @@ typedef struct {
   void (*set_scale)(uint8_t scale);
   void (*set_camera)(e3d_Camera *camera);
   void (*set_light)(e3d_Light *light);
+  void (*unset_camera)(const e3d_Camera *camera);
+  void (*unset_light)(const e3d_Light *light);
+  void (*remove_material_from_scene)(const e3d_Material *material);
 } e3d_IRenderer;
 
 #endif

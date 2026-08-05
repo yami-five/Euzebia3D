@@ -174,7 +174,7 @@ static inline void set_active_texture_data(const uint16_t *texture,
   activeTextureHeightShift = texture_dimension_shift(height);
 }
 
-static inline void set_active_texture_direct(e3d_Material *mat) {
+static inline void set_active_texture_direct(const e3d_Material *mat) {
   if (mat == NULL) {
     set_active_texture_data(NULL, 0, 0);
     return;
@@ -182,7 +182,7 @@ static inline void set_active_texture_direct(e3d_Material *mat) {
   set_active_texture_data(mat->texture, mat->textureWidth, mat->textureHeight);
 }
 
-static void prepare_texture_cache(e3d_Material *mat) {
+static void prepare_texture_cache(const e3d_Material *mat) {
   set_active_texture_direct(mat);
 
 #if EUZEBIA3D_TEXTURE_CACHE_ENABLED
@@ -990,7 +990,8 @@ static inline void fill_span(uint16_t *dst, uint16_t length, uint16_t color) {
     dst[i] = color;
 }
 
-static void texture_span(uint16_t *dst, uint16_t length, e3d_Material *mat,
+static void texture_span(uint16_t *dst, uint16_t length,
+                         const e3d_Material *mat,
                          int32_t U, int32_t dUdx, int32_t V, int32_t dVdx,
                          int32_t Z, int32_t dZdx) {
   const uint16_t *texture = activeTextureData;
@@ -1137,8 +1138,9 @@ static e3d_SpanLerpState make_span_lerp_state(int32_t x0, int32_t x_start,
   return state;
 }
 
-static void build_material_span(uint16_t *dst, uint16_t length, e3d_Material *mat,
-                                e3d_Light *light, const e3d_SpanLerpState *lerp) {
+static void build_material_span(uint16_t *dst, uint16_t length,
+                                const e3d_Material *mat, e3d_Light *light,
+                                const e3d_SpanLerpState *lerp) {
   if (length == 0)
     return;
 
@@ -1159,9 +1161,10 @@ inline int32_t calc_pixel_depth(int32_t Ba, int32_t Bb, int32_t Bc, int32_t z1,
   return inverse(z);
 }
 
-void rasterize(int32_t y, int32_t x0, int32_t x1, e3d_Material *mat, e3d_Light *light,
-               int32_t L0, int32_t L1, int32_t U0, int32_t U1, int32_t V0,
-               int32_t V1, int32_t Z0, int32_t Z1) {
+void rasterize(int32_t y, int32_t x0, int32_t x1,
+               const e3d_Material *mat, e3d_Light *light, int32_t L0,
+               int32_t L1, int32_t U0, int32_t U1, int32_t V0, int32_t V1,
+               int32_t Z0, int32_t Z1) {
   // Scanline rasterizer: barycentrics per line, then per-pixel interpolation
   if (y < 0 || y >= render_height)
     return;
@@ -1262,8 +1265,8 @@ inline void swap_int32(int32_t *x, int32_t *y) {
   *y = temp;
 }
 
-void tri(e3d_TriangleToRender *triangle, e3d_Material *mat, int32_t lightDistances[],
-         e3d_Light *light) {
+void tri(e3d_TriangleToRender *triangle, const e3d_Material *mat,
+         int32_t lightDistances[], e3d_Light *light) {
   RENDERER_SET_DEBUG_STAGE(400);
   prepare_texture_cache(mat);
   RENDERER_SET_DEBUG_STAGE(401);
@@ -1939,6 +1942,40 @@ void set_camera(e3d_Camera *camera) { sceneCamera = camera; }
 
 void set_light(e3d_Light *light) { sceneLight = light; }
 
+void unset_camera(const e3d_Camera *camera) {
+  if (sceneCamera == camera)
+    sceneCamera = NULL;
+}
+
+void unset_light(const e3d_Light *light) {
+  if (sceneLight != light)
+    return;
+
+  sceneLight = NULL;
+
+  uint16_t writeIndex = 0;
+  for (uint16_t readIndex = 0; readIndex < sceneCounter; readIndex++) {
+    if (scene[readIndex].type != TRIANGLE)
+      scene[writeIndex++] = scene[readIndex];
+  }
+  sceneCounter = writeIndex;
+}
+
+void remove_material_from_scene(const e3d_Material *material) {
+  uint16_t writeIndex = 0;
+
+  for (uint16_t readIndex = 0; readIndex < sceneCounter; readIndex++) {
+    e3d_Primitive *primitive = &scene[readIndex];
+    bool usesMaterial =
+        primitive->type == TRIANGLE && primitive->payload.triangle.mat == material;
+
+    if (!usesMaterial)
+      scene[writeIndex++] = *primitive;
+  }
+
+  sceneCounter = writeIndex;
+}
+
 static e3d_IRenderer renderer = {
     .init_renderer = init_renderer,
     .render_scene = render_scene,
@@ -1949,6 +1986,9 @@ static e3d_IRenderer renderer = {
     .set_scale = renderer_set_scale,
     .set_camera = set_camera,
     .set_light = set_light,
+    .unset_camera = unset_camera,
+    .unset_light = unset_light,
+    .remove_material_from_scene = remove_material_from_scene,
 };
 
 const e3d_IRenderer *get_renderer(void) { return &renderer; }

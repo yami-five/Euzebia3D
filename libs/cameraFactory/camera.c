@@ -186,3 +186,23 @@ void update_camera(e3d_Camera *camera) {
   calculateViewMatrix(camera);
   calculatePerspectiveMatrix(camera);
 }
+
+void free_camera(e3d_Camera *camera) {
+  if (camera == NULL)
+    return;
+
+  if (camera->transformations != NULL) {
+    for (uint32_t i = 0; i < camera->transformationsNum; i++)
+      free(camera->transformations[i].transformVector);
+    free(camera->transformations);
+  }
+
+  free(camera->pos);
+  free(camera->target);
+  free(camera->up);
+  free(camera->forward);
+  free(camera->right);
+  free(camera->vMatrix);
+  free(camera->pMatrix);
+  free(camera);
+}

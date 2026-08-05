@@ -37,5 +37,6 @@ void modify_camera_transformation(e3d_TransformInfo *currentTransformations,
                                   uint32_t transformationIndex);
 void camera_apply_transformations(e3d_Camera *camera);
 void update_camera(e3d_Camera *camera);
+void free_camera(e3d_Camera *camera);
 
 #endif

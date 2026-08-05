@@ -21,7 +21,7 @@ typedef struct {
   uint16_t *normals;
   int32_t *vn;
   uint16_t vnCounter;
-  e3d_Material *mat;
+  const e3d_Material *mat;
   e3d_TransformInfo *transformations;
   uint32_t transformationsNum;
 } e3d_Mesh;

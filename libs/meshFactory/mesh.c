@@ -50,7 +50,6 @@ void free_model(e3d_Mesh *mesh) {
     }
     free(mesh->transformations);
   }
-  free(mesh->mat);
   free(mesh->faces);
   free(mesh->vertices);
   free(mesh->textureCoords);
