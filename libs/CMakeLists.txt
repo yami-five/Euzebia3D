@@ -115,7 +115,7 @@ target_include_directories(
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/cameraFactory
 )
-target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Transformations)
+target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
 add_library(
     Euzebia3D_Display

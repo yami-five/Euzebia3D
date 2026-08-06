@@ -136,18 +136,14 @@ e3d_Camera *e3d_Camera_CreateCamera(e3d_EngineContext *engine_ctx, float camX,
                                     float camY, float camZ, float targetX,
                                     float targetY, float targetZ, float upX,
                                     float upY, float upZ);
-/// Appends a transformation to a camera and updates its transformation count.
-e3d_TransformInfo *
-e3d_Camera_AddTransformation(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
-                             float w, float x, float y, float z,
-                             e3d_CameraTransformType transformationType);
-/// Replaces the values of an existing camera transformation at the given index.
-void e3d_Camera_ModifyTransformation(e3d_EngineContext *engine_ctx,
-                                     e3d_Camera *camera, float w, float x,
-                                     float y, float z,
-                                     uint32_t transformationIndex);
-/// Applies camera transformations and recalculates its view and projection
-/// matrices.
+/// Sets camera position. Invoke e3d_Camera_UpdateCamera() to apply changes.
+void e3d_Camera_SetPos(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
+                       float x, float y, float z);
+/// Sets camera's target position. Invoke e3d_Camera_UpdateCamera() to apply
+/// changes.
+void e3d_Camera_SetTargetPos(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
+                             float x, float y, float z);
+/// Recalculates camera view and projection matrices.
 void e3d_Camera_UpdateCamera(e3d_EngineContext *engine_ctx, e3d_Camera *camera);
 /// Removes camera
 void e3d_Camera_DeleteCamera(e3d_EngineContext *engine_ctx,

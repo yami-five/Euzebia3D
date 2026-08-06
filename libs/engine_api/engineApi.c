@@ -159,30 +159,20 @@ e3d_Camera *e3d_Camera_CreateCamera(e3d_EngineContext *engine_ctx, float camX,
       camX, camY, camZ, targetX, targetY, targetZ, upX, upY, upZ);
 }
 
-e3d_TransformInfo *
-e3d_Camera_AddTransformation(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
-                             float w, float x, float y, float z,
-                             e3d_CameraTransformType transformationType) {
+void e3d_Camera_SetPos(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
+                       float x, float y, float z) {
   (void)engine_ctx;
   if (camera == NULL)
-    return NULL;
-
-  camera->transformations = add_camera_transformation(
-      camera->transformations, &camera->transformationsNum, w, x, y, z,
-      transformationType);
-  return camera->transformations;
+    return;
+  set_camera_pos(camera, x, y, z);
 }
 
-void e3d_Camera_ModifyTransformation(e3d_EngineContext *engine_ctx,
-                                     e3d_Camera *camera, float w, float x,
-                                     float y, float z,
-                                     uint32_t transformationIndex) {
+void e3d_Camera_SetTargetPos(e3d_EngineContext *engine_ctx, e3d_Camera *camera,
+                             float x, float y, float z) {
   (void)engine_ctx;
-  if (camera == NULL || transformationIndex >= camera->transformationsNum)
+  if (camera == NULL)
     return;
-
-  modify_camera_transformation(camera->transformations, w, x, y, z,
-                               transformationIndex);
+  set_camera_target_pos(camera, x, y, z);
 }
 
 void e3d_Camera_UpdateCamera(e3d_EngineContext *engine_ctx,

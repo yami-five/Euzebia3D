@@ -3,7 +3,7 @@
 #define ZNEAR 4096       // floatToFixed(1.0f)
 #define ZFAR 409600      // floatToFixed(100.0f)
 #define ASPECTRATIO 4096 // 1.0; the renderer outputs square display pixels
-#define TANFOV2 4096      // tan(fov/2) fov=90
+#define TANFOV2 4096     // tan(fov/2) fov=90
 
 static void calculate_forward_vector(e3d_Vector3 *out, const e3d_Vector3 *pos,
                                      const e3d_Vector3 *target) {
@@ -45,8 +45,7 @@ void calculatePerspectiveMatrix(e3d_Camera *camera) {
   // a pixel offset directly. Applying the 4:3 viewport aspect here therefore
   // compressed X and produced visibly rectangular pixels. Keep the horizontal
   // and vertical projection scales equal for square pixels.
-  camera->pMatrix[0] =
-      fixed_div(SCALE_FACTOR, fixed_mul(TANFOV2, ASPECTRATIO));
+  camera->pMatrix[0] = fixed_div(SCALE_FACTOR, fixed_mul(TANFOV2, ASPECTRATIO));
   camera->pMatrix[1] = camera->pMatrix[2] = camera->pMatrix[3] = 0;
   camera->pMatrix[4] = 0;
   camera->pMatrix[5] = fixed_div(SCALE_FACTOR, TANFOV2);
@@ -60,126 +59,22 @@ void calculatePerspectiveMatrix(e3d_Camera *camera) {
   camera->pMatrix[15] = 0;
 }
 
-e3d_TransformInfo *add_camera_transformation(e3d_TransformInfo *currentTransformations,
-                                         uint32_t *currentTransformationsNum,
-                                         float w, float x, float y, float z,
-                                         uint8_t transformationType) {
-  if (currentTransformationsNum == NULL)
-    return currentTransformations;
-
-  if (transformationType > CAMERA_TRANSFORM_ROTATE_TARGET)
-    return currentTransformations;
-
-  uint32_t oldTransformationsNum = *currentTransformationsNum;
-  uint32_t newTransformationsNum = oldTransformationsNum + 1u;
-  e3d_TransformInfo *newTransformations = (e3d_TransformInfo *)realloc(
-      currentTransformations, newTransformationsNum * sizeof(e3d_TransformInfo));
-  if (newTransformations == NULL)
-    return currentTransformations;
-
-  e3d_TransformVector *newVector =
-      (e3d_TransformVector *)malloc(sizeof(e3d_TransformVector));
-  if (newVector == NULL)
-    return newTransformations;
-
-  newTransformations[oldTransformationsNum].transformVector = newVector;
-  newTransformations[oldTransformationsNum].transformType = transformationType;
-  newTransformations[oldTransformationsNum].transformVector->w =
-      float_to_fixed(w);
-  newTransformations[oldTransformationsNum].transformVector->x =
-      float_to_fixed(x);
-  newTransformations[oldTransformationsNum].transformVector->y =
-      float_to_fixed(y);
-  newTransformations[oldTransformationsNum].transformVector->z =
-      float_to_fixed(z);
-  *currentTransformationsNum = newTransformationsNum;
-
-  return newTransformations;
+void set_camera_pos(e3d_Camera *camera, float x, float y, float z) {
+  camera->pos->x = float_to_fixed(x);
+  camera->pos->y = float_to_fixed(y);
+  camera->pos->z = float_to_fixed(z);
 }
 
-void modify_camera_transformation(e3d_TransformInfo *currentTransformations,
-                                  float w, float x, float y, float z,
-                                  uint32_t transformationIndex) {
-  modify_transformation(currentTransformations, w, x, y, z,
-                        transformationIndex);
-}
-
-static void rotate_vector(e3d_Vector3 *resultVec, e3d_TransformVector *transVec) {
-  int32_t qt_rad = fixed_mul(transVec->w, PI2);
-  int32_t c = fast_cos(qt_rad >> 1);
-  int32_t s = fast_sin(qt_rad >> 1);
-  e3d_Vector3 qVec = {.x = transVec->x, .y = transVec->y, .z = transVec->z};
-  e3d_Quaternion q = {.w = c, .vec = &qVec};
-  norm_vector(q.vec);
-  mul_vec_scalar(q.vec, s);
-  e3d_Vector3 qVecInv = {.x = -q.vec->x, .y = -q.vec->y, .z = -q.vec->z};
-  e3d_Quaternion qInv = {.w = c, .vec = &qVecInv};
-
-  e3d_Quaternion q_vertex = {.w = 0, .vec = resultVec};
-
-  e3d_Vector3 resultVec1;
-  e3d_Quaternion result = {.w = 0, .vec = &resultVec1};
-
-  mul_quaternion(&result, &q, &q_vertex);
-
-  e3d_Vector3 resultVec2;
-  e3d_Quaternion result2 = {.w = 0, .vec = &resultVec2};
-
-  mul_quaternion(&result2, &result, &qInv);
-
-  resultVec->x = result2.vec->x;
-  resultVec->y = result2.vec->y;
-  resultVec->z = result2.vec->z;
-}
-
-static void translate_vector(e3d_Vector3 *resultVec, e3d_TransformVector *transVec) {
-  resultVec->x += transVec->x;
-  resultVec->y += transVec->y;
-  resultVec->z += transVec->z;
-}
-
-void camera_apply_transformations(e3d_Camera *camera) {
-  if (camera == NULL || camera->transformations == NULL ||
-      camera->transformationsNum == 0)
-    return;
-
-  for (uint32_t i = 0; i < camera->transformationsNum; i++) {
-    e3d_TransformInfo *info = &camera->transformations[i];
-    if (info->transformType == CAMERA_TRANSFORM_TRANSLATE)
-      translate_vector(camera->pos, info->transformVector);
-    if (info->transformType == CAMERA_TRANSFORM_ROTATE) {
-      e3d_Vector3 offset = {
-          .x = camera->pos->x - camera->target->x,
-          .y = camera->pos->y - camera->target->y,
-          .z = camera->pos->z - camera->target->z,
-      };
-      rotate_vector(&offset, info->transformVector);
-      camera->pos->x = camera->target->x + offset.x;
-      camera->pos->y = camera->target->y + offset.y;
-      camera->pos->z = camera->target->z + offset.z;
-      // rotate_vector(camera->up, info->transformVector);
-    }
-    if (info->transformType == CAMERA_TRANSFORM_TRANSLATE_TARGET)
-      translate_vector(camera->target, info->transformVector);
-    if (info->transformType == CAMERA_TRANSFORM_ROTATE_TARGET) {
-      e3d_Vector3 offset = {
-          .x = camera->target->x - camera->pos->x,
-          .y = camera->target->y - camera->pos->y,
-          .z = camera->target->z - camera->pos->z,
-      };
-      rotate_vector(&offset, info->transformVector);
-      camera->target->x = camera->pos->x + offset.x;
-      camera->target->y = camera->pos->y + offset.y;
-      camera->target->z = camera->pos->z + offset.z;
-    }
-  }
+void set_camera_target_pos(e3d_Camera *camera, float x, float y, float z) {
+  camera->target->x = float_to_fixed(x);
+  camera->target->y = float_to_fixed(y);
+  camera->target->z = float_to_fixed(z);
 }
 
 void update_camera(e3d_Camera *camera) {
   if (camera == NULL || camera->pos == NULL || camera->target == NULL ||
       camera->up == NULL || camera->right == NULL || camera->forward == NULL)
     return;
-  camera_apply_transformations(camera);
   calculate_forward_vector(camera->forward, camera->pos, camera->target);
   calculate_right_vector(camera->right, camera->up, camera->forward);
   calculate_up_vector(camera->up, camera->forward, camera->right);
@@ -190,12 +85,6 @@ void update_camera(e3d_Camera *camera) {
 void free_camera(e3d_Camera *camera) {
   if (camera == NULL)
     return;
-
-  if (camera->transformations != NULL) {
-    for (uint32_t i = 0; i < camera->transformationsNum; i++)
-      free(camera->transformations[i].transformVector);
-    free(camera->transformations);
-  }
 
   free(camera->pos);
   free(camera->target);
