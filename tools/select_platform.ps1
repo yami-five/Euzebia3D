@@ -42,9 +42,6 @@ option(DEBUG_MODE "Show metrics on the display" ON)
 
 $pico = @'
 
-set(EUZEBIA3D_PLATFORM "PICO")
-set(EUZEBIA3D_PLATFORM_NORMALIZED "PICO")
-
 option(EUZEBIA3D_USE_PSRAM "Enable optional PSRAM-backed const asset copies" ON)
 option(EUZEBIA3D_TEXTURE_CACHE_FROM_PSRAM "Allow renderer texture cache for textures stored in PSRAM/XIP" ON)
 
@@ -107,9 +104,6 @@ endif()
 
 $windows = @'
 
-set(EUZEBIA3D_PLATFORM "WINDOWS")
-set(EUZEBIA3D_PLATFORM_NORMALIZED "WINDOWS")
-
 project(Euzebia3D C)
 
 set(EUZEBIA3D_APP_MAIN "${CMAKE_CURRENT_LIST_DIR}/Euzebia3D.c")
@@ -143,12 +137,32 @@ if(EUZEBIA3D_BUILD_APP)
 endif()
 '@
 
-$platformCmake = switch ($Platform) {
-    "Pico" { $pico }
-    "Windows" { $windows }
-}
+$defaultPlatform = $Platform.ToUpperInvariant()
+$platformStart = @'
 
-$content = ($common.TrimEnd() + $platformCmake + [Environment]::NewLine)
+# A parent project may set EUZEBIA3D_PLATFORM before add_subdirectory().
+# The platform selected by this script is only the standalone-build default.
+if(NOT DEFINED EUZEBIA3D_PLATFORM)
+    set(EUZEBIA3D_PLATFORM "__DEFAULT_PLATFORM__")
+endif()
+string(TOUPPER "${EUZEBIA3D_PLATFORM}" EUZEBIA3D_PLATFORM_NORMALIZED)
+
+if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO")
+'@.Replace('__DEFAULT_PLATFORM__', $defaultPlatform)
+
+$platformMiddle = @'
+
+elseif(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
+'@
+
+$platformEnd = @'
+
+else()
+    message(FATAL_ERROR "Unsupported EUZEBIA3D_PLATFORM='${EUZEBIA3D_PLATFORM}'")
+endif()
+'@
+
+$content = ($common.TrimEnd() + $platformStart + $pico + $platformMiddle + $windows + $platformEnd + [Environment]::NewLine)
 [System.IO.File]::WriteAllText($cmakeListsPath, $content, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host "Aktywna platforma: $Platform"

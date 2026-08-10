@@ -7,7 +7,18 @@
 #if defined(EUZEBIA3D_PLATFORM_PICO)
 #elif defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include <SDL3/SDL.h>
+
+/* EngineApi provides SDL's platform entry-point implementation. Consumers
+ * only need the main-to-SDL_main mapping from this public header. */
+#if !defined(SDL_MAIN_NOIMPL)
+#define EUZEBIA3D_UNDEF_SDL_MAIN_NOIMPL 1
+#define SDL_MAIN_NOIMPL 1
+#endif
 #include <SDL3/SDL_main.h>
+#if defined(EUZEBIA3D_UNDEF_SDL_MAIN_NOIMPL)
+#undef SDL_MAIN_NOIMPL
+#undef EUZEBIA3D_UNDEF_SDL_MAIN_NOIMPL
+#endif
 #else
 #error "Unsupported Euzebia3D platform"
 #endif

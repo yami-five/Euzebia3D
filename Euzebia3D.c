@@ -2,14 +2,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#if defined(EUZEBIA3D_PLATFORM_PICO)
-#elif defined(EUZEBIA3D_PLATFORM_WINDOWS)
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-#else
-#error "Unsupported Euzebia3D platform"
-#endif
-
 #include "engineApi.h"
 
 static char t_char[11];

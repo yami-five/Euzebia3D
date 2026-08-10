@@ -1,7 +1,6 @@
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-/* SDL_main.h is part of the public API, but the engine library must not
- * provide the application's main/WinMain implementation. */
-#define SDL_MAIN_NOIMPL 1
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #endif
 
 #include "engineApi.h"

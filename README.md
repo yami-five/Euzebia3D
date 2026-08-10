@@ -106,8 +106,15 @@ it. Deleting a material removes queued scene triangles that reference it.
 For CMake consumers, link only the aggregate API target:
 
 ```cmake
+set(EUZEBIA3D_PLATFORM WINDOWS)
+add_subdirectory(path/to/Euzebia3D Euzebia3D)
+
 target_link_libraries(my_demo PRIVATE Euzebia3D_libs)
 ```
+
+Set `EUZEBIA3D_PLATFORM` before `add_subdirectory()`. A value inherited from
+the consuming project takes priority over Euzebia3D's standalone-build
+default. Supported values are `WINDOWS` and `PICO` (case-insensitive).
 
 Storage access remains an implementation detail. Its accessor implementation is
 centralized in `storage/storage.c`, which includes the generated data sources
