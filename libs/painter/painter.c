@@ -9,6 +9,8 @@
 #else
 #include "hardware/sync/spin_lock.h"
 #include "painter.h"
+
+static uint dma_channel;
 #endif
 
 #ifndef DISPLAY_WIDTH
