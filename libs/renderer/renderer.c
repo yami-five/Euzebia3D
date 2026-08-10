@@ -1523,16 +1523,16 @@ void render_scene() {
     renderer_debug_vertex_index = i;
     renderer_debug_face_index = drawItems[i].index;
     e3d_Primitive *primitive = &scene[drawItems[i].index];
-    if (primitive->type == POINT) {
+    if (primitive->type == E3D_PRIM_POINT) {
       e3d_PointInScene *point = &primitive->payload.point;
       draw_scaled_scene_pixel(point->point.x, point->point.y, point->color);
       continue;
     }
-    if (primitive->type == LINE) {
+    if (primitive->type == E3D_PRIM_LINE) {
       draw_scene_line(&primitive->payload.line);
       continue;
     }
-    if (primitive->type != TRIANGLE)
+    if (primitive->type != E3D_PRIM_TRIANGLE)
       continue;
 
     e3d_TriangleInScene *triScene = &primitive->payload.triangle;
@@ -1848,7 +1848,7 @@ void add_model_to_scene(e3d_Mesh *mesh) {
         continue;
 
       RENDERER_SET_DEBUG_STAGE(191);
-      e3d_Primitive *outPrimitive = append_scene_primitive(TRIANGLE);
+      e3d_Primitive *outPrimitive = append_scene_primitive(E3D_PRIM_TRIANGLE);
       if (outPrimitive == NULL) {
         RENDERER_SET_DEBUG_STAGE(190);
         return;
@@ -1897,7 +1897,7 @@ void add_point_to_scene(e3d_Point3D *point) {
       screenPoint.y >= render_height)
     return;
 
-  e3d_Primitive *primitive = append_scene_primitive(POINT);
+  e3d_Primitive *primitive = append_scene_primitive(E3D_PRIM_POINT);
   if (primitive == NULL)
     return;
 
@@ -1922,7 +1922,7 @@ void add_line_to_scene(e3d_Line3D *line) {
       !clip_line_to_render_area(&screenStart, &screenEnd))
     return;
 
-  e3d_Primitive *primitive = append_scene_primitive(LINE);
+  e3d_Primitive *primitive = append_scene_primitive(E3D_PRIM_LINE);
   if (primitive == NULL)
     return;
 
@@ -1955,7 +1955,7 @@ void unset_light(const e3d_Light *light) {
 
   uint16_t writeIndex = 0;
   for (uint16_t readIndex = 0; readIndex < sceneCounter; readIndex++) {
-    if (scene[readIndex].type != TRIANGLE)
+    if (scene[readIndex].type != E3D_PRIM_TRIANGLE)
       scene[writeIndex++] = scene[readIndex];
   }
   sceneCounter = writeIndex;
@@ -1967,7 +1967,8 @@ void remove_material_from_scene(const e3d_Material *material) {
   for (uint16_t readIndex = 0; readIndex < sceneCounter; readIndex++) {
     e3d_Primitive *primitive = &scene[readIndex];
     bool usesMaterial =
-        primitive->type == TRIANGLE && primitive->payload.triangle.mat == material;
+        primitive->type == E3D_PRIM_TRIANGLE &&
+        primitive->payload.triangle.mat == material;
 
     if (!usesMaterial)
       scene[writeIndex++] = *primitive;

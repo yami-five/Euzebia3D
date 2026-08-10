@@ -56,9 +56,9 @@ typedef struct {
 } e3d_LineInScene;
 
 typedef enum {
-  POINT = 0,
-  LINE = 1,
-  TRIANGLE = 2,
+  E3D_PRIM_POINT = 0,
+  E3D_PRIM_LINE = 1,
+  E3D_PRIM_TRIANGLE = 2,
 } e3d_PrimType;
 
 typedef union {

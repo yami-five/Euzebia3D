@@ -17,7 +17,7 @@ option(DEBUG_MODE "Show metrics on the display" ON)
 # A parent project may set EUZEBIA3D_PLATFORM before add_subdirectory().
 # The platform selected by this script is only the standalone-build default.
 if(NOT DEFINED EUZEBIA3D_PLATFORM)
-    set(EUZEBIA3D_PLATFORM "PICO")
+    set(EUZEBIA3D_PLATFORM "WINDOWS")
 endif()
 string(TOUPPER "${EUZEBIA3D_PLATFORM}" EUZEBIA3D_PLATFORM_NORMALIZED)
 
