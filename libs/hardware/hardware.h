@@ -14,8 +14,6 @@
 #include "pico/stdlib.h"
 #include "stdio.h"
 
-static spi_inst_t *SPI_PORT = spi1;
-static spi_inst_t *I2C_PORT = spi1;
 static struct audio_buffer_pool *audio_i2s;
 #endif
 

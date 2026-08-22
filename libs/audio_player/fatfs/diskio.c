@@ -29,8 +29,14 @@ DSTATUS disk_initialize(
 	{
 	case SD_CARD:
 		res = SD_Initialize(hardware);
-		if (res)
+		if (res) {
+			printf("SD init failed: code=0x%02X stage=%u cmd=%u r1=0x%02X "
+			       "R7=%02X%02X%02X%02X OCR=%02X%02X%02X%02X\r\n",
+			       res, SD_InitStage, SD_InitLastCmd, SD_InitLastR1,
+			       SD_InitR7[0], SD_InitR7[1], SD_InitR7[2], SD_InitR7[3],
+			       SD_InitOCR[0], SD_InitOCR[1], SD_InitOCR[2], SD_InitOCR[3]);
 			SD_SPI_ReadWriteByte(0xff);
+		}
 		break;
 	default:
 		res = 1;
@@ -59,11 +65,15 @@ DRESULT disk_read(
 	switch (drv)
 	{
 	case SD_CARD:
-        // hardware->write(SD_CS_PIN, 0);
-        // hardware->write(LCD_CS_PIN, 1);
 		res = SD_ReadDisk(buff, sector, count);
-		if (res)
+		if (res) {
+			printf("SD read failed: sector=%lu count=%u result=0x%02X "
+			       "cmd=%u r1=0x%02X token=0x%02X type=0x%02X\r\n",
+			       (unsigned long)sector, (unsigned)count, (unsigned)res,
+			       (unsigned)SD_InitLastCmd, (unsigned)SD_InitLastR1,
+			       (unsigned)SD_LastDataToken, (unsigned)SD_Type);
 			SD_SPI_ReadWriteByte(0xff);
+		}
 		break;
 	default:
 		res = 1;
@@ -111,16 +121,11 @@ DRESULT disk_ioctl(
 		switch (ctrl)
 		{
 		case CTRL_SYNC:
-			// hardware->write(SD_CS_PIN, 0);
-			// hardware->write(LCD_CS_PIN, 1);
 			if (SD_WaitReady() == 0)
 				res = RES_OK;
 			else
 				res = RES_ERROR;
-				// hardware->write(SD_CS_PIN, 1);
-				// hardware->write(LCD_CS_PIN, 0);
 			break;
-			// hardware->write(LCD_CS_PIN, 0);
 		case GET_SECTOR_SIZE:
 			*(WORD *)buff = 512;
 			res = RES_OK;

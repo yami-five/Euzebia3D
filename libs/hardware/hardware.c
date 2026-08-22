@@ -13,6 +13,7 @@ static spin_lock_t *spi_spinlock;
 
 #define SAMPLES_PER_BUFFER 256
 #define LCD_SPI_REQUESTED_BAUDRATE_HZ (100000u * 1000u)
+#define SD_SPI_INITIAL_BAUDRATE_HZ (400u * 1000u)
 #endif
 
 static void init_hardware(void) {
@@ -26,18 +27,23 @@ static void init_hardware(void) {
   stdio_init_all();
 
   // SPI config
-  uint32_t actual_spi0_baud = spi_init(spi0, LCD_SPI_REQUESTED_BAUDRATE_HZ);
-  uint32_t actual_spi1_baud = spi_init(spi1, LCD_SPI_REQUESTED_BAUDRATE_HZ);
-  lcd_spi_baudrate_hz =
-      (SPI_PORT == spi0) ? actual_spi0_baud : actual_spi1_baud;
-  printf("SPI requested: %lu Hz, spi0 actual: %lu Hz, spi1 actual: %lu Hz, LCD "
-         "actual: %lu Hz\n",
+  uint32_t actual_sd_spi_baud = spi_init(spi0, SD_SPI_INITIAL_BAUDRATE_HZ);
+  lcd_spi_baudrate_hz = spi_init(spi1, LCD_SPI_REQUESTED_BAUDRATE_HZ);
+  spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  spi_set_format(spi1, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+  printf("LCD spi1 requested: %lu Hz, actual: %lu Hz; SD spi0 requested: %lu "
+         "Hz, actual: %lu Hz\n",
          (unsigned long)LCD_SPI_REQUESTED_BAUDRATE_HZ,
-         (unsigned long)actual_spi0_baud, (unsigned long)actual_spi1_baud,
-         (unsigned long)lcd_spi_baudrate_hz);
+         (unsigned long)lcd_spi_baudrate_hz,
+         (unsigned long)SD_SPI_INITIAL_BAUDRATE_HZ,
+         (unsigned long)actual_sd_spi_baud);
   gpio_set_function(LCD_CLK_PIN, GPIO_FUNC_SPI);
   gpio_set_function(LCD_MOSI_PIN, GPIO_FUNC_SPI);
   gpio_set_function(LCD_MISO_PIN, GPIO_FUNC_SPI);
+  gpio_set_function(SD_CLK_PIN, GPIO_FUNC_SPI);
+  gpio_set_function(SD_MOSI_PIN, GPIO_FUNC_SPI);
+  gpio_set_function(SD_MISO_PIN, GPIO_FUNC_SPI);
+  gpio_pull_up(SD_MISO_PIN);
 
   // PWM config
   gpio_set_function(LCD_BL_PIN, GPIO_FUNC_PWM);
@@ -72,31 +78,39 @@ static void init_hardware(void) {
   gpio_set_dir(TP_IRQ_PIN, GPIO_IN);
   gpio_init(SD_CS_PIN);
   gpio_set_dir(SD_CS_PIN, GPIO_OUT);
+  gpio_init(ONBOARD_SD_CS_PIN);
+  gpio_set_dir(ONBOARD_SD_CS_PIN, GPIO_OUT);
   gpio_set_pulls(TP_IRQ_PIN, true, false);
 
   gpio_put(TP_CS_PIN, 1);
   gpio_put(LCD_CS_PIN, 1);
   gpio_put(LCD_BL_PIN, 1);
   gpio_put(SD_CS_PIN, 1);
+  gpio_put(ONBOARD_SD_CS_PIN, 1);
 
   spi_spinlock = spin_lock_init(spin_lock_claim_unused(true));
 #endif
 }
 
-static void init_audio_i2s(void) {
+static void init_audio_i2s(uint32_t sample_freq, uint16_t channel_count) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+  (void)sample_freq;
+  (void)channel_count;
   return;
 #else
-  static struct audio_format format = {
-      .sample_freq = 96000,
-      .format = AUDIO_BUFFER_FORMAT_PCM_S16,
-      .channel_count = 2,
-  };
+  if (audio_i2s != NULL)
+    return;
 
-  static struct audio_buffer_format producer_format = {
-      .format = &format,
-      .sample_stride = 16,
-  };
+  static struct audio_format format;
+  static struct audio_buffer_format producer_format;
+
+  format.sample_freq = sample_freq;
+  format.format = AUDIO_BUFFER_FORMAT_PCM_S16;
+  format.channel_count = channel_count;
+
+  producer_format.format = &format;
+  producer_format.sample_stride =
+      (uint16_t)(sizeof(int16_t) * channel_count);
 
   struct audio_buffer_pool *producer_pool =
       audio_new_producer_pool(&producer_format, 16, SAMPLES_PER_BUFFER);
@@ -131,22 +145,30 @@ static void write(uint32_t pin, uint8_t value) {
 #endif
 }
 
-static void spi_write_byte(uint8_t value) {
+static void lcd_spi_write_byte(uint8_t value) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
   (void)value;
 #else
-  spi_write_blocking(SPI_PORT, &value, 1);
+  spi_write_blocking(spi1, &value, 1);
 #endif
 }
 
-static uint8_t spi_write_read_byte(uint8_t value) {
+static uint8_t sd_spi_write_read_byte(uint8_t value) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
   (void)value;
   return 0;
 #else
   uint8_t rx_data;
-  spi_write_read_blocking(SPI_PORT, &value, &rx_data, 1);
+  spi_write_read_blocking(spi0, &value, &rx_data, 1);
   return rx_data;
+#endif
+}
+
+static void set_sd_spi_baudrate_hz(uint32_t baudrate_hz) {
+#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
+  (void)baudrate_hz;
+#else
+  spi_set_baudrate(spi0, baudrate_hz);
 #endif
 }
 
@@ -167,22 +189,11 @@ static void set_pwm(uint8_t value) {
 #endif
 }
 
-static spi_inst_t *get_spi_port(void) {
+static spi_inst_t *get_lcd_spi_port(void) {
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
   return NULL;
 #else
-  return SPI_PORT;
-#endif
-}
-
-static void set_spi_port(uint8_t spi_num) {
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  (void)spi_num;
-#else
-  if (spi_num == 0)
-    SPI_PORT = spi0;
-  else
-    SPI_PORT = spi1;
+  return spi1;
 #endif
 }
 
@@ -226,12 +237,12 @@ static e3d_IHardware hardware = {
     .init_hardware = init_hardware,
     .init_audio_i2s = init_audio_i2s,
     .write = write,
-    .spi_write_byte = spi_write_byte,
-    .spi_write_read_byte = spi_write_read_byte,
+    .lcd_spi_write_byte = lcd_spi_write_byte,
+    .sd_spi_write_read_byte = sd_spi_write_read_byte,
+    .set_sd_spi_baudrate_hz = set_sd_spi_baudrate_hz,
     .delay_ms = delay_ms,
     .set_pwm = set_pwm,
-    .get_spi_port = get_spi_port,
-    .set_spi_port = set_spi_port,
+    .get_lcd_spi_port = get_lcd_spi_port,
     .get_audio_buffer_pool = get_audio_buffer_pool,
     .get_spinlock = get_spinlock,
     .get_lcd_spi_baudrate_hz = get_lcd_spi_baudrate_hz,

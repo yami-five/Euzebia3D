@@ -10,7 +10,11 @@
 #define LCD_RST_PIN 15
 #define TP_CS_PIN 16
 #define TP_IRQ_PIN 17
-#define SD_CS_PIN 22
+#define SD_CLK_PIN 18
+#define SD_MOSI_PIN 19
+#define SD_MISO_PIN 20
+#define SD_CS_PIN 21
+#define ONBOARD_SD_CS_PIN 22
 #define LED_PIN 25
 #define PICO_AUDIO_DATA_PIN 26
 #define PICO_AUDIO_CLOCK_PIN 27

@@ -1,3 +1,4 @@
+#include "audioPlayer.h"
 #if defined(EUZEBIA3D_PLATFORM_WINDOWS)
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -51,6 +52,9 @@ void e3d_InitEngine(e3d_EngineContext *engine_ctx) {
   engine_ctx->lightFactory = get_lightFactory();
 
   engine_ctx->cameraFactory = get_cameraFactory();
+
+  engine_ctx->audioPlayer = get_audioPlayer();
+  engine_ctx->audioPlayer->init_audio_player(engine_ctx->hardware);
 }
 // debug
 void e3d_Debug_BeginFrame(e3d_EngineContext *engine_ctx) {
@@ -331,4 +335,10 @@ void e3d_Renderer_SetLight(e3d_EngineContext *engine_ctx,
 // audioPlayer
 void e3d_Audio_PlayWavFile(e3d_EngineContext *engine_ctx, char *file_name) {
   engine_ctx->audioPlayer->play_wave_file(file_name);
+}
+
+bool e3d_Audio_IsStorageReady(e3d_EngineContext *engine_ctx) {
+  return engine_ctx != NULL && engine_ctx->audioPlayer != NULL &&
+         engine_ctx->audioPlayer->is_storage_ready != NULL &&
+         engine_ctx->audioPlayer->is_storage_ready();
 }

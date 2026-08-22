@@ -175,9 +175,9 @@ static void init_dma(void) {
   channel_config_set_read_increment(&config, true);
   channel_config_set_write_increment(&config, false);
   channel_config_set_dreq(&config,
-                          spi_get_dreq(_hardware->get_spi_port(), true));
+                          spi_get_dreq(_hardware->get_lcd_spi_port(), true));
   dma_channel_configure(dma_channel, &config,
-                        &spi_get_hw(_hardware->get_spi_port())->dr, NULL,
+                        &spi_get_hw(_hardware->get_lcd_spi_port())->dr, NULL,
                         BUFFER_SIZE_HALF, false);
   dma_channel_set_irq1_enabled(dma_channel, true);
   irq_set_exclusive_handler(DMA_IRQ_1, dma_buffer_irq_handler);
@@ -197,7 +197,6 @@ void init_painter(const e3d_IDisplay *display, const e3d_IHardware *hardware,
   ensure_sdl_backend();
 #else
   init_dma();
-  _hardware->write(SD_CS_PIN, 1);
   _hardware->write(LCD_CS_PIN, 0);
   (void)lcd_spinlock;
 #endif
@@ -228,14 +227,14 @@ void draw_buffer(void) {
   SDL_RenderPresent(sdl_renderer);
 #else
   PAINTER_SET_DEBUG_STAGE(110);
-  spi_inst_t *spi_port = _hardware->get_spi_port();
+  spi_inst_t *spi_port = _hardware->get_lcd_spi_port();
   spin_lock_t *spi_spinlock = _hardware->get_spinlock();
   (void)spi_spinlock;
 
   PAINTER_SET_DEBUG_STAGE(120);
   spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
   _hardware->write(LCD_DC_PIN, 0);
-  _hardware->spi_write_byte(0x2C);
+  _hardware->lcd_spi_write_byte(0x2C);
   _hardware->write(LCD_DC_PIN, 1);
   spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 

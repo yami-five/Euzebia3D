@@ -1,10 +1,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+#include "pico/multicore.h"
+#endif
 
 #include "engineApi.h"
 
 static char t_char[11];
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+static void core1_main(void);
+#endif
 
 #if EUZEBIA3D_DEBUG_STAGE_ENABLED
 volatile uint32_t euzebia_debug_stage = 0;
@@ -101,15 +108,14 @@ int main(void)
   e3d_Mesh_AddTransformation(&engine_ctx, room, 0, 2.2f, 2.2f, 2.2f,
                              MODEL_TRANSFORM_SCALE);
 
-  e3d_Light *light = e3d_Light_CreatePointLight(
-      &engine_ctx, -10.0f, 3.0f, 15.0f, 15.0f, 0xffff);
+  e3d_Light *light = e3d_Light_CreatePointLight(&engine_ctx, -10.0f, 3.0f,
+                                                15.0f, 15.0f, 0xffff);
   if (light == NULL)
     return 1;
   e3d_Renderer_SetLight(&engine_ctx, light);
 
   e3d_Camera *camera = e3d_Camera_CreateCamera(
-      &engine_ctx, 0.0f, 75.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-      0.0f);
+      &engine_ctx, 0.0f, 75.0f, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
   if (camera == NULL)
     return 1;
   e3d_Renderer_SetCamera(&engine_ctx, camera);
@@ -143,6 +149,9 @@ int main(void)
       .x = 100,
       .y = 100,
   };
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+  multicore_launch_core1(core1_main);
+#endif
   int running = 1;
   while (running) {
     euzebia_debug_frame = t;
@@ -161,8 +170,7 @@ int main(void)
     (void)qt;
     e3d_Renderer_CleanScene(&engine_ctx);
     EUZEBIA3D_SET_DEBUG_STAGE(110);
-    e3d_Mesh_ModifyTransformation(&engine_ctx, room, qt, 0.0f, -10.0f, 0.0f,
-                                  0);
+    e3d_Mesh_ModifyTransformation(&engine_ctx, room, qt, 0.0f, -10.0f, 0.0f, 0);
     e3d_Mesh_ModifyTransformation(&engine_ctx, mug, qt, 10.0f, -10.0f, 10.0f,
                                   0);
     EUZEBIA3D_SET_DEBUG_STAGE(120);
@@ -176,6 +184,12 @@ int main(void)
 #if defined(EUZEBIA3D_DEBUG_MODE)
     EUZEBIA3D_SET_DEBUG_STAGE(150);
     e3d_Debug_ShowInfo(&engine_ctx);
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+    e3d_Painter_Print(&engine_ctx,
+                      e3d_Audio_IsStorageReady(&engine_ctx) ? "SD OK"
+                                                            : "SD ERROR",
+                      4, 52, 0, 0xffff);
+#endif
     snprintf(t_char, sizeof(t_char), "%lu", (unsigned long)t);
     e3d_Painter_Print(&engine_ctx, t_char, 0, 220, 1, 0xffff);
     e3d_Debug_BeginDrawBuffer(&engine_ctx);
@@ -205,3 +219,12 @@ int main(void)
 
   return 0;
 }
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+static void core1_main(void) {
+  e3d_Audio_PlayWavFile(&engine_ctx, "test.wav");
+
+  while (true)
+    tight_loop_contents();
+}
+#endif

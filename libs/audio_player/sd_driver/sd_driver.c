@@ -1,34 +1,56 @@
 #include "sd_driver.h"
 #include "IHardware.h"
 #include "hardware.h"
+#include "pico/time.h"
+
+#define SD_READY_TIMEOUT_MS 500u
+#define SD_RESPONSE_TIMEOUT_MS 500u
+#define SD_INIT_TIMEOUT_MS 2000u
+#define SD_POWER_UP_DELAY_MS 10u
+#define SD_CMD0_RETRY_COUNT 100u
+#define SD_TRANSFER_BAUDRATE_HZ (4u * 1000u * 1000u)
+
+#define SD_INIT_STAGE_NOT_STARTED 0u
+#define SD_INIT_STAGE_STARTUP_CLOCKS 1u
+#define SD_INIT_STAGE_CMD0 2u
+#define SD_INIT_STAGE_CMD8 3u
+#define SD_INIT_STAGE_R7 4u
+#define SD_INIT_STAGE_ACMD41 5u
+#define SD_INIT_STAGE_CMD58 6u
+#define SD_INIT_STAGE_OCR 7u
+#define SD_INIT_STAGE_LEGACY_ACMD41 8u
+#define SD_INIT_STAGE_LEGACY_CMD1 9u
+#define SD_INIT_STAGE_CMD16 10u
+#define SD_INIT_STAGE_READY 11u
 
 unsigned char SD_Type = 0; // version of the sd card
+volatile uint8_t SD_InitStage = SD_INIT_STAGE_NOT_STARTED;
+volatile uint8_t SD_InitLastCmd = 0xff;
+volatile uint8_t SD_InitLastR1 = 0xff;
+volatile uint8_t SD_InitR7[4] = {0xff, 0xff, 0xff, 0xff};
+volatile uint8_t SD_InitOCR[4] = {0xff, 0xff, 0xff, 0xff};
+volatile uint8_t SD_LastDataToken = 0xff;
 const e3d_IHardware *_hardware;
 
 // data: data to be written to sd card.
 // return: data read from sd card.
 unsigned char SD_SPI_ReadWriteByte(unsigned char CMD) {
-  return _hardware->spi_write_read_byte(CMD);
-  //	return SPI_Read_Byte();
+  return _hardware->sd_spi_write_read_byte(CMD);
 }
 
 // set spi in low speed mode.
 void SD_SPI_SpeedLow(void) {
-  //	SPI1->CR1&=0XFFC7;
-  //	SPI1->CR1|=SPI_BaudRatePrescaler_256;
-  //	SPI_Cmd(SPI1,ENABLE);
+  _hardware->set_sd_spi_baudrate_hz(400u * 1000u);
 }
 
 // set spi in high speed mode.
 void SD_SPI_SpeedHigh(void) {
-  //	SPI1->CR1&=0XFFC7;
-  //	SPI1->CR1|=SPI_BaudRatePrescaler_32;
-  //	SPI_Cmd(SPI1,ENABLE);
+  _hardware->set_sd_spi_baudrate_hz(SD_TRANSFER_BAUDRATE_HZ);
 }
 
 // released spi bus
 void SD_DisSelect(void) {
-  // _hardware->write(SD_CS_PIN, 1);
+  _hardware->write(SD_CS_PIN, 1);
   SD_SPI_ReadWriteByte(0xff); // providing extra 8 clocks
 }
 
@@ -36,22 +58,19 @@ void SD_DisSelect(void) {
 // return: 0: succed 1: failure
 unsigned char SD_Select(void) {
   _hardware->write(SD_CS_PIN, 0);
-  _hardware->write(LCD_CS_PIN, 1);
   if (SD_WaitReady() == 0)
     return 0;
   SD_DisSelect();
-  // _hardware->write(LCD_CS_PIN, 0);
   return 1;
 }
 
 // waiting for sd card until it's ready
 unsigned char SD_WaitReady(void) {
-  unsigned int t = 0;
+  absolute_time_t deadline = make_timeout_time_ms(SD_READY_TIMEOUT_MS);
   do {
     if (SD_SPI_ReadWriteByte(0XFF) == 0XFF)
       return 0;
-    t++;
-  } while (t < 0XFFFFFF);
+  } while (!time_reached(deadline));
   return 1;
 }
 
@@ -60,13 +79,14 @@ unsigned char SD_WaitReady(void) {
 // return: succeed for 0, fail for other else
 // return: 0 for success, other for failure.
 unsigned char SD_GetResponse(unsigned char Response) {
-  unsigned short Count = 0xFFFF;
-  while ((SD_SPI_ReadWriteByte(0XFF) != Response) && Count)
-    Count--;
-  if (Count == 0)
-    return MSD_RESPONSE_FAILURE;
-  else
-    return MSD_RESPONSE_NO_ERROR;
+  absolute_time_t deadline = make_timeout_time_ms(SD_RESPONSE_TIMEOUT_MS);
+  do {
+    SD_LastDataToken = SD_SPI_ReadWriteByte(0XFF);
+    if (SD_LastDataToken == Response)
+      return MSD_RESPONSE_NO_ERROR;
+  } while (!time_reached(deadline));
+
+  return MSD_RESPONSE_FAILURE;
 }
 
 // read a buffer from sd card.
@@ -117,9 +137,12 @@ unsigned char SD_SendCmd(unsigned char cmd, unsigned int arg,
                          unsigned char crc) {
   unsigned char r1;
   unsigned char Retry = 0;
+  SD_InitLastCmd = cmd;
   SD_DisSelect();
-  if (SD_Select())
+  if (SD_Select()) {
+    SD_InitLastR1 = 0xff;
     return 0XFF;
+  }
 
   SD_SPI_ReadWriteByte(cmd | 0x40);
   SD_SPI_ReadWriteByte(arg >> 24);
@@ -134,6 +157,7 @@ unsigned char SD_SendCmd(unsigned char cmd, unsigned int arg,
     r1 = SD_SPI_ReadWriteByte(0xFF);
   } while ((r1 & 0X80) && Retry--);
 
+  SD_InitLastR1 = r1;
   return r1;
 }
 
@@ -207,34 +231,60 @@ unsigned char SD_Initialize(const e3d_IHardware *hardware) {
   unsigned short i;
   _hardware = hardware;
 
+  SD_Type = SD_TYPE_ERR;
+  SD_InitStage = SD_INIT_STAGE_STARTUP_CLOCKS;
+  SD_InitLastCmd = 0xff;
+  SD_InitLastR1 = 0xff;
+  for (i = 0; i < 4; i++) {
+    SD_InitR7[i] = 0xff;
+    SD_InitOCR[i] = 0xff;
+  }
+
+  // The reader on the display board shares SPI0 with the external reader.
   _hardware->write(SD_CS_PIN, 1);
+  _hardware->write(ONBOARD_SD_CS_PIN, 1);
   SD_SPI_SpeedLow();
-  for (i = 0; i < 10; i++)
+  _hardware->delay_ms(SD_POWER_UP_DELAY_MS);
+  for (i = 0; i < 20; i++)
     SD_SPI_ReadWriteByte(0XFF);
-  retry = 20;
+
+  SD_InitStage = SD_INIT_STAGE_CMD0;
+  absolute_time_t init_deadline = make_timeout_time_ms(SD_INIT_TIMEOUT_MS);
+  retry = SD_CMD0_RETRY_COUNT;
   do {
     r1 = SD_SendCmd(CMD0, 0, 0x95); // enter to idle state
-  } while ((r1 != 0X01) && retry--);
-  SD_Type = 0;
+    if (r1 != 0X01)
+      _hardware->delay_ms(1);
+  } while ((r1 != 0X01) && retry-- && !time_reached(init_deadline));
 
   if (r1 == 0X01) {
-    if (SD_SendCmd(CMD8, 0x1AA, 0x87) == 1) // SD V2.0
+    SD_InitStage = SD_INIT_STAGE_CMD8;
+    r1 = SD_SendCmd(CMD8, 0x1AA, 0x87);
+    if (r1 == 1) // SD V2.0
     {
+      SD_InitStage = SD_INIT_STAGE_R7;
       for (i = 0; i < 4; i++)
-        buf[i] =
+        SD_InitR7[i] = buf[i] =
             SD_SPI_ReadWriteByte(0XFF); // Get trailing return value of R7 resp
       if (buf[2] == 0X01 && buf[3] == 0XAA) // is it support of 2.7~3.6V
       {
-        retry = 0XFFFE;
+        SD_InitStage = SD_INIT_STAGE_ACMD41;
+        init_deadline = make_timeout_time_ms(SD_INIT_TIMEOUT_MS);
         do {
           SD_SendCmd(CMD55, 0, 0X01);
           r1 = SD_SendCmd(CMD41, 0x40000000, 0X01);
-        } while (r1 && retry--);
-        if (retry && SD_SendCmd(CMD58, 0, 0X01) ==
-                         0) // start to identify the SD2.0 version of sd card.
-        {
+          if (r1)
+            _hardware->delay_ms(1);
+        } while (r1 && !time_reached(init_deadline));
+
+        if (!r1) {
+          SD_InitStage = SD_INIT_STAGE_CMD58;
+          r1 = SD_SendCmd(CMD58, 0, 0X01);
+        }
+        if (!r1) {
+          SD_InitStage = SD_INIT_STAGE_OCR;
           for (i = 0; i < 4; i++)
-            buf[i] = SD_SPI_ReadWriteByte(0XFF); // get OCR
+            SD_InitOCR[i] = buf[i] = SD_SPI_ReadWriteByte(0XFF); // get OCR
           if (buf[0] & 0x40)
             SD_Type = SD_TYPE_V2HC; // check CCS
           else
@@ -243,33 +293,45 @@ unsigned char SD_Initialize(const e3d_IHardware *hardware) {
       }
     } else // SD V1.x/ MMC	V3
     {
+      SD_InitStage = SD_INIT_STAGE_LEGACY_ACMD41;
       SD_SendCmd(CMD55, 0, 0X01);
       r1 = SD_SendCmd(CMD41, 0, 0X01);
       if (r1 <= 1) {
         SD_Type = SD_TYPE_V1;
-        retry = 0XFFFE;
+        init_deadline = make_timeout_time_ms(SD_INIT_TIMEOUT_MS);
         do // exit idle state
         {
           SD_SendCmd(CMD55, 0, 0X01);
           r1 = SD_SendCmd(CMD41, 0, 0X01);
-        } while (r1 && retry--);
+          if (r1)
+            _hardware->delay_ms(1);
+        } while (r1 && !time_reached(init_deadline));
       } else {
         SD_Type = SD_TYPE_MMC; // MMC V3
-        retry = 0XFFFE;
+        SD_InitStage = SD_INIT_STAGE_LEGACY_CMD1;
+        init_deadline = make_timeout_time_ms(SD_INIT_TIMEOUT_MS);
         do {
           r1 = SD_SendCmd(CMD1, 0, 0X01);
-        } while (r1 && retry--);
+          if (r1)
+            _hardware->delay_ms(1);
+        } while (r1 && !time_reached(init_deadline));
       }
-      if (retry == 0 || SD_SendCmd(CMD16, 512, 0X01) != 0)
+      if (!r1) {
+        SD_InitStage = SD_INIT_STAGE_CMD16;
+        r1 = SD_SendCmd(CMD16, 512, 0X01);
+      }
+      if (r1)
         SD_Type = SD_TYPE_ERR;
     }
   }
   SD_DisSelect();
-  SD_SPI_SpeedHigh();
-  if (SD_Type)
+  if (SD_Type) {
+    SD_InitStage = SD_INIT_STAGE_READY;
+    SD_SPI_SpeedHigh();
     return 0;
-  else if (r1)
+  } else if (r1) {
     return r1;
+  }
   return 0xaa;
 }
 

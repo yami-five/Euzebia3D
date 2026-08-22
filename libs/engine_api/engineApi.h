@@ -223,5 +223,7 @@ void e3d_Renderer_SetLight(e3d_EngineContext *engine_ctx, e3d_Light *e3d_Light);
 // audioPlayer
 /// Starts playback of a WAV file from storage.
 void e3d_Audio_PlayWavFile(e3d_EngineContext *engine_ctx, char *file_name);
+/// Returns true when the audio storage mounted successfully.
+bool e3d_Audio_IsStorageReady(e3d_EngineContext *engine_ctx);
 
 #endif

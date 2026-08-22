@@ -12,14 +12,14 @@ static const e3d_IHardware *_hardware;
 static void send_command(uint8_t reg) {
   _hardware->write(LCD_DC_PIN, 0);
   _hardware->write(LCD_CS_PIN, 0);
-  _hardware->spi_write_byte(reg);
+  _hardware->lcd_spi_write_byte(reg);
   _hardware->write(LCD_CS_PIN, 1);
 }
 
 static void send_data_8bit(uint8_t data) {
   _hardware->write(LCD_DC_PIN, 1);
   _hardware->write(LCD_CS_PIN, 0);
-  _hardware->spi_write_byte(data);
+  _hardware->lcd_spi_write_byte(data);
   _hardware->write(LCD_CS_PIN, 1);
 }
 

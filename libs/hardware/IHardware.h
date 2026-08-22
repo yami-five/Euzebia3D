@@ -26,14 +26,14 @@ typedef struct spin_lock spin_lock_t;
 
 typedef struct {
   void (*init_hardware)(void);
-  void (*init_audio_i2s)(void);
+  void (*init_audio_i2s)(uint32_t sample_freq, uint16_t channel_count);
   void (*write)(uint32_t pin, uint8_t value);
-  void (*spi_write_byte)(uint8_t value);
-  uint8_t (*spi_write_read_byte)(uint8_t value);
+  void (*lcd_spi_write_byte)(uint8_t value);
+  uint8_t (*sd_spi_write_read_byte)(uint8_t value);
+  void (*set_sd_spi_baudrate_hz)(uint32_t baudrate_hz);
   void (*delay_ms)(uint32_t ms);
   void (*set_pwm)(uint8_t value);
-  spi_inst_t *(*get_spi_port)(void);
-  void (*set_spi_port)(uint8_t spiNum);
+  spi_inst_t *(*get_lcd_spi_port)(void);
   audio_buffer_pool_t *(*get_audio_buffer_pool)(void);
   spin_lock_t *(*get_spinlock)(void);
   uint32_t (*get_lcd_spi_baudrate_hz)(void);

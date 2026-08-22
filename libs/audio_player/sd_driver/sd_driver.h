@@ -42,6 +42,12 @@
 typedef unsigned char uint8_t;
 
 extern uint8_t SD_Type;
+extern volatile uint8_t SD_InitStage;
+extern volatile uint8_t SD_InitLastCmd;
+extern volatile uint8_t SD_InitLastR1;
+extern volatile uint8_t SD_InitR7[4];
+extern volatile uint8_t SD_InitOCR[4];
+extern volatile uint8_t SD_LastDataToken;
 
 uint8_t SD_SPI_ReadWriteByte(uint8_t data);
 void SD_SPI_SpeedLow(void);
