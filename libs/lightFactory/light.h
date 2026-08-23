@@ -19,4 +19,9 @@ typedef struct {
   e3d_LightType lightType;
 } e3d_Light;
 
+void set_light_pos(e3d_Light *light, float x, float y, float z);
+void set_light_color(e3d_Light *light, uint16_t newColor);
+void set_light_intensity(e3d_Light *light, float newIntensity);
+void free_light(e3d_Light *light);
+
 #endif

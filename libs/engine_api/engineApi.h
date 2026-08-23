@@ -1,6 +1,7 @@
 #ifndef ENGINEAPI_h
 #define ENGINEAPI_h
 
+#include "light.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -168,6 +169,15 @@ e3d_Light *e3d_Light_CreatePointLight(e3d_EngineContext *engine_ctx, float x,
 e3d_Light *e3d_Light_CreateDirectionalLight(e3d_EngineContext *engine_ctx,
                                             float x, float y, float z,
                                             float intensity, uint16_t color);
+/// Sets the position of a point light or the direction of a directional light.
+void e3d_Light_SetLightPos(e3d_EngineContext *engine_ctx, e3d_Light *light,
+                           float x, float y, float z);
+/// Sets the light color in RGB565 format.
+void e3d_Light_SetLightColor(e3d_EngineContext *engine_ctx, e3d_Light *light,
+                             uint16_t color);
+/// Sets the light intensity.
+void e3d_Light_SetLightIntensity(e3d_EngineContext *engine_ctx,
+                                 e3d_Light *light, float intensity);
 /// Removes light
 void e3d_Light_DeleteLight(e3d_EngineContext *engine_ctx, e3d_Light **light);
 // e3d_Mesh

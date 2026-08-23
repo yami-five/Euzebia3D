@@ -216,6 +216,25 @@ e3d_Light *e3d_Light_CreateDirectionalLight(e3d_EngineContext *engine_ctx,
   return engine_ctx->lightFactory->create_directional_light(x, y, z, intensity,
                                                             color);
 }
+
+void e3d_Light_SetLightPos(e3d_EngineContext *engine_ctx, e3d_Light *light,
+                           float x, float y, float z) {
+  (void)engine_ctx;
+  set_light_pos(light, x, y, z);
+}
+
+void e3d_Light_SetLightColor(e3d_EngineContext *engine_ctx, e3d_Light *light,
+                             uint16_t color) {
+  (void)engine_ctx;
+  set_light_color(light, color);
+}
+
+void e3d_Light_SetLightIntensity(e3d_EngineContext *engine_ctx,
+                                 e3d_Light *light, float intensity) {
+  (void)engine_ctx;
+  set_light_intensity(light, intensity);
+}
+
 void e3d_Light_DeleteLight(e3d_EngineContext *engine_ctx, e3d_Light **light) {
   if (light == NULL || *light == NULL)
     return;
@@ -223,7 +242,7 @@ void e3d_Light_DeleteLight(e3d_EngineContext *engine_ctx, e3d_Light **light) {
   if (engine_ctx != NULL && engine_ctx->renderer != NULL)
     engine_ctx->renderer->unset_light(*light);
 
-  free(*light);
+  free_light(*light);
   *light = NULL;
 }
 
