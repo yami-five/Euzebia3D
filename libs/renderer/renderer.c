@@ -5,16 +5,13 @@
 #include "material.h"
 #include "mesh.h"
 #include "primitives.h"
+#include "renderer_platform.h"
+#include "renderer_span.h"
 #include "string.h"
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-#include "hardware/interp.h"
-#endif
-
-static const e3d_IHardware *_hardware = NULL;
 static const e3d_IPainter *_painter = NULL;
 
 static uint8_t render_scale = 1; // 2 => 160x120 render; 1 => 320x240 render
@@ -77,17 +74,6 @@ static inline int32_t make_perspective_uv(int32_t uv, int32_t invZ) {
 #endif
 }
 
-static inline int32_t restore_perspective_uv(int32_t uvOverZ, int32_t z) {
-#if EUZEBIA3D_RENDERER_PERSPECTIVE_CORRECT_UV_ENABLED
-  int64_t value = (int64_t)uvOverZ * (int64_t)z;
-  value >>= (SHIFT_FACTOR + UV_PERSPECTIVE_SHIFT);
-  return clamp_i64_to_i32(value);
-#else
-  (void)z;
-  return uvOverZ >> UV_PERSPECTIVE_SHIFT;
-#endif
-}
-
 static inline int32_t texture_dimension_shift(int32_t size) {
   if (size <= 0 || (size & (size - 1)) != 0)
     return -1;
@@ -124,27 +110,8 @@ typedef struct {
   uint16_t pixels[TEXTURE_CACHE_PIXELS];
 } e3d_TextureCacheSlot;
 
-typedef enum {
-  TEXTURE_SOURCE_UNKNOWN = 0,
-  TEXTURE_SOURCE_FLASH = 1,
-  TEXTURE_SOURCE_PSRAM = 2
-} e3d_TextureSource;
-
 static e3d_TextureCacheSlot textureCache[TEXTURE_CACHE_SLOTS] = {0};
 static uint8_t textureCacheNextSlot = 0;
-
-static inline e3d_TextureSource detect_texture_source(const uint16_t *texture) {
-  (void)texture;
-#if defined(EUZEBIA3D_PLATFORM_PICO)
-  uintptr_t address = (uintptr_t)texture;
-  uint32_t region = (uint32_t)(address & 0xff000000u);
-  if (region == 0x10000000u)
-    return TEXTURE_SOURCE_FLASH;
-  if (region == 0x11000000u)
-    return TEXTURE_SOURCE_PSRAM;
-#endif
-  return TEXTURE_SOURCE_UNKNOWN;
-}
 
 static inline uint8_t texture_cache_source_enabled(e3d_TextureSource source) {
   if (source == TEXTURE_SOURCE_FLASH)
@@ -198,7 +165,8 @@ static void prepare_texture_cache(const e3d_Material *mat) {
   if (texelCount > TEXTURE_CACHE_PIXELS)
     return;
 
-  if (!texture_cache_source_enabled(detect_texture_source(mat->texture)))
+  if (!texture_cache_source_enabled(
+          renderer_platform_detect_texture_source(mat->texture)))
     return;
 
   for (uint8_t i = 0; i < TEXTURE_CACHE_SLOTS; i++) {
@@ -225,32 +193,6 @@ static void prepare_texture_cache(const e3d_Material *mat) {
   set_active_texture_data(slot->pixels, slot->width, slot->height);
 #endif
 }
-
-/* Pico path uses hardware interpolators to speed up span setup. */
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static void init_span_interpolators(void) {
-  interp_config uv_cfg = interp_default_config();
-  interp_config_set_signed(&uv_cfg, true);
-  interp_set_config(interp0, 0, &uv_cfg);
-  interp_set_config(interp0, 1, &uv_cfg);
-
-  interp_config w_cfg = interp_default_config();
-  interp_config_set_signed(&w_cfg, true);
-  interp_set_config(interp1, 0, &w_cfg);
-
-  interp_config l_cfg = interp_default_config();
-  interp_config_set_signed(&l_cfg, true);
-  interp_set_config(interp1, 1, &l_cfg);
-
-  // Keep lane BASE registers neutral - span code uses raw lane values only.
-  interp_set_base(interp0, 0, 0);
-  interp_set_base(interp0, 1, 0);
-  interp_set_base(interp0, 2, 0);
-  interp_set_base(interp1, 0, 0);
-  interp_set_base(interp1, 1, 0);
-  interp_set_base(interp1, 2, 0);
-}
-#endif
 
 // Scratch buffers reused between frames/models to avoid frequent heap churn.
 static int32_t *modelScratchVerticesModified = NULL;
@@ -374,12 +316,9 @@ void renderer_set_scale(uint8_t scale) {
 }
 
 void init_renderer(const e3d_IHardware *hardware, const e3d_IPainter *painter) {
-  _hardware = hardware;
   _painter = painter;
   configure_render_dimensions();
-#if !defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  init_span_interpolators();
-#endif
+  renderer_platform_init(hardware);
   // init_sin_cos();
 }
 
@@ -743,230 +682,10 @@ static uint8_t clip_line_to_render_area(e3d_Vector2 *start, e3d_Vector2 *end) {
   return 0;
 }
 
-typedef struct {
-  int32_t intensity;
-  uint32_t rLightScale;
-  uint32_t gLightScale;
-  uint32_t bLightScale;
-} e3d_ShadingContext;
-
-static inline e3d_ShadingContext make_shading_context(const e3d_Light *light) {
-  int32_t intensity = light->intensity;
-  if (intensity < 0)
-    intensity = 0;
-  const int32_t INTENSITY_MAX = SCALE_FACTOR * 6;
-  if (intensity > INTENSITY_MAX)
-    intensity = INTENSITY_MAX;
-
-  uint32_t rLight = (light->color >> 11) & 0x1f;
-  uint32_t gLight = (light->color >> 5) & 0x3f;
-  uint32_t bLight = light->color & 0x1f;
-
-  e3d_ShadingContext context = {
-      .intensity = intensity,
-      .rLightScale = rLight * 33u,
-      .gLightScale = gLight * 16u,
-      .bLightScale = bLight * 33u,
-  };
-  return context;
-}
-
-static inline uint16_t shade_color(uint16_t color,
-                                   const e3d_ShadingContext *context,
-                                   int32_t lightDistance) {
-  if (color == TEXTURE_TRANSPARENT_COLOR)
-    return color;
-
-  // Clamp minimum light to keep pixels from going fully dark on edges
-  const int32_t AMBIENT_MIN = SCALE_FACTOR >> 5;
-  if (lightDistance < AMBIENT_MIN)
-    lightDistance = AMBIENT_MIN;
-  if (lightDistance > SCALE_FACTOR)
-    lightDistance = SCALE_FACTOR;
-
-  // LightColor * MaterialColor scaled by light factor
-  int32_t lightFactor =
-      (int32_t)(((int64_t)lightDistance * context->intensity) >> SHIFT_FACTOR);
-  if (lightFactor < 0)
-    lightFactor = 0;
-  const int32_t MAX_LIGHT_FACTOR = SCALE_FACTOR * 4;
-  if (lightFactor > MAX_LIGHT_FACTOR)
-    lightFactor = MAX_LIGHT_FACTOR;
-
-  uint32_t rMesh = (color >> 11) & 0x1f;
-  uint32_t gMesh = (color >> 5) & 0x3f;
-  uint32_t bMesh = color & 0x1f;
-
-  uint32_t rTmp = (uint32_t)(((uint64_t)(rMesh * context->rLightScale) *
-                              (uint32_t)lightFactor) >>
-                             (SHIFT_FACTOR * 2));
-  uint32_t gTmp = (uint32_t)(((uint64_t)(gMesh * context->gLightScale) *
-                              (uint32_t)lightFactor) >>
-                             (SHIFT_FACTOR * 2));
-  uint32_t bTmp = (uint32_t)(((uint64_t)(bMesh * context->bLightScale) *
-                              (uint32_t)lightFactor) >>
-                             (SHIFT_FACTOR * 2));
-
-  if (rTmp > 31)
-    rTmp = 31;
-  if (gTmp > 63)
-    gTmp = 63;
-  if (bTmp > 31)
-    bTmp = 31;
-
-  uint8_t r = (uint8_t)rTmp;
-  uint8_t g = (uint8_t)gTmp;
-  uint8_t b = (uint8_t)bTmp;
-
-  return (uint16_t)((r << 11) | (g << 5) | b);
-}
-
 void shading(uint16_t *color, e3d_Light *light, int32_t lightDistance) {
-  e3d_ShadingContext context = make_shading_context(light);
-  *color = shade_color(*color, &context, lightDistance);
-}
-
-static inline void add_opaque_texel(uint16_t color, uint32_t *r, uint32_t *g,
-                                    uint32_t *b, uint32_t *count) {
-  if (color == TEXTURE_TRANSPARENT_COLOR)
-    return;
-
-  *r += (color >> 11) & 0x1f;
-  *g += (color >> 5) & 0x3f;
-  *b += color & 0x1f;
-  *count += 1u;
-}
-
-static inline uint16_t average_opaque_rgb565_pair(uint16_t a, uint16_t b) {
-  uint32_t rb = ((uint32_t)(a & 0xf81f) + (uint32_t)(b & 0xf81f)) >> 1;
-  uint32_t g = ((uint32_t)(a & 0x07e0) + (uint32_t)(b & 0x07e0)) >> 1;
-  return (uint16_t)((rb & 0xf81f) | (g & 0x07e0));
-}
-
-static inline uint16_t average_opaque_rgb565_2x2(uint16_t c00, uint16_t c10,
-                                                 uint16_t c01, uint16_t c11) {
-  uint16_t top = average_opaque_rgb565_pair(c00, c10);
-  uint16_t bottom = average_opaque_rgb565_pair(c01, c11);
-  return average_opaque_rgb565_pair(top, bottom);
-}
-
-static inline uint16_t sample_texture_2x2(const uint16_t *texture, int32_t row0,
-                                          int32_t row1, int32_t x0, int32_t x1,
-                                          bool transparent) {
-  uint16_t c00 = texture[row0 + x0];
-#if !EUZEBIA3D_RENDERER_TEXTURE_FILTER_2X2_ENABLED
-  (void)row1;
-  (void)x1;
-  (void)transparent;
-  return c00;
-#else
-  uint16_t c10 = texture[row0 + x1];
-  uint16_t c01 = texture[row1 + x0];
-  uint16_t c11 = texture[row1 + x1];
-
-  if (!transparent)
-    return average_opaque_rgb565_2x2(c00, c10, c01, c11);
-
-  if (c00 == TEXTURE_TRANSPARENT_COLOR)
-    return TEXTURE_TRANSPARENT_COLOR;
-
-  if (c10 == TEXTURE_TRANSPARENT_COLOR || c01 == TEXTURE_TRANSPARENT_COLOR ||
-      c11 == TEXTURE_TRANSPARENT_COLOR) {
-    uint32_t r = 0;
-    uint32_t g = 0;
-    uint32_t b = 0;
-    uint32_t count = 0;
-    add_opaque_texel(c00, &r, &g, &b, &count);
-    add_opaque_texel(c10, &r, &g, &b, &count);
-    add_opaque_texel(c01, &r, &g, &b, &count);
-    add_opaque_texel(c11, &r, &g, &b, &count);
-    if (count == 0)
-      return TEXTURE_TRANSPARENT_COLOR;
-    return ((r / count) << 11) | ((g / count) << 5) | (b / count);
-  }
-
-  return average_opaque_rgb565_2x2(c00, c10, c01, c11);
-#endif
-}
-
-static inline void clamp_uv_fixed(int32_t *uv_x, int32_t *uv_y) {
-  if (*uv_x < 0)
-    *uv_x = 0;
-  if (*uv_y < 0)
-    *uv_y = 0;
-  if (*uv_x > SCALE_FACTOR)
-    *uv_x = SCALE_FACTOR;
-  if (*uv_y > SCALE_FACTOR)
-    *uv_y = SCALE_FACTOR;
-}
-
-static inline void clamp_texel_coords(int32_t textureWidth,
-                                      int32_t textureHeight, int32_t *tex_x,
-                                      int32_t *tex_y) {
-  int32_t minX = textureWidth > 2 ? 1 : 0;
-  int32_t minY = textureHeight > 2 ? 1 : 0;
-  int32_t maxX = textureWidth > 2 ? textureWidth - 2 : textureWidth - 1;
-  int32_t maxY = textureHeight > 2 ? textureHeight - 2 : textureHeight - 1;
-  if (*tex_x < minX)
-    *tex_x = minX;
-  if (*tex_y < minY)
-    *tex_y = minY;
-  if (*tex_x > maxX)
-    *tex_x = maxX;
-  if (*tex_y > maxY)
-    *tex_y = maxY;
-}
-
-static inline uint16_t
-texturing_power_of_two(const uint16_t *texture, int32_t textureWidth,
-                       int32_t textureHeight, int32_t textureWidthShift,
-                       int32_t textureHeightShift, int32_t U, int32_t V,
-                       int32_t Z, bool transparent) {
-  if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
-    return TEXTURE_TRANSPARENT_COLOR;
-
-  int32_t uv_x = restore_perspective_uv(U, Z);
-  int32_t uv_y = restore_perspective_uv(V, Z);
-  clamp_uv_fixed(&uv_x, &uv_y);
-
-  int32_t tex_x = uv_x >> (SHIFT_FACTOR - textureWidthShift);
-  int32_t tex_y = uv_y >> (SHIFT_FACTOR - textureHeightShift);
-  clamp_texel_coords(textureWidth, textureHeight, &tex_x, &tex_y);
-
-  int32_t x0 = tex_x;
-  int32_t y0 = tex_y;
-  int32_t x1 = x0 + 1 < textureWidth ? x0 + 1 : x0;
-  int32_t y1 = y0 + 1 < textureHeight ? y0 + 1 : y0;
-  int32_t row0 = y0 << textureWidthShift;
-  int32_t row1 = y1 << textureWidthShift;
-
-  return sample_texture_2x2(texture, row0, row1, x0, x1, transparent);
-}
-
-static inline uint16_t texturing_generic(const uint16_t *texture,
-                                         int32_t textureWidth,
-                                         int32_t textureHeight, int32_t U,
-                                         int32_t V, int32_t Z,
-                                         bool transparent) {
-  if (texture == NULL || textureWidth <= 0 || textureHeight <= 0)
-    return TEXTURE_TRANSPARENT_COLOR;
-
-  int32_t uv_x = restore_perspective_uv(U, Z);
-  int32_t uv_y = restore_perspective_uv(V, Z);
-  clamp_uv_fixed(&uv_x, &uv_y);
-
-  int32_t tex_x = (uv_x * textureWidth) >> SHIFT_FACTOR;
-  int32_t tex_y = (uv_y * textureHeight) >> SHIFT_FACTOR;
-  clamp_texel_coords(textureWidth, textureHeight, &tex_x, &tex_y);
-
-  int32_t x0 = tex_x;
-  int32_t y0 = tex_y;
-  int32_t x1 = x0 + 1 < textureWidth ? x0 + 1 : x0;
-  int32_t y1 = y0 + 1 < textureHeight ? y0 + 1 : y0;
-  int32_t row0 = y0 * textureWidth;
-  int32_t row1 = y1 * textureWidth;
-
-  return sample_texture_2x2(texture, row0, row1, x0, x1, transparent);
+  e3d_RendererShadingContext context =
+      renderer_span_make_shading_context(light);
+  *color = renderer_span_shade_color(*color, &context, lightDistance);
 }
 
 static void draw_masked_span(uint16_t x, uint16_t y, const uint16_t *span,
@@ -994,106 +713,15 @@ static void texture_span(uint16_t *dst, uint16_t length,
                          const e3d_Material *mat,
                          int32_t U, int32_t dUdx, int32_t V, int32_t dVdx,
                          int32_t Z, int32_t dZdx) {
-  const uint16_t *texture = activeTextureData;
-  int32_t textureWidth = activeTextureWidth;
-  int32_t textureHeight = activeTextureHeight;
-  int32_t textureWidthShift = activeTextureWidthShift;
-  int32_t textureHeightShift = activeTextureHeightShift;
-  bool transparent = mat->transparent;
-  uint8_t usePowerOfTwo =
-      (textureWidthShift >= 0 && textureHeightShift >= 0 &&
-       textureWidthShift <= SHIFT_FACTOR && textureHeightShift <= SHIFT_FACTOR);
-
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  int32_t Uacc = U;
-  int32_t Vacc = V;
-  int32_t Zacc = Z;
-
-  if (usePowerOfTwo) {
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Ucur = Uacc >> UV_LERP_SHIFT;
-      int32_t Vcur = Vacc >> UV_LERP_SHIFT;
-      int32_t Zcur = Zacc;
-      dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight,
-                                      textureWidthShift, textureHeightShift,
-                                      Ucur, Vcur, Zcur, transparent);
-      Uacc += dUdx;
-      Vacc += dVdx;
-      Zacc += dZdx;
-    }
-  } else {
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Ucur = Uacc >> UV_LERP_SHIFT;
-      int32_t Vcur = Vacc >> UV_LERP_SHIFT;
-      int32_t Zcur = Zacc;
-      dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur,
-                                 Vcur, Zcur, transparent);
-      Uacc += dUdx;
-      Vacc += dVdx;
-      Zacc += dZdx;
-    }
-  }
-#else
-  interp_set_accumulator(interp0, 0, (uint32_t)U);
-  interp_set_accumulator(interp0, 1, (uint32_t)V);
-  interp_set_accumulator(interp1, 0, (uint32_t)Z);
-
-  if (usePowerOfTwo) {
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Ucur =
-          ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
-      int32_t Vcur =
-          ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
-      int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-      dst[i] = texturing_power_of_two(texture, textureWidth, textureHeight,
-                                      textureWidthShift, textureHeightShift,
-                                      Ucur, Vcur, Zcur, transparent);
-      interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
-      interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
-      interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
-    }
-  } else {
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Ucur =
-          ((int32_t)interp_get_accumulator(interp0, 0)) >> UV_LERP_SHIFT;
-      int32_t Vcur =
-          ((int32_t)interp_get_accumulator(interp0, 1)) >> UV_LERP_SHIFT;
-      int32_t Zcur = (int32_t)interp_get_accumulator(interp1, 0);
-      dst[i] = texturing_generic(texture, textureWidth, textureHeight, Ucur,
-                                 Vcur, Zcur, transparent);
-      interp_add_accumulator(interp0, 0, (uint32_t)dUdx);
-      interp_add_accumulator(interp0, 1, (uint32_t)dVdx);
-      interp_add_accumulator(interp1, 0, (uint32_t)dZdx);
-    }
-  }
-#endif
+  renderer_platform_texture_span(
+      dst, length, activeTextureData, activeTextureWidth, activeTextureHeight,
+      activeTextureWidthShift, activeTextureHeightShift, mat->transparent, U,
+      dUdx, V, dVdx, Z, dZdx);
 }
 
 static void shade_span(uint16_t *dst, uint16_t length, e3d_Light *light, int32_t L,
                        int32_t dLdx) {
-  e3d_ShadingContext context = make_shading_context(light);
-  if (length <= MAX_SHADING_SPAN_LEN) {
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-    int32_t Lacc = L;
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Lcur = Lacc >> LIGHT_LERP_SHIFT;
-      dst[i] = shade_color(dst[i], &context, Lcur);
-      Lacc += dLdx;
-    }
-#else
-    interp_set_accumulator(interp1, 1, (uint32_t)L);
-
-    for (uint16_t i = 0; i < length; i++) {
-      int32_t Lcur =
-          ((int32_t)interp_get_accumulator(interp1, 1)) >> LIGHT_LERP_SHIFT;
-      dst[i] = shade_color(dst[i], &context, Lcur);
-      interp_add_accumulator(interp1, 1, (uint32_t)dLdx);
-    }
-#endif
-  } else {
-    int32_t firstPixelLight = L >> LIGHT_LERP_SHIFT;
-    dst[0] = shade_color(dst[0], &context, firstPixelLight);
-  }
+  renderer_platform_shade_span(dst, length, light, L, dLdx);
 }
 
 typedef struct {
