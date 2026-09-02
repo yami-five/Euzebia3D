@@ -101,10 +101,8 @@ static bool ensure_sdl_backend(void) {
   return true;
 }
 
-void painter_platform_init(const e3d_IDisplay *display,
-                           const e3d_IHardware *hardware) {
+void painter_platform_init(const e3d_IDisplay *display) {
   (void)display;
-  (void)hardware;
   (void)ensure_sdl_backend();
 }
 
@@ -132,8 +130,4 @@ bool painter_platform_draw_buffer(const uint16_t *buffer,
   set_debug_stage(debug_stage, 120);
   SDL_RenderPresent(sdl_renderer);
   return true;
-}
-
-void painter_platform_draw_image(uint16_t *buffer, const e3d_Image *image) {
-  memcpy(buffer, image->image, BUFFER_SIZE);
 }

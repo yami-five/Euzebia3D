@@ -8,6 +8,11 @@ if(DEFINED EUZEBIA3D_PLATFORM)
     string(TOUPPER "${EUZEBIA3D_PLATFORM}" EUZEBIA3D_PLATFORM_NORMALIZED)
 endif()
 
+if(NOT DEFINED EUZEBIA3D_PICO_DISPLAY)
+    set(EUZEBIA3D_PICO_DISPLAY "ST7789")
+endif()
+string(TOUPPER "${EUZEBIA3D_PICO_DISPLAY}" EUZEBIA3D_PICO_DISPLAY_NORMALIZED)
+
 if(NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "PICO" AND NOT EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
     message(FATAL_ERROR "Unsupported EUZEBIA3D_PLATFORM_NORMALIZED='${EUZEBIA3D_PLATFORM_NORMALIZED}'")
 endif()
@@ -135,10 +140,36 @@ target_include_directories(
 )
 target_link_libraries(Euzebia3D_CameraFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
-add_library(
-    Euzebia3D_Display
+set(EUZEBIA3D_DISPLAY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/display/display.c
 )
+
+if(EUZEBIA3D_PLATFORM_WINDOWS)
+    list(APPEND EUZEBIA3D_DISPLAY_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/display/win_display/win_display.c
+    )
+elseif(EUZEBIA3D_PICO_DISPLAY_NORMALIZED STREQUAL "ST7789")
+    list(APPEND EUZEBIA3D_DISPLAY_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/display/st7789/st7789.c
+    )
+elseif(EUZEBIA3D_PICO_DISPLAY_NORMALIZED STREQUAL "DVI")
+    set(EUZEBIA3D_DVI_DISPLAY_SOURCE
+        ${CMAKE_CURRENT_SOURCE_DIR}/display/dvi/dvi.c
+    )
+    if(NOT EXISTS "${EUZEBIA3D_DVI_DISPLAY_SOURCE}")
+        message(FATAL_ERROR
+            "DVI display backend selected, but its implementation is missing: ${EUZEBIA3D_DVI_DISPLAY_SOURCE}"
+        )
+    endif()
+    list(APPEND EUZEBIA3D_DISPLAY_SOURCES ${EUZEBIA3D_DVI_DISPLAY_SOURCE})
+else()
+    message(FATAL_ERROR
+        "Unsupported EUZEBIA3D_PICO_DISPLAY='${EUZEBIA3D_PICO_DISPLAY}'"
+    )
+endif()
+
+add_library(Euzebia3D_Display ${EUZEBIA3D_DISPLAY_SOURCES})
+
 target_include_directories(
     Euzebia3D_Display
     PUBLIC

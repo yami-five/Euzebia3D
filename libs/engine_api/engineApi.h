@@ -37,25 +37,15 @@
 #include "IRenderer.h"
 #include "IStorage.h"
 
-#include "Camera.h"
-#include "Material.h"
-#include "Mesh.h"
-#include "audioPlayer.h"
-#include "cameraFactory.h"
-#include "debugMode.h"
-#include "lightFactory.h"
-#include "materialFactory.h"
-#include "meshFactory.h"
-#include "painter.h"
-#include "puppeteer.h"
-#include "renderer.h"
-#include "storage.h"
+#include "camera.h"
+#include "material.h"
+#include "mesh.h"
+
+
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
-#include "display.h"
-#include "hardware.h"
-#define EUZEBIA3D_SYS_CLOCK_KHZ 300000
-// #define EUZEBIA3D_SYS_CLOCK_KHZ 150000
+#define EUZEBIA3D_SYS_CLOCK 300000
+// #define EUZEBIA3D_SYS_CLOCK 150000
 #endif
 
 typedef struct {
@@ -98,15 +88,13 @@ void e3d_Buffer_ClearBuffer(e3d_EngineContext *engine_ctx, uint16_t color);
 /// Draws a pixel at the specified screen coordinates.
 void e3d_Painter_DrawPixel(e3d_EngineContext *engine_ctx, uint16_t x,
                            uint16_t y, uint16_t color);
-/// Draws an image resource selected by its index.
-void e3d_Painter_DrawImage(e3d_EngineContext *engine_ctx, uint8_t image_index);
+/// Draws an image.
+void e3d_Painter_DrawImage(e3d_EngineContext *engine_ctx,
+                                e3d_Image *image);
 /// Draws a sprite at the specified position, rotation and scale.
 void e3d_Painter_DrawSprite(e3d_EngineContext *engine_ctx,
                             const e3d_Sprite *e3d_Sprite, int16_t pos_x,
                             int16_t pos_y, int32_t angle, uint8_t scale);
-/// Draws an image as the screen background.
-void e3d_Painter_DrawBackground(e3d_EngineContext *engine_ctx,
-                                e3d_Image *e3d_Image);
 /// Draws text at the specified screen position using the selected font and
 /// color.
 void e3d_Painter_Print(e3d_EngineContext *engine_ctx, const char *text,
@@ -117,14 +105,14 @@ void e3d_Painter_FadeFullscreen(e3d_EngineContext *engine_ctx, uint8_t mode,
                                 uint32_t startFrame, uint32_t currentFrame);
 /// Draws an animated text scroller using the supplied frame timing.
 void e3d_Painter_DrawScroller(e3d_EngineContext *engine_ctx,
-                              const e3d_Scroller *e3d_Scroller, uint16_t x,
+                              const e3d_Scroller *scroller, uint16_t x,
                               uint16_t y, uint32_t startFrame,
                               uint32_t currentFrame);
 /// Draws an animated plasma effect inside the specified rectangle.
 void e3d_Painter_DrawPlasma(e3d_EngineContext *engine_ctx, uint16_t *colors,
                             uint16_t colorsNum, uint32_t t, uint8_t scale,
                             int8_t facA, int8_t facB, int8_t facC, int8_t facD,
-                            e3d_Rectangle *e3d_Rectangle);
+                            e3d_Rectangle *rect);
 /// Fills the specified rectangle with a solid color.
 void e3d_Painter_DrawRectangle(e3d_EngineContext *engine_ctx,
                                e3d_Rectangle *rect, uint16_t color);
@@ -133,7 +121,7 @@ void e3d_Painter_DrawLine(e3d_EngineContext *engine_ctx, e3d_Point *start,
                           e3d_Point *end, uint16_t color);
 /// Fills a rectangle with a directional gradient between two colors.
 void e3d_Painter_DrawGradient(e3d_EngineContext *engine_ctx, uint16_t colorA,
-                              uint16_t colorB, e3d_Rectangle *e3d_Rectangle,
+                              uint16_t colorB, e3d_Rectangle *rect,
                               uint8_t direction);
 // puppetteer
 /// Creates a puppet from the resource selected by its index.
@@ -141,7 +129,7 @@ e3d_Puppet *e3d_Puppetteer_CreatePuppet(e3d_EngineContext *engine_ctx,
                                         uint8_t puppetIndex);
 /// Updates and performs a puppet animation for the specified time value.
 void e3d_Puppetteer_Perform(e3d_EngineContext *engine_ctx,
-                            e3d_Puppet *e3d_Puppet, uint32_t t);
+                            e3d_Puppet *puppet, uint32_t t);
 // e3d_Camera
 /// Creates a camera from its position, target and up vectors.
 e3d_Camera *e3d_Camera_CreateCamera(e3d_EngineContext *engine_ctx, float camX,

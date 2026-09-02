@@ -2,7 +2,6 @@
 #define PAINTER_h
 
 #include "IPainter.h"
-#include "../storage/gfx.h"
 
 #define WIDTH_DOUBLED 640
 #define HEIGHT_DOUBLED 480

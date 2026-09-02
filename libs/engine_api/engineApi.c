@@ -10,10 +10,26 @@
 static const e3d_IDebugMode *debugMode;
 #endif
 
+#include "audioPlayer.h"
+#include "cameraFactory.h"
+#include "debugMode.h"
+#include "display.h"
+#include "hardware.h"
+#include "lightFactory.h"
+#include "materialFactory.h"
+#include "meshFactory.h"
+#include "painter.h"
+#include "puppeteer.h"
+#include "renderer.h"
+#include "storage.h"
+
+#if defined(EUZEBIA3D_PLATFORM_PICO)
+#endif
+
 void e3d_InitEngine(e3d_EngineContext *engine_ctx) {
 
 #if defined(EUZEBIA3D_PLATFORM_PICO)
-  set_sys_clock_khz(EUZEBIA3D_SYS_CLOCK_KHZ, true);
+  set_sys_clock_khz(EUZEBIA3D_SYS_CLOCK, true);
 
   engine_ctx->hardware = get_hardware();
   engine_ctx->hardware->init_hardware();
@@ -25,8 +41,7 @@ void e3d_InitEngine(e3d_EngineContext *engine_ctx) {
   engine_ctx->storage = get_storage();
 
   engine_ctx->painter = get_painter();
-  engine_ctx->painter->init_painter(engine_ctx->display, engine_ctx->hardware,
-                                    engine_ctx->storage);
+  engine_ctx->painter->init_painter(engine_ctx->display, engine_ctx->storage);
 
   // #if defined(EUZEBIA3D_DEBUG_MODE)
   engine_ctx->debugMode = get_debugMode();
@@ -95,19 +110,14 @@ void e3d_Painter_DrawPixel(e3d_EngineContext *engine_ctx, uint16_t x,
   engine_ctx->painter->draw_pixel(x, y, color);
 }
 
-void e3d_Painter_DrawImage(e3d_EngineContext *engine_ctx, uint8_t image_index) {
-  engine_ctx->painter->draw_image(image_index);
+void e3d_Painter_DrawImage(e3d_EngineContext *engine_ctx, e3d_Image *image) {
+  engine_ctx->painter->draw_image(image);
 }
 
 void e3d_Painter_DrawSprite(e3d_EngineContext *engine_ctx,
-                            const e3d_Sprite *e3d_Sprite, int16_t pos_x,
+                            const e3d_Sprite *sprite, int16_t pos_x,
                             int16_t pos_y, int32_t angle, uint8_t scale) {
-  engine_ctx->painter->draw_sprite(e3d_Sprite, pos_x, pos_y, angle, scale);
-}
-
-void e3d_Painter_DrawBackground(e3d_EngineContext *engine_ctx,
-                                e3d_Image *e3d_Image) {
-  engine_ctx->painter->draw_background(e3d_Image);
+  engine_ctx->painter->draw_sprite(sprite, pos_x, pos_y, angle, scale);
 }
 
 void e3d_Painter_Print(e3d_EngineContext *engine_ctx, const char *text,
@@ -117,19 +127,18 @@ void e3d_Painter_Print(e3d_EngineContext *engine_ctx, const char *text,
 }
 
 void e3d_Painter_DrawScroller(e3d_EngineContext *engine_ctx,
-                              const e3d_Scroller *e3d_Scroller, uint16_t x,
+                              const e3d_Scroller *scroller, uint16_t x,
                               uint16_t y, uint32_t startFrame,
                               uint32_t currentFrame) {
-  engine_ctx->painter->draw_scroller(e3d_Scroller, x, y, startFrame,
-                                     currentFrame);
+  engine_ctx->painter->draw_scroller(scroller, x, y, startFrame, currentFrame);
 }
 
 void e3d_Painter_DrawPlasma(e3d_EngineContext *engine_ctx, uint16_t *colors,
                             uint16_t colorsNum, uint32_t t, uint8_t scale,
                             int8_t facA, int8_t facB, int8_t facC, int8_t facD,
-                            e3d_Rectangle *e3d_Rectangle) {
+                            e3d_Rectangle *rect) {
   engine_ctx->painter->draw_plasma(colors, colorsNum, t, scale, facA, facB,
-                                   facC, facD, e3d_Rectangle);
+                                   facC, facD, rect);
 }
 
 void e3d_Painter_DrawRectangle(e3d_EngineContext *engine_ctx,
@@ -143,9 +152,9 @@ void e3d_Painter_DrawLine(e3d_EngineContext *engine_ctx, e3d_Point *start,
 }
 
 void e3d_Painter_DrawGradient(e3d_EngineContext *engine_ctx, uint16_t colorA,
-                              uint16_t colorB, e3d_Rectangle *e3d_Rectangle,
+                              uint16_t colorB, e3d_Rectangle *rect,
                               uint8_t direction) {
-  engine_ctx->painter->draw_gradient(colorA, colorB, e3d_Rectangle, direction);
+  engine_ctx->painter->draw_gradient(colorA, colorB, rect, direction);
 }
 
 // puppetteer
@@ -154,9 +163,9 @@ e3d_Puppet *e3d_Puppetteer_CreatePuppet(e3d_EngineContext *engine_ctx,
   return engine_ctx->puppeteer->create_puppet(puppetIndex);
 }
 
-void e3d_Puppetteer_Perform(e3d_EngineContext *engine_ctx,
-                            e3d_Puppet *e3d_Puppet, uint32_t t) {
-  engine_ctx->puppeteer->perform(e3d_Puppet, t);
+void e3d_Puppetteer_Perform(e3d_EngineContext *engine_ctx, e3d_Puppet *puppet,
+                            uint32_t t) {
+  engine_ctx->puppeteer->perform(puppet, t);
 }
 
 // e3d_Camera
@@ -320,13 +329,13 @@ void e3d_Renderer_SetRendererScale(e3d_EngineContext *engine_ctx,
 }
 
 void e3d_Renderer_AddModelToScene(e3d_EngineContext *engine_ctx,
-                                  e3d_Mesh *e3d_Mesh) {
-  engine_ctx->renderer->add_model_to_scene(e3d_Mesh);
+                                  e3d_Mesh *mesh) {
+  engine_ctx->renderer->add_model_to_scene(mesh);
 }
 
 void e3d_Renderer_AddPointToScene(e3d_EngineContext *engine_ctx,
-                                  e3d_Point3D *e3d_Point) {
-  engine_ctx->renderer->add_point_to_scene(e3d_Point);
+                                  e3d_Point3D *point) {
+  engine_ctx->renderer->add_point_to_scene(point);
 }
 
 void e3d_Renderer_AddLineToScene(e3d_EngineContext *engine_ctx,
@@ -342,14 +351,12 @@ void e3d_Renderer_RenderScene(e3d_EngineContext *engine_ctx) {
   engine_ctx->renderer->render_scene();
 }
 
-void e3d_Renderer_SetCamera(e3d_EngineContext *engine_ctx,
-                            e3d_Camera *e3d_Camera) {
-  engine_ctx->renderer->set_camera(e3d_Camera);
+void e3d_Renderer_SetCamera(e3d_EngineContext *engine_ctx, e3d_Camera *camera) {
+  engine_ctx->renderer->set_camera(camera);
 }
 
-void e3d_Renderer_SetLight(e3d_EngineContext *engine_ctx,
-                           e3d_Light *e3d_Light) {
-  engine_ctx->renderer->set_light(e3d_Light);
+void e3d_Renderer_SetLight(e3d_EngineContext *engine_ctx, e3d_Light *light) {
+  engine_ctx->renderer->set_light(light);
 }
 // audioPlayer
 void e3d_Audio_PlayWavFile(e3d_EngineContext *engine_ctx, char *file_name) {

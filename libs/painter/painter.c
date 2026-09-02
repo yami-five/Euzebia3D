@@ -80,10 +80,10 @@ static const uint8_t fadeOutPatterns[9][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 
-void init_painter(const e3d_IDisplay *display, const e3d_IHardware *hardware,
+void init_painter(const e3d_IDisplay *display,
                   const e3d_IStorage *storage) {
   _storage = storage;
-  painter_platform_init(display, hardware);
+  painter_platform_init(display);
 }
 
 void draw_buffer(void) {
@@ -117,17 +117,6 @@ void draw_span(uint16_t x, uint16_t y, const uint16_t *span,
     span_length = DISPLAY_WIDTH - x;
 
   memcpy(&buffer[pixel_index(x, y)], span, span_length * sizeof(uint16_t));
-}
-
-void draw_image(uint8_t image_index) {
-  if (_storage == NULL || _storage->get_image == NULL)
-    return;
-
-  const e3d_Image *image = _storage->get_image(image_index);
-  if (image == NULL || image->image == NULL)
-    return;
-
-  painter_platform_draw_image(buffer, image);
 }
 
 static inline uint8_t get_r(uint16_t c) { return (c >> 11) & 0x1F; }
@@ -365,7 +354,7 @@ void draw_sprite(const e3d_Sprite *sprite, int16_t pos_x, int16_t pos_y,
   }
 }
 
-void draw_background(e3d_Image *image) {
+void draw_image(e3d_Image *image) {
   if (image == NULL)
     return;
   if (image->image == NULL)
@@ -786,7 +775,6 @@ static e3d_IPainter painter = {
     .draw_image = draw_image,
     .apply_post_process_effect = apply_post_process_effect,
     .draw_sprite = draw_sprite,
-    .draw_background = draw_background,
     .print = print,
     .draw_gradient = draw_gradient,
     .fade_fullscreen = fade_fullscreen,
