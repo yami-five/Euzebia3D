@@ -1,5 +1,7 @@
 # Euzebia3D
 
+Version 1.0.0
+
 Software 3D renderer and demo framework for Raspberry Pi Pico 2, built for demoscene productions.
 
 Core characteristics:
@@ -87,6 +89,36 @@ int main(void) {
 All public engine-owned types use the `e3d_` prefix. API functions follow the
 `e3d_<Module>_<Operation>` naming scheme, for example
 `e3d_Painter_Print()` and `e3d_Renderer_RenderScene()`.
+
+### Public API reference
+
+`engineApi.h` is the public entry point and declares the complete API. The
+functions below are grouped by their intended use; all take
+`e3d_EngineContext *` as their first parameter.
+
+| Area | Public operations |
+| --- | --- |
+| Engine and buffer | `e3d_InitEngine`, `e3d_Buffer_DrawBuffer`, `e3d_Buffer_ClearBuffer` |
+| Renderer | `e3d_Renderer_SetRendererScale`, `e3d_Renderer_SetCamera`, `e3d_Renderer_SetLight`, `e3d_Renderer_AddModelToScene`, `e3d_Renderer_AddPointToScene`, `e3d_Renderer_AddLineToScene`, `e3d_Renderer_CleanScene`, `e3d_Renderer_RenderScene` |
+| Camera | `e3d_Camera_CreateCamera`, `e3d_Camera_SetPos`, `e3d_Camera_SetTargetPos`, `e3d_Camera_UpdateCamera`, `e3d_Camera_DeleteCamera` |
+| Lights | `e3d_Light_CreatePointLight`, `e3d_Light_CreateDirectionalLight`, `e3d_Light_SetLightPos`, `e3d_Light_SetLightColor`, `e3d_Light_SetLightIntensity`, `e3d_Light_DeleteLight` |
+| Materials and meshes | `e3d_Material_CreateDiffuseMat`, `e3d_Material_CreateTexturedMat`, `e3d_Material_DeleteMat`, `e3d_Mesh_CreateMesh`, `e3d_Mesh_DeleteMesh`, `e3d_Mesh_AddTransformation`, `e3d_Mesh_ModifyTransformation` |
+| 2D painter | `e3d_Painter_DrawPixel`, `e3d_Painter_DrawImage`, `e3d_Painter_DrawSprite`, `e3d_Painter_DrawBackground`, `e3d_Painter_Print`, `e3d_Painter_FadeFullscreen`, `e3d_Painter_DrawScroller`, `e3d_Painter_DrawPlasma`, `e3d_Painter_DrawRectangle`, `e3d_Painter_DrawLine`, `e3d_Painter_DrawGradient` |
+| Puppets | `e3d_Puppetteer_CreatePuppet`, `e3d_Puppetteer_Perform` |
+| Debug and audio | `e3d_Debug_BeginFrame`, `e3d_Debug_BeginDrawBuffer`, `e3d_Debug_EndDrawBuffer`, `e3d_Debug_EndFrame`, `e3d_Debug_ResetWindow`, `e3d_Debug_ShowInfo`, `e3d_Audio_PlayWavFile`, `e3d_Audio_IsStorageReady` |
+
+The renderer accepts meshes, `e3d_Point3D`, and `e3d_Line3D`. All three are
+stored in one scene queue with a shared primitive limit
+(`MAX_PRIMITIVES_IN_SCENE`) and are painted far-to-near. A point contains a
+3D position and RGB565 color; a line contains 3D start/end positions and an
+RGB565 color. Define them with the types from `engineApi.h`, then submit them
+with `e3d_Renderer_AddPointToScene()` or `e3d_Renderer_AddLineToScene()`.
+
+Use `e3d_Camera_UpdateCamera()` after changing a camera's position or target.
+For mesh transformations, pass one of `MODEL_TRANSFORM_ROTATE`,
+`MODEL_TRANSFORM_TRANSLATE`, or `MODEL_TRANSFORM_SCALE` to
+`e3d_Mesh_AddTransformation()`. Colors accepted by painter, material, point,
+and line functions use RGB565 (`uint16_t`).
 
 Meshes borrow their materials, so a material may be shared by multiple meshes.
 Delete all meshes that reference a material before deleting the material itself:
