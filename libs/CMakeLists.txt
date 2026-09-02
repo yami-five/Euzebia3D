@@ -28,13 +28,24 @@ if(NOT DEFINED EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED)
     set(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED ON)
 endif()
 
-set(EUZEBIA3D_IS_WINDOWS OFF)
+set(EUZEBIA3D_PLATFORM_WINDOWS OFF)
 if(EUZEBIA3D_PLATFORM_NORMALIZED STREQUAL "WINDOWS")
-    set(EUZEBIA3D_IS_WINDOWS ON)
+    set(EUZEBIA3D_PLATFORM_WINDOWS ON)
+
+    set(EUZEBIA3D_WINDOWS_WINDOW_WIDTH 960 CACHE STRING "Initial width of the Windows output window")
+    set(EUZEBIA3D_WINDOWS_WINDOW_HEIGHT 720 CACHE STRING "Initial height of the Windows output window")
+    option(EUZEBIA3D_WINDOWS_FULLSCREEN "Render the Windows output in fullscreen mode" OFF)
+
+    if(NOT EUZEBIA3D_WINDOWS_WINDOW_WIDTH MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "EUZEBIA3D_WINDOWS_WINDOW_WIDTH must be a positive integer")
+    endif()
+    if(NOT EUZEBIA3D_WINDOWS_WINDOW_HEIGHT MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "EUZEBIA3D_WINDOWS_WINDOW_HEIGHT must be a positive integer")
+    endif()
 endif()
 
 add_library(Euzebia3D_PlatformDefs INTERFACE)
-if(EUZEBIA3D_IS_WINDOWS)
+if(EUZEBIA3D_PLATFORM_WINDOWS)
     target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_PLATFORM_WINDOWS=1)
 else()
     target_compile_definitions(Euzebia3D_PlatformDefs INTERFACE EUZEBIA3D_PLATFORM_PICO=1)
@@ -48,7 +59,7 @@ endif()
 
 add_library(Euzebia3D_PicoDeps INTERFACE)
 target_link_libraries(Euzebia3D_PicoDeps INTERFACE Euzebia3D_PlatformDefs)
-if(NOT EUZEBIA3D_IS_WINDOWS)
+if(NOT EUZEBIA3D_PLATFORM_WINDOWS)
     target_link_libraries(
         Euzebia3D_PicoDeps
         INTERFACE
@@ -78,16 +89,21 @@ set(EUZEBIA3D_STORAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../storage")
 set(EUZEBIA3D_AUDIO_PLAYER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/audioPlayer.c
 )
-if(NOT EUZEBIA3D_IS_WINDOWS)
+if(EUZEBIA3D_PLATFORM_WINDOWS)
     list(APPEND EUZEBIA3D_AUDIO_PLAYER_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ff.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/diskio.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffsystem.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs/ffunicode.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver/sd_driver.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/windows/audioPlayer_platform_win.c
+    )
+else()
+    list(APPEND EUZEBIA3D_AUDIO_PLAYER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/audioPlayer_platform_pico2.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/fatfs/ff.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/fatfs/diskio.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/fatfs/ffsystem.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/fatfs/ffunicode.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/sd_driver/sd_driver.c
     )
 endif()
-if(EUZEBIA3D_IS_WINDOWS)
+if(EUZEBIA3D_PLATFORM_WINDOWS)
     find_path(EUZEBIA3D_MINIAUDIO_INCLUDE_DIR NAMES miniaudio.h)
     if(NOT EUZEBIA3D_MINIAUDIO_INCLUDE_DIR)
         message(FATAL_ERROR "miniaudio.h not found. Install miniaudio or pass -DEUZEBIA3D_MINIAUDIO_INCLUDE_DIR=<directory containing miniaudio.h>.")
@@ -138,11 +154,16 @@ target_include_directories(
     Euzebia3D_AudioPlayer
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/audio_player
-    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/fatfs
-    ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/sd_driver
 )
-if(EUZEBIA3D_IS_WINDOWS)
+if(EUZEBIA3D_PLATFORM_WINDOWS)
     target_include_directories(Euzebia3D_AudioPlayer PRIVATE ${EUZEBIA3D_MINIAUDIO_INCLUDE_DIR})
+else()
+    target_include_directories(
+        Euzebia3D_AudioPlayer
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/fatfs
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_player/rpi_pico2/sd_driver
+    )
 endif()
 target_link_libraries(Euzebia3D_AudioPlayer PUBLIC Euzebia3D_PicoDeps Euzebia3D_Painter Euzebia3D_Hardware)
 
@@ -156,7 +177,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/hardware
 )
 target_link_libraries(Euzebia3D_Hardware PUBLIC Euzebia3D_PicoDeps)
-if(NOT EUZEBIA3D_IS_WINDOWS)
+if(NOT EUZEBIA3D_PLATFORM_WINDOWS)
     pico_generate_pio_header(Euzebia3D_Hardware ${CMAKE_CURRENT_LIST_DIR}/hardware/audio_pio.pio)
 endif()
 
@@ -208,10 +229,20 @@ target_include_directories(
 )
 target_link_libraries(Euzebia3D_MeshFactory PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics Euzebia3D_Storage Euzebia3D_Transformations Euzebia3D_MaterialFactory)
 
-add_library(
-    Euzebia3D_Painter
+set(EUZEBIA3D_PAINTER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/painter/painter.c
 )
+if(EUZEBIA3D_PLATFORM_WINDOWS)
+    list(APPEND EUZEBIA3D_PAINTER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/painter/windows/painter_platform_win.c
+    )
+else()
+    list(APPEND EUZEBIA3D_PAINTER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/painter/rpi_pico2/painter_platform_pico2.c
+    )
+endif()
+
+add_library(Euzebia3D_Painter ${EUZEBIA3D_PAINTER_SOURCES})
 target_include_directories(
     Euzebia3D_Painter
     PUBLIC
@@ -227,8 +258,19 @@ target_link_libraries(
     Euzebia3D_Storage
     Euzebia3D_Puppeteer
 )
-if(EUZEBIA3D_IS_WINDOWS)
+if(EUZEBIA3D_PLATFORM_WINDOWS)
     target_link_libraries(Euzebia3D_Painter PUBLIC SDL3::SDL3)
+    target_compile_definitions(
+        Euzebia3D_Painter
+        PRIVATE
+        EUZEBIA3D_WINDOWS_WINDOW_WIDTH=${EUZEBIA3D_WINDOWS_WINDOW_WIDTH}
+        EUZEBIA3D_WINDOWS_WINDOW_HEIGHT=${EUZEBIA3D_WINDOWS_WINDOW_HEIGHT}
+    )
+    if(EUZEBIA3D_WINDOWS_FULLSCREEN)
+        target_compile_definitions(Euzebia3D_Painter PRIVATE EUZEBIA3D_WINDOWS_FULLSCREEN=1)
+    else()
+        target_compile_definitions(Euzebia3D_Painter PRIVATE EUZEBIA3D_WINDOWS_FULLSCREEN=0)
+    endif()
 endif()
 
 add_library(
@@ -267,7 +309,7 @@ target_link_libraries(
     Euzebia3D_Storage
     Euzebia3D_Painter
 )
-if(NOT EUZEBIA3D_IS_WINDOWS)
+if(NOT EUZEBIA3D_PLATFORM_WINDOWS)
     target_link_libraries(Euzebia3D_Puppeteer PUBLIC hardware_interp)
 endif()
 
@@ -282,10 +324,20 @@ target_include_directories(
 )
 target_link_libraries(Euzebia3D_Transformations PUBLIC Euzebia3D_PicoDeps Euzebia3D_Arithmetics)
 
-add_library(
-    Euzebia3D_Renderer
+set(EUZEBIA3D_RENDERER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/renderer/renderer.c
 )
+if(EUZEBIA3D_PLATFORM_WINDOWS)
+    list(APPEND EUZEBIA3D_RENDERER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/renderer/windows/renderer_platform_win.c
+    )
+else()
+    list(APPEND EUZEBIA3D_RENDERER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/renderer/rpi_pico2/renderer_platform_pico2.c
+    )
+endif()
+
+add_library(Euzebia3D_Renderer ${EUZEBIA3D_RENDERER_SOURCES})
 target_include_directories(
     Euzebia3D_Renderer
     PUBLIC
@@ -338,8 +390,8 @@ if(EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED)
 else()
     target_compile_definitions(Euzebia3D_Renderer PRIVATE EUZEBIA3D_RENDERER_SCENE_SORT_ENABLED=0)
 endif()
-if(NOT EUZEBIA3D_IS_WINDOWS)
-    target_link_libraries(Euzebia3D_Renderer PUBLIC hardware_interp)
+if(NOT EUZEBIA3D_PLATFORM_WINDOWS)
+    target_link_libraries(Euzebia3D_Renderer PRIVATE hardware_interp)
 endif()
 
 add_library(

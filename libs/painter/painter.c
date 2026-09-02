@@ -1,17 +1,9 @@
-#include "IPainter.h"
+#include "painter.h"
+#include "painter_platform.h"
 #include "fpa.h"
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-#include <SDL3/SDL.h>
-#else
-#include "hardware/sync/spin_lock.h"
-#include "painter.h"
-
-static uint dma_channel;
-#endif
 
 #ifndef DISPLAY_WIDTH
 #define DISPLAY_WIDTH 320
@@ -42,8 +34,6 @@ static uint dma_channel;
 #define FONT_GLYPHS_COUNT ((FONT_ASCII_LAST - FONT_ASCII_FIRST) + 1u)
 #define FONT_TRANSPARENT_COLOR 63519u
 #define FONT_GLYPH_END_COLOR 0u
-static const e3d_IHardware *_hardware = NULL;
-static const e3d_IDisplay *_display = NULL;
 static const e3d_IStorage *_storage = NULL;
 static uint16_t buffer[BUFFER_SIZE_HALF];
 
@@ -53,21 +43,13 @@ volatile uint32_t painter_debug_stage = 0;
   do {                                                                         \
     painter_debug_stage = (stage);                                             \
   } while (0)
+#define PAINTER_DEBUG_STAGE_PTR (&painter_debug_stage)
 #else
 #define PAINTER_SET_DEBUG_STAGE(stage) ((void)0)
+#define PAINTER_DEBUG_STAGE_PTR NULL
 #endif
 volatile uint32_t painter_debug_line = 0;
 
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static uint16_t mirrored_buffer[BUFFER_SIZE_HALF];
-static SDL_Window *sdl_window = NULL;
-static SDL_Renderer *sdl_renderer = NULL;
-static SDL_Texture *sdl_texture = NULL;
-static uint8_t sdl_video_initialized_here = 0;
-static uint8_t sdl_cleanup_registered = 0;
-#else
-static spin_lock_t *lcd_spinlock;
-#endif
 static uint8_t scanline_offset = 0;
 
 static inline uint32_t pixel_index(uint16_t x, uint16_t y) {
@@ -98,159 +80,19 @@ static const uint8_t fadeOutPatterns[9][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-static void destroy_sdl_backend(void) {
-  if (sdl_texture != NULL) {
-    SDL_DestroyTexture(sdl_texture);
-    sdl_texture = NULL;
-  }
-  if (sdl_renderer != NULL) {
-    SDL_DestroyRenderer(sdl_renderer);
-    sdl_renderer = NULL;
-  }
-  if (sdl_window != NULL) {
-    SDL_DestroyWindow(sdl_window);
-    sdl_window = NULL;
-  }
-  if (sdl_video_initialized_here) {
-    SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    sdl_video_initialized_here = 0;
-  }
-}
-
-static int ensure_sdl_backend(void) {
-  if (sdl_texture != NULL && sdl_renderer != NULL && sdl_window != NULL)
-    return 1;
-
-  if ((SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) == 0) {
-    if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-      SDL_Log("Painter SDL init failed: %s", SDL_GetError());
-      return 0;
-    }
-    sdl_video_initialized_here = 1;
-  }
-
-  sdl_window = SDL_CreateWindow("Euzebia3D", DISPLAY_WIDTH * 3,
-                                DISPLAY_HEIGHT * 3, SDL_WINDOW_RESIZABLE);
-  if (sdl_window == NULL) {
-    SDL_Log("Painter SDL window creation failed: %s", SDL_GetError());
-    destroy_sdl_backend();
-    return 0;
-  }
-
-  sdl_renderer = SDL_CreateRenderer(sdl_window, NULL);
-  if (sdl_renderer == NULL) {
-    SDL_Log("Painter SDL renderer creation failed: %s", SDL_GetError());
-    destroy_sdl_backend();
-    return 0;
-  }
-  SDL_SetDefaultTextureScaleMode(sdl_renderer, SDL_SCALEMODE_LINEAR);
-
-  sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_RGB565,
-                                  SDL_TEXTUREACCESS_STREAMING, DISPLAY_WIDTH,
-                                  DISPLAY_HEIGHT);
-  if (sdl_texture == NULL) {
-    SDL_Log("Painter SDL texture creation failed: %s", SDL_GetError());
-    destroy_sdl_backend();
-    return 0;
-  }
-  SDL_SetTextureScaleMode(sdl_texture, SDL_SCALEMODE_LINEAR);
-
-  SDL_SetRenderLogicalPresentation(sdl_renderer, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                                   SDL_LOGICAL_PRESENTATION_LETTERBOX);
-
-  if (!sdl_cleanup_registered) {
-    atexit(destroy_sdl_backend);
-    sdl_cleanup_registered = 1;
-  }
-  return 1;
-}
-#else
-static void dma_buffer_irq_handler(void) { dma_hw->ints1 = 1u << dma_channel; }
-
-static void init_dma(void) {
-  dma_channel = dma_claim_unused_channel(true);
-  dma_channel_config config = dma_channel_get_default_config(dma_channel);
-  channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
-  channel_config_set_read_increment(&config, true);
-  channel_config_set_write_increment(&config, false);
-  channel_config_set_dreq(&config,
-                          spi_get_dreq(_hardware->get_lcd_spi_port(), true));
-  dma_channel_configure(dma_channel, &config,
-                        &spi_get_hw(_hardware->get_lcd_spi_port())->dr, NULL,
-                        BUFFER_SIZE_HALF, false);
-  dma_channel_set_irq1_enabled(dma_channel, true);
-  irq_set_exclusive_handler(DMA_IRQ_1, dma_buffer_irq_handler);
-  irq_set_enabled(DMA_IRQ_1, false);
-}
-#endif
-
 void init_painter(const e3d_IDisplay *display, const e3d_IHardware *hardware,
                   const e3d_IStorage *storage) {
-  _hardware = hardware;
-  _display = display;
   _storage = storage;
-
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  (void)_hardware;
-  (void)_display;
-  ensure_sdl_backend();
-#else
-  init_dma();
-  _hardware->write(LCD_CS_PIN, 0);
-  (void)lcd_spinlock;
-#endif
+  painter_platform_init(display, hardware);
 }
 
 void draw_buffer(void) {
   PAINTER_SET_DEBUG_STAGE(100);
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  if (!ensure_sdl_backend()) {
+  if (!painter_platform_draw_buffer(buffer, PAINTER_DEBUG_STAGE_PTR,
+                                    &painter_debug_line)) {
     PAINTER_SET_DEBUG_STAGE(101);
     return;
   }
-
-  for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++) {
-    painter_debug_line = y;
-    uint32_t dst_row_start = (uint32_t)y * DISPLAY_WIDTH;
-    uint32_t src_row_start = (uint32_t)(DISPLAY_HEIGHT - 1 - y) * DISPLAY_WIDTH;
-    for (uint16_t x = 0; x < DISPLAY_WIDTH; x++)
-      mirrored_buffer[dst_row_start + x] = buffer[src_row_start + x];
-  }
-
-  PAINTER_SET_DEBUG_STAGE(110);
-  SDL_UpdateTexture(sdl_texture, NULL, mirrored_buffer,
-                    DISPLAY_WIDTH * (int32_t)sizeof(uint16_t));
-  SDL_RenderClear(sdl_renderer);
-  SDL_RenderTexture(sdl_renderer, sdl_texture, NULL, NULL);
-  PAINTER_SET_DEBUG_STAGE(120);
-  SDL_RenderPresent(sdl_renderer);
-#else
-  PAINTER_SET_DEBUG_STAGE(110);
-  spi_inst_t *spi_port = _hardware->get_lcd_spi_port();
-  spin_lock_t *spi_spinlock = _hardware->get_spinlock();
-  (void)spi_spinlock;
-
-  PAINTER_SET_DEBUG_STAGE(120);
-  spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-  _hardware->write(LCD_DC_PIN, 0);
-  _hardware->lcd_spi_write_byte(0x2C);
-  _hardware->write(LCD_DC_PIN, 1);
-  spi_set_format(spi_port, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-
-  PAINTER_SET_DEBUG_STAGE(130);
-  dma_channel_set_trans_count(dma_channel, BUFFER_SIZE_HALF, false);
-  dma_channel_set_read_addr(dma_channel, buffer, true);
-  PAINTER_SET_DEBUG_STAGE(140);
-  dma_channel_wait_for_finish_blocking(dma_channel);
-
-  PAINTER_SET_DEBUG_STAGE(150);
-  while (spi_is_busy(spi_port)) {
-  }
-
-  PAINTER_SET_DEBUG_STAGE(160);
-  spi_set_format(spi_port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-#endif
   PAINTER_SET_DEBUG_STAGE(200);
 }
 
@@ -278,28 +120,14 @@ void draw_span(uint16_t x, uint16_t y, const uint16_t *span,
 }
 
 void draw_image(uint8_t image_index) {
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-  if (_storage == NULL)
+  if (_storage == NULL || _storage->get_image == NULL)
     return;
 
   const e3d_Image *image = _storage->get_image(image_index);
   if (image == NULL || image->image == NULL)
     return;
 
-  memcpy(buffer, image->image, BUFFER_SIZE);
-#else
-  int dma_channel_flash = dma_claim_unused_channel(true);
-  dma_channel_config config = dma_channel_get_default_config(dma_channel_flash);
-  channel_config_set_transfer_data_size(&config, DMA_SIZE_16);
-  channel_config_set_read_increment(&config, true);
-  channel_config_set_write_increment(&config, true);
-  dma_channel_configure(dma_channel_flash, &config, buffer,
-                        _storage->get_image(image_index)->image,
-                        BUFFER_SIZE_HALF, false);
-  dma_channel_start(dma_channel_flash);
-  dma_channel_wait_for_finish_blocking(dma_channel_flash);
-  dma_channel_unclaim(dma_channel_flash);
-#endif
+  painter_platform_draw_image(buffer, image);
 }
 
 static inline uint8_t get_r(uint16_t c) { return (c >> 11) & 0x1F; }

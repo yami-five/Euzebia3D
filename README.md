@@ -180,6 +180,17 @@ Configure:
 cmake -S . -B build-windows
 ```
 
+The Windows output defaults to a resizable 960x720 window. Its initial size
+and presentation mode can be selected while configuring:
+
+```bash
+cmake -S . -B build-windows -DEUZEBIA3D_WINDOWS_WINDOW_WIDTH=1280 -DEUZEBIA3D_WINDOWS_WINDOW_HEIGHT=720 -DEUZEBIA3D_WINDOWS_FULLSCREEN=OFF
+```
+
+Set `EUZEBIA3D_WINDOWS_FULLSCREEN=ON` to use the current desktop in fullscreen
+mode. The selected window size does not change the engine's logical 320x240
+rendering resolution; SDL scales it while preserving the aspect ratio.
+
 If SDL3 is installed via `vcpkg`, configure with toolchain:
 
 ```bash

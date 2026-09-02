@@ -3,16 +3,6 @@
 
 #include "IPainter.h"
 #include "../storage/gfx.h"
-#if defined(EUZEBIA3D_PLATFORM_WINDOWS)
-#include <stdlib.h>
-#else
-#include "../storage/pins.h"
-#include "hardware/dma.h"
-#include "hardware/spi.h"
-#include "pico/stdlib.h"
-#endif
-#include "stdio.h"
-#include "string.h"
 
 #define WIDTH_DOUBLED 640
 #define HEIGHT_DOUBLED 480
